@@ -25,11 +25,13 @@ def graph2Optimizer(graph):
     for i in graph.edges:
         edge = g2o.EdgeSE3()
 
-        for j, k in enumerate([i.startuid, i.enduid]):
+        for j, k in enumerate([graph.edges[i].startuid,
+                               graph.edges[i].enduid]):
             edge.set_vertex(j, optimizer.vertex(k))
 
-        edge.set_measurement(pose2Isometry(i.change))
-        edge.set_information(i.importance)
+        edge.set_measurement(pose2Isometry(graph.edges[i].change))
+        edge.set_information(graph.edges[i].importance)
+        edge.set_id(i)
 
         optimizer.add_edge(edge)
 
@@ -129,16 +131,16 @@ class Graph:
 
     def connectedComponents(self):
         groups = []
-        for edge in self.edges:
-            uids = {edge.startuid, edge.enduid}
+        for i in self.edges:
+            uids = {self.edges[i].startuid, self.edges[i].enduid}
             membership = []
-            for i, group in enumerate(groups):
+            for j, group in enumerate(groups):
                 if len(group[0] & uids) > 0:
-                    membership.append(i)
+                    membership.append(j)
 
-            newGroup = (set.union(uids, *[groups[i][0] for i in membership]),
-                        [edge] + list(itertools.chain.from_iterable
-                                      ([groups[i][1] for i in membership])))
+            newGroup = (set.union(uids, *[groups[k][0] for k in membership]),
+                        [i] + list(itertools.chain.from_iterable
+                                   ([groups[k][1] for k in membership])))
 
             membership.reverse()
 
@@ -148,62 +150,22 @@ class Graph:
             groups.append(newGroup)
 
         return [Graph(vertices={k: self.vertices[k] for k in group[0]},
-                      edges=group[1]) for group in groups]
+                      edges={k: self.edges[k] for k in group[1]})
+                for group in groups]
 
     def odometryGraph(self):
-        odometryEdges = []
+        odometryEdges = {}
         odometryVertices = {}
-        for edge in self.edges:
-            if self.vertices[edge.startuid].mode == VertexType.ODOMETRY \
-               and self.vertices[edge.enduid].mode == VertexType.ODOMETRY:
-                odometryVertices[edge.startuid] = self.vertices[edge.startuid]
-                odometryVertices[edge.enduid] = self.vertices[edge.enduid]
-                odometryEdges.append(edge)
+        for i in self.edges:
+            if self.vertices[self.edges[i].startuid].mode \
+               == VertexType.ODOMETRY \
+               and self.vertices[self.edges[i].enduid].mode \
+               == VertexType.ODOMETRY:
 
-        return Graph(vertices={k: self.vertices[k] for k in odometryVertices},
-                     edges=odometryEdges)
+                odometryVertices[self.edges[i].startuid] \
+                    = self.vertices[self.edges[i].startuid]
+                odometryVertices[self.edges[i].enduid] \
+                    = self.vertices[self.edges[i].enduid]
+                odometryEdges[i] = self.edges[i]
 
-    def orderedOdometryEdges(self):
-        segments = []
-
-        for edge in self.edges:
-            if self.vertices[edge.startuid].mode != VertexType.ODOMETRY \
-               or self.vertices[edge.enduid].mode != VertexType.ODOMETRY:
-                continue
-            startFound = endFound = False
-            startFoundIdx = endFoundIdx = 0
-
-            for i in range(len(segments) - 1, -1, -1):
-                currentStartFound = edge.startuid == segments[i][-1].enduid
-                currentEndFound = edge.enduid == segments[i][0].startuid
-
-                if currentStartFound:
-                    startFound = True
-                    startFoundIdx = i
-
-                elif currentEndFound:
-                    endFound = True
-                    endFoundIdx = i
-
-                if currentStartFound and endFound:
-                    segments[i].append(edge)
-                    segments[i].extend(segments[endFoundIdx])
-                    del segments[endFoundIdx]
-                    break
-
-                elif currentEndFound and startFound:
-                    segments[startFoundIdx].append(edge)
-                    segments[i] = segments[startFoundIdx] + segments[i]
-                    del segments[startFoundIdx]
-                    break
-
-            if startFound and not endFound:
-                segments[startFoundIdx].append(edge)
-
-            elif endFound and not startFound:
-                segments[endFoundIdx].insert(0, edge)
-
-            elif not (startFound or endFound):
-                segments.append([edge])
-
-        return segments
+        return Graph(vertices=odometryVertices, edges=odometryEdges)

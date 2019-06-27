@@ -33,7 +33,8 @@ def convertEdge(edge):
 
 def convert(posegraph):
     vertices = {}
-    edges = []
+    edges = {}
+    edgeUid = 0
 
     for startid in posegraph.odometry_edges:
         for endid in posegraph.odometry_edges[startid]:
@@ -44,7 +45,8 @@ def convert(posegraph):
                 uid, converted = convertVertex(vertex)
                 vertices[uid] = converted
 
-            edges.append(convertEdge(edge))
+            edges[edgeUid] = convertEdge(edge)
+            edgeUid += 1
 
     for startid in posegraph.odometry_tag_edges:
         for endid in posegraph.odometry_tag_edges[startid]:
@@ -55,7 +57,8 @@ def convert(posegraph):
                 uid, converted = convertVertex(vertex)
                 vertices[uid] = converted
 
-            edges.append(convertEdge(edge))
+            edges[edgeUid] = convertEdge(edge)
+            edgeUid += 1
 
     for startid in posegraph.odometry_waypoints_edges:
         for endid in posegraph.odometry_waypoints_edges[startid]:
@@ -66,6 +69,7 @@ def convert(posegraph):
                 uid, converted = convertVertex(vertex)
                 vertices[uid] = converted
 
-            edges.append(convertEdge(edge))
+            edges[edgeUid] = convertEdge(edge)
+            edgeUid += 1
 
     return Graph(vertices=vertices, edges=edges)
