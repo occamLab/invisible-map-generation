@@ -1,4 +1,6 @@
 import itertools
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import g2o
 import numpy as np
 
@@ -33,6 +35,25 @@ def graph2Optimizer(graph):
     return optimizer
 
 
+def optimizer2map(vertices, optimizer):
+    locations = np.reshape([], [0, 3])
+    tags = np.reshape([], [0, 3])
+    waypoints = np.reshape([], [0, 3])
+
+    for i in optimizer.vertices():
+        mode = vertices[i].mode
+        location = optimizer.vertex(i).estimate().translation()
+        if mode == VertexType.ODOMETRY:
+            locations = np.vstack([locations, location])
+        elif mode == VertexType.TAG:
+            tags = np.vstack([tags, location])
+        elif mode == VertexType.WAYPOINT:
+            waypoints = np.vstack([waypoints, location])
+
+    return {'locations': np.array(locations), 'tags': np.array(tags),
+            'waypoints': np.array(waypoints)}
+
+
 class VertexType:
     ODOMETRY = 0
     TAG = 1
@@ -58,6 +79,52 @@ class Graph:
     def __init__(self, vertices, edges):
         self.edges = edges
         self.vertices = vertices
+
+    def generateUnoptimizedGraph(self):
+        self.unoptimizedGraph = graph2Optimizer(self)
+        return self.unoptimizedGraph
+
+    def optimizeGraph(self):
+        self.optimizedGraph = graph2Optimizer(self)
+
+        initStatus = self.optimizedGraph.initialize_optimization()
+        runStatus = self.optimizedGraph.optimize(20)
+
+        return initStatus and runStatus
+
+    def plotMap(self):
+        unoptimized = optimizer2map(self.vertices, self.unoptimizedGraph)
+        optimized = optimizer2map(self.vertices, self.optimizedGraph)
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        tagMarker = '^'
+        waypointMarker = 's'
+        locationMarker = '.'
+
+        ax.plot(unoptimized['locations'][:, 0], unoptimized['locations'][:, 1],
+                unoptimized['locations'][:, 2], locationMarker,
+                label='Uncorrected Path')
+        ax.plot(optimized['locations'][:, 0], optimized['locations'][:, 1],
+                optimized['locations'][:, 2], locationMarker,
+                label='Corrected Path')
+
+        ax.plot(unoptimized['tags'][:, 0], unoptimized['tags'][:, 1],
+                unoptimized['tags'][:, 2], tagMarker, label='Uncorrected Tags')
+        ax.plot(optimized['tags'][:, 0], optimized['tags'][:, 1],
+                optimized['tags'][:, 2], tagMarker, label='Corrected Tags')
+
+        ax.plot(unoptimized['waypoints'][:, 0], unoptimized['waypoints'][:, 1],
+                unoptimized['waypoints'][:, 2], waypointMarker,
+                label='Uncorrected Waypoints')
+        ax.plot(optimized['waypoints'][:, 0], optimized['waypoints'][:, 1],
+                optimized['waypoints'][:, 2], waypointMarker,
+                label='Corrected Waypoints')
+
+        ax.legend()
+
+        return fig
 
     def connectedComponents(self):
         groups = []
