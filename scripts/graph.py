@@ -1,8 +1,9 @@
 import itertools
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import g2o
 import numpy as np
+
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def pose2Isometry(pose):
@@ -88,7 +89,7 @@ class Graph:
         self.optimizedGraph = graph2Optimizer(self)
 
         initStatus = self.optimizedGraph.initialize_optimization()
-        runStatus = self.optimizedGraph.optimize(20)
+        runStatus = self.optimizedGraph.optimize(64)
 
         return initStatus and runStatus
 

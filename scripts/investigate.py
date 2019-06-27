@@ -1,17 +1,12 @@
-from graph import VertexType, graph2Optimizer
+#!/usr/bin/env python
+
 import pickle
-import g2o
-import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 import maximization_model
 
-with open('test.pkl', 'rb') as data:
-    # graph = pickle.load(data, encoding='latin1')
+with open('graph.pkl', 'rb') as data:
     graph = pickle.load(data)
-with open('test.pkl', 'wb') as data:
-    pickle.dump(graph, data)
 
 
 def main():
@@ -19,7 +14,8 @@ def main():
     graph.generateUnoptimizedGraph()
     graph.optimizeGraph()
 
-    fig = graph.plotMap()
+    graph.plotMap()
+
     plt.show()
 
 
