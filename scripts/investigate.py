@@ -7,14 +7,14 @@ from graph import optimizer2map
 import matplotlib.pyplot as plt
 from convert_posegraph import convert
 
-# with open('academic_center.pkl', 'rb') as data:
-#     graph = convert(pickle.load(data, encoding='latin1'))
+with open('academic_center.pkl', 'rb') as data:
+    graph = convert(pickle.load(data, encoding='latin1'))
 
-with open('graph.pkl', 'rb') as data:
-    graph = pickle.load(data)
+# with open('graph.pkl', 'rb') as data:
+#     graph = pickle.load(data)
 
-# with open('graph.pkl', 'wb') as data:
-#     pickle.dump(graph, data)
+with open('graph.pkl', 'wb') as data:
+    pickle.dump(graph, data)
 
 
 def main():

@@ -101,7 +101,7 @@ class Graph:
                     != (self.vertices[self.edges[uid].enduid].mode
                         == VertexType.DUMMY):
 
-                basisMatrices[uid] = np.zeros([6,6])
+                basisMatrices[uid] = np.eye(6)
                 basisMatrices[uid][3:6, 3:6] = globalYawEffectBasis(
                     R.from_quat(self.edges[uid].change[3:7]))
 
@@ -120,7 +120,7 @@ class Graph:
         initStatus = self.optimizedGraph.initialize_optimization()
         runStatus = self.optimizedGraph.optimize(256)
 
-        self.g2oStatus =  initStatus and runStatus
+        self.g2oStatus = initStatus and runStatus
 
     def generateMaximizationParams(self):
         errors = np.array([])
@@ -175,17 +175,18 @@ class Graph:
 
             if startMode == VertexType.ODOMETRY:
                 if endMode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(np.sqrt(np.exp(-self.weights[:6])))
+                    self.edges[uid].information = np.diag(
+                        np.sqrt(np.exp(-self.weights[:6])))
                 if endMode == VertexType.TAG:
-                    self.edges[uid].information = np.diag(np.sqrt(np.exp(-self.weights[6:12])))
+                    self.edges[uid].information = np.diag(
+                        np.sqrt(np.exp(-self.weights[6:12])))
                 if endMode == VertexType.DUMMY:
                     basis = self.basisMatrices[uid][3:6, 3:6]
                     cov = np.diag(np.exp(-self.weights[15:18] / 2))
                     information = basis.dot(cov).dot(basis.T)
-                    template = np.zeros([6,6])
+                    template = np.zeros([6, 6])
                     template[3:6, 3:6] = information
                     self.edges[uid].information = template
-
 
         return results
 
