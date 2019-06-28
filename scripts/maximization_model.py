@@ -16,4 +16,4 @@ def gradfun(w, *args):
 
 
 def maxweights(x, e, w):
-    return minimize(objfun, w, (x, e))
+    return minimize(objfun, w, (x, e), jac=gradfun)

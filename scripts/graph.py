@@ -1,4 +1,6 @@
 import itertools
+from maximization_model import maxweights
+from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import g2o
 import numpy as np
@@ -30,7 +32,7 @@ def graph2Optimizer(graph):
             edge.set_vertex(j, optimizer.vertex(k))
 
         edge.set_measurement(pose2Isometry(graph.edges[i].change))
-        edge.set_information(graph.edges[i].importance)
+        edge.set_information(graph.edges[i].information)
         edge.set_id(i)
 
         optimizer.add_edge(edge)
@@ -57,6 +59,12 @@ def optimizer2map(vertices, optimizer):
             'waypoints': np.array(waypoints)}
 
 
+def globalYawEffectBasis(rotation):
+    rotation1 = R.from_euler('z', 0.05) * rotation
+    change = rotation1.as_quat()[:3] - rotation.as_quat()[:3]
+    return np.linalg.svd(change[:, np.newaxis])[0]
+
+
 class VertexType:
     ODOMETRY = 0
     TAG = 1
@@ -71,10 +79,10 @@ class Vertex:
 
 
 class Edge:
-    def __init__(self, startuid, enduid, importance, change):
+    def __init__(self, startuid, enduid, information, change):
         self.startuid = startuid
         self.enduid = enduid
-        self.importance = importance
+        self.information = information
         self.change = change
 
 
@@ -82,6 +90,25 @@ class Graph:
     def __init__(self, vertices, edges):
         self.edges = edges
         self.vertices = vertices
+        self.generateBasisMatrices()
+
+    def generateBasisMatrices(self):
+        basisMatrices = {}
+
+        for uid in self.edges:
+            if (self.vertices[self.edges[uid].startuid].mode
+                    == VertexType.DUMMY) \
+                    != (self.vertices[self.edges[uid].enduid].mode
+                        == VertexType.DUMMY):
+
+                basisMatrices[uid] = np.eye(6)
+                basisMatrices[uid][3:6, 3:6] = globalYawEffectBasis(
+                    R.from_quat(self.edges[uid].change[3:7]))
+
+            else:
+                basisMatrices[uid] = np.eye(6)
+
+        self.basisMatrices = basisMatrices
 
     def generateUnoptimizedGraph(self):
         self.unoptimizedGraph = graph2Optimizer(self)
@@ -91,9 +118,82 @@ class Graph:
         self.optimizedGraph = graph2Optimizer(self)
 
         initStatus = self.optimizedGraph.initialize_optimization()
-        runStatus = self.optimizedGraph.optimize(64)
+        runStatus = self.optimizedGraph.optimize(256)
 
         return initStatus and runStatus
+
+    def generateMaximizationParams(self):
+        errors = np.array([])
+        observations = np.reshape([], [0, 18])
+        optimizedEdges = {edge.id(): edge for edge in list(
+            self.optimizedGraph.edges())}
+
+        for uid in self.edges:
+            edge = self.edges[uid]
+            startMode = self.vertices[edge.startuid].mode
+            endMode = self.vertices[edge.enduid].mode
+
+            if endMode != VertexType.WAYPOINT:
+                errors = np.hstack(
+                    [errors, self.basisMatrices[uid].T.dot(
+                        optimizedEdges[uid].error())])
+
+            if startMode == VertexType.ODOMETRY:
+                if endMode == VertexType.ODOMETRY:
+                    observations = np.vstack([observations, np.eye(6, 18)])
+                elif endMode == VertexType.TAG:
+                    observations = np.vstack([observations, np.eye(6, 18, 6)])
+                elif endMode == VertexType.DUMMY:
+                    observations = np.vstack([observations, np.eye(6, 18, 12)])
+                elif endMode == VertexType.WAYPOINT:
+                    pass
+                else:
+                    raise Exception("Unspecified handling for edge of start"
+                                    " type {} and end type {}"
+                                    .format(startMode, endMode))
+
+            else:
+                raise Exception("Unspecified handling for edge of start type"
+                                " {} and end type {}"
+                                .format(startMode, endMode))
+
+        self.errors = errors
+        self.observations = observations
+        return errors, observations
+
+    def tuneWeights(self):
+        results = maxweights(self.observations, self.errors,
+                             np.zeros(self.observations.shape[1]))
+        self.expectationSuccess = results.success
+        self.weights = results.x
+
+        for uid in self.edges:
+            edge = self.edges[uid]
+            startMode = self.vertices[edge.startuid].mode
+            endMode = self.vertices[edge.enduid].mode
+
+            if startMode == VertexType.ODOMETRY:
+                if endMode == VertexType.ODOMETRY:
+                    self.edges[uid].information = np.diag(
+                        np.exp(self.weights[:6]))
+                if endMode == VertexType.TAG:
+                    self.edges[uid].information = np.diag(
+                        np.exp(self.weights[6:12]))
+                if endMode == VertexType.DUMMY:
+                    self.edges[uid].information = np.diag(
+                        np.exp(self.weights[12:18]))
+
+        return results
+
+    def emOnce(self):
+        self.generateUnoptimizedGraph()
+        self.optimizeGraph()
+        self.generateMaximizationParams()
+        self.tuneWeights()
+
+    def em(self, n):
+        for _ in range(n):
+            self.emOnce()
 
     def plotMap(self):
         unoptimized = optimizer2map(self.vertices, self.unoptimizedGraph)
@@ -126,6 +226,16 @@ class Graph:
                 label='Corrected Waypoints')
 
         ax.legend()
+
+        return fig
+
+    def plotErrors(self):
+        tabulatedErrors = self.errors.reshape(-1, 6)
+        fig, axs = plt.subplots(3, 2)
+
+        for i, (title, ax) in enumerate(zip(["x", "y", "z", "qx", "qy", "qz"], itertools.chain.from_iterable(axs))):
+            ax.set_title("{} Error".format(title))
+            ax.hist(tabulatedErrors[:, i])
 
         return fig
 

@@ -99,9 +99,11 @@ class Analysis:
 def main():
     analysis = Analysis('data_optimized.pkl')
     analysis.getvariance()
+    print(analysis.variance)
     analysis.updateEdges()
     analysis.writePosegraph()
     print(analysis.posegraph.odometry_edges.values()[0].values()[0].end.rotation)
+    print(analysis.success)
     return analysis
 
 

@@ -26,7 +26,7 @@ def convertVertex(vertex):
 
 def convertEdge(edge):
     return Edge(startuid=edge.start.id, enduid=edge.end.id,
-                importance=edge.importance_matrix,
+                information=edge.importance_matrix,
                 change=np.concatenate
                 ([edge.translation, edge.rotation]))
 
