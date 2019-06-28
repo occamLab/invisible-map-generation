@@ -101,7 +101,7 @@ class Graph:
                     != (self.vertices[self.edges[uid].enduid].mode
                         == VertexType.DUMMY):
 
-                basisMatrices[uid] = np.eye(6)
+                basisMatrices[uid] = np.zeros([6,6])
                 basisMatrices[uid][3:6, 3:6] = globalYawEffectBasis(
                     R.from_quat(self.edges[uid].change[3:7]))
 
@@ -120,7 +120,7 @@ class Graph:
         initStatus = self.optimizedGraph.initialize_optimization()
         runStatus = self.optimizedGraph.optimize(256)
 
-        return initStatus and runStatus
+        self.g2oStatus =  initStatus and runStatus
 
     def generateMaximizationParams(self):
         errors = np.array([])
@@ -164,8 +164,9 @@ class Graph:
     def tuneWeights(self):
         results = maxweights(self.observations, self.errors,
                              np.zeros(self.observations.shape[1]))
-        self.expectationSuccess = results.success
+        self.maximizationSuccess = results.success
         self.weights = results.x
+        self.maximizationResults = results
 
         for uid in self.edges:
             edge = self.edges[uid]
@@ -174,14 +175,17 @@ class Graph:
 
             if startMode == VertexType.ODOMETRY:
                 if endMode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(
-                        np.exp(self.weights[:6]))
+                    self.edges[uid].information = np.diag(np.sqrt(np.exp(-self.weights[:6])))
                 if endMode == VertexType.TAG:
-                    self.edges[uid].information = np.diag(
-                        np.exp(self.weights[6:12]))
+                    self.edges[uid].information = np.diag(np.sqrt(np.exp(-self.weights[6:12])))
                 if endMode == VertexType.DUMMY:
-                    self.edges[uid].information = np.diag(
-                        np.exp(self.weights[12:18]))
+                    basis = self.basisMatrices[uid][3:6, 3:6]
+                    cov = np.diag(np.exp(-self.weights[15:18] / 2))
+                    information = basis.dot(cov).dot(basis.T)
+                    template = np.zeros([6,6])
+                    template[3:6, 3:6] = information
+                    self.edges[uid].information = template
+
 
         return results
 
@@ -191,9 +195,24 @@ class Graph:
         self.generateMaximizationParams()
         self.tuneWeights()
 
-    def em(self, n):
-        for _ in range(n):
+    def em(self, maxIter=10, tol=1):
+        prevChi2 = self.optimizedGraph.chi2()
+        newChi2 = 0
+        i = 0
+        while i < maxIter:
             self.emOnce()
+            newChi2 = self.optimizedGraph.chi2()
+
+            if np.abs(newChi2 - prevChi2) < tol:
+                return i
+
+            prevChi2 = newChi2
+            i += 1
+
+        if np.abs(newChi2 - prevChi2) < tol:
+            return i
+
+        return i
 
     def plotMap(self):
         unoptimized = optimizer2map(self.vertices, self.unoptimizedGraph)
@@ -205,6 +224,9 @@ class Graph:
         tagMarker = '^'
         waypointMarker = 's'
         locationMarker = '.'
+
+        ax.set_title(r'Map ($\chi^2 = {:.4g}$)'.format(
+            self.optimizedGraph.chi2()))
 
         ax.plot(unoptimized['locations'][:, 0], unoptimized['locations'][:, 1],
                 unoptimized['locations'][:, 2], locationMarker,

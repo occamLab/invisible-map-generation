@@ -3,6 +3,7 @@
 import pickle
 import numpy as np
 import itertools
+from graph import optimizer2map
 import matplotlib.pyplot as plt
 from convert_posegraph import convert
 
@@ -22,17 +23,56 @@ def main():
     graph.optimizeGraph()
     graph.generateMaximizationParams()
     graph.tuneWeights()
-    test = copy.deepcopy(graph)
+    print('Expectation: ', graph.g2oStatus)
+    print('Maximization: ', graph.maximizationSuccess)
 
-    graph.plotMap()
-    graph.plotErrors()
+    unoptimizedTrajectory = optimizer2map(
+        graph.vertices, graph.unoptimizedGraph)
+    optimizedTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
 
-    rowsPerMap = 100
-    numAxs = graph.observations.shape[0] // graph.observations.shape[1] // rowsPerMap
-    heatf, heataxs = plt.subplots(1, numAxs)
-    for i, ax in enumerate(heataxs):
-        ax.imshow(graph.observations[i * rowsPerMap:(i+1)*rowsPerMap])
+    print('Optimized chi2: ', graph.optimizedGraph.chi2())
+    numIter = graph.em(tol=0.01, maxIter=32)
+    print(graph.maximizationResults)
+    print('EM Expectation: ', graph.g2oStatus)
+    print('EM Maximization: ', graph.maximizationSuccess)
+    print('emIterations: ', numIter)
+    print('EM chi2: ', graph.optimizedGraph.chi2())
 
+    emTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    tagMarker = '^'
+    waypointMarker = 's'
+    locationMarker = '.'
+    ax.plot(unoptimizedTrajectory['locations'][:, 0], unoptimizedTrajectory['locations'][:, 1],
+            unoptimizedTrajectory['locations'][:, 2], locationMarker,
+            label='Uncorrected Path')
+    ax.plot(optimizedTrajectory['locations'][:, 0], optimizedTrajectory['locations'][:, 1],
+            optimizedTrajectory['locations'][:, 2], locationMarker,
+            label='Corrected Path')
+    ax.plot(emTrajectory['locations'][:, 0], emTrajectory['locations'][:, 1],
+            emTrajectory['locations'][:, 2], locationMarker,
+            label='EM Corrected Path')
+
+    ax.plot(unoptimizedTrajectory['tags'][:, 0], unoptimizedTrajectory['tags'][:, 1],
+            unoptimizedTrajectory['tags'][:, 2], tagMarker, label='Uncorrected Tags')
+    ax.plot(optimizedTrajectory['tags'][:, 0], optimizedTrajectory['tags'][:, 1],
+            optimizedTrajectory['tags'][:, 2], tagMarker, label='Corrected Tags')
+    ax.plot(emTrajectory['tags'][:, 0], emTrajectory['tags'][:, 1],
+            emTrajectory['tags'][:, 2], tagMarker, label='EM Corrected Tags')
+
+    ax.plot(unoptimizedTrajectory['waypoints'][:, 0], unoptimizedTrajectory['waypoints'][:, 1],
+            unoptimizedTrajectory['waypoints'][:, 2], waypointMarker,
+            label='Uncorrected Waypoints')
+    ax.plot(optimizedTrajectory['waypoints'][:, 0], optimizedTrajectory['waypoints'][:, 1],
+            optimizedTrajectory['waypoints'][:, 2], waypointMarker,
+            label='Corrected Waypoints')
+    ax.plot(emTrajectory['waypoints'][:, 0], emTrajectory['waypoints'][:, 1],
+            emTrajectory['waypoints'][:, 2], waypointMarker,
+            label='EM Corrected Waypoints')
+
+    ax.legend()
     plt.show()
 
 
