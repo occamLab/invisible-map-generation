@@ -1,15 +1,20 @@
 import itertools
-from maximization_model import maxweights
-from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 import g2o
 import numpy as np
-
+from scipy.spatial.transform import Rotation as R
 from mpl_toolkits.mplot3d import Axes3D
+
+from maximization_model import maxweights
 
 
 def pose2Isometry(pose):
     return g2o.Isometry3d(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
+
+
+def isometry2Pose(isometry):
+    return np.concatenate(
+        [isometry.translation(), isometry.rotation().coeffs()])
 
 
 def graph2Optimizer(graph):
@@ -89,6 +94,7 @@ class Edge:
 class Graph:
     def __init__(self, vertices, edges):
         self.edges = edges
+        self.originalVertices = vertices
         self.vertices = vertices
         self.generateBasisMatrices()
 
@@ -118,7 +124,7 @@ class Graph:
         self.optimizedGraph = graph2Optimizer(self)
 
         initStatus = self.optimizedGraph.initialize_optimization()
-        runStatus = self.optimizedGraph.optimize(256)
+        runStatus = self.optimizedGraph.optimize(512)
 
         self.g2oStatus = initStatus and runStatus
 
@@ -176,23 +182,24 @@ class Graph:
             if startMode == VertexType.ODOMETRY:
                 if endMode == VertexType.ODOMETRY:
                     self.edges[uid].information = np.diag(
-                        np.sqrt(np.exp(-self.weights[:6])))
+                        np.exp(-self.weights[:6]))
                 if endMode == VertexType.TAG:
                     self.edges[uid].information = np.diag(
-                        np.sqrt(np.exp(-self.weights[6:12])))
+                        np.exp(-self.weights[6:12]))
                 if endMode == VertexType.DUMMY:
                     basis = self.basisMatrices[uid][3:6, 3:6]
-                    cov = np.diag(np.exp(-self.weights[15:18] / 2))
+                    cov = np.diag(np.exp(-self.weights[15:18]))
                     information = basis.dot(cov).dot(basis.T)
                     template = np.zeros([6, 6])
                     template[3:6, 3:6] = information
-                    self.edges[uid].information = template
+                    # self.edges[uid].information = template
 
         return results
 
     def emOnce(self):
         self.generateUnoptimizedGraph()
         self.optimizeGraph()
+        self.updateVertices()
         self.generateMaximizationParams()
         self.tuneWeights()
 
@@ -215,8 +222,14 @@ class Graph:
 
         return i
 
+    def updateVertices(self):
+        for uid in self.optimizedGraph.vertices():
+            self.vertices[uid].value = isometry2Pose(
+                self.optimizedGraph.vertices()[uid].estimate())
+
     def plotMap(self):
-        unoptimized = optimizer2map(self.vertices, self.unoptimizedGraph)
+        unoptimized = optimizer2map(
+            self.originalVertices, self.unoptimizedGraph)
         optimized = optimizer2map(self.vertices, self.optimizedGraph)
 
         fig = plt.figure()

@@ -12,8 +12,9 @@ def objfun(w, *args):
 
 def gradfun(w, *args):
     x, e = args
-    return -(e**2 * np.exp(-x.dot(w)) - 1).dot(x) / 2
+    return np.divide(-(np.square(e) * np.exp(-x.dot(w)) - 1).dot(x), 2)
 
 
 def maxweights(x, e, w):
+    # return minimize(objfun, w, (x, e))
     return minimize(objfun, w, (x, e), jac=gradfun)

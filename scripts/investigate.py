@@ -7,14 +7,14 @@ from graph import optimizer2map
 import matplotlib.pyplot as plt
 from convert_posegraph import convert
 
-with open('academic_center.pkl', 'rb') as data:
-    graph = convert(pickle.load(data, encoding='latin1'))
+# with open('academic_center.pkl', 'rb') as data:
+#     graph = convert(pickle.load(data, encoding='latin1'))
 
-# with open('graph.pkl', 'rb') as data:
-#     graph = pickle.load(data)
+with open('graph.pkl', 'rb') as data:
+    graph = pickle.load(data)
 
-with open('graph.pkl', 'wb') as data:
-    pickle.dump(graph, data)
+# with open('graph.pkl', 'wb') as data:
+#     pickle.dump(graph, data)
 
 
 def main():
@@ -31,11 +31,17 @@ def main():
     optimizedTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
 
     print('Optimized chi2: ', graph.optimizedGraph.chi2())
-    numIter = graph.em(tol=0.01, maxIter=32)
+    weights = np.reshape([], (0, 18))
+    for _ in range(6):
+        graph.emOnce()
+        print(graph.maximizationSuccess)
+        print(graph.g2oStatus)
+        print(graph.maximizationResults.message)
+        weights = np.vstack([weights, graph.weights])
+        print(weights[-1])
+
     print(graph.maximizationResults)
-    print('EM Expectation: ', graph.g2oStatus)
     print('EM Maximization: ', graph.maximizationSuccess)
-    print('emIterations: ', numIter)
     print('EM chi2: ', graph.optimizedGraph.chi2())
 
     emTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
@@ -73,7 +79,33 @@ def main():
             label='EM Corrected Waypoints')
 
     ax.legend()
+
+    weightsF, weightsAx = plt.subplots()
+    weightmap = weightsAx.imshow(weights[:, :12])
+    plt.colorbar(weightmap)
+
     plt.show()
+
+
+def checkVals():
+    graph.generateUnoptimizedGraph()
+    graph.optimizeGraph()
+    graph.generateMaximizationParams()
+    errs = [[] for _ in range(18)]
+    assignments = [np.where(i == 1)[0][0] for i in graph.observations]
+
+    for i, assignment in enumerate(assignments):
+        errs[assignment].append(graph.errors[i])
+
+    variance = [(np.array(err)**2).sum() for err in errs]
+    variance = np.array(variance) / [len(err) for err in errs]
+
+    print(variance)
+    graph.tuneWeights()
+    print(np.exp(graph.weights))
+    print(variance - np.exp(graph.weights))
+
+    return variance
 
 
 if __name__ == '__main__':
