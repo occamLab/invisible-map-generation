@@ -10,7 +10,11 @@ def convert_vertex(vertex):
     """Convert the old type of vertex to the new type.
 
     Args:
-        vertex: an old type vertex to be converted to the new format.
+        vertex: An old type vertex to be converted to the new format.
+
+    Returns:
+        A vertex of the new type with the same information as the
+        input vertex.
     """
     if vertex.fix_status:
         vertextype = VertexType.DUMMY
@@ -33,7 +37,11 @@ def convert_edge(edge):
     """Convert the old type edge to an edge of the new type.
 
     Args:
-        edge: an old type edge to be converted to the new format.
+        edge: An old type edge to be converted to the new format.
+
+    Returns:
+        An edge of the new type with the same information as the input
+        edge.
     """
     return Edge(startuid=edge.start.id, enduid=edge.end.id,
                 information=edge.importance_matrix,
@@ -43,6 +51,12 @@ def convert_edge(edge):
 
 def convert(posegraph):
     """Convert the old format for a graph to the new one.
+
+    Args:
+        posegraph: An old graph to be converted to the new format.
+
+    Returns:
+        A graph of the new type with the same information as the old graph.
     """
     vertices = {}
     edges = {}
