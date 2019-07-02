@@ -28,7 +28,7 @@ def convert_vertex(vertex):
         raise Exception("Vertex type {} not recognized".format(vertex.type))
 
     return (vertex.id, Vertex(mode=vertextype,
-                              value=np.concatenate
+                              estimate=np.concatenate
                               ([vertex.translation, (vertex.rotation)])
                               ))
 

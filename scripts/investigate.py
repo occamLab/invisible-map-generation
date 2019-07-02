@@ -2,49 +2,51 @@
 
 import pickle
 import numpy as np
-import itertools
-from graph import optimizer2map
+from graph_utils import optimizer_to_map
 import matplotlib.pyplot as plt
 from convert_posegraph import convert
+from mpl_toolkits.mplot3d import Axes3D
 
-# with open('academic_center.pkl', 'rb') as data:
-#     graph = convert(pickle.load(data, encoding='latin1'))
+with open('tasstraight.pkl', 'rb') as data:
+    graph = convert(pickle.load(data, encoding='latin1'))
 
-with open('graph.pkl', 'rb') as data:
-    graph = pickle.load(data)
+# with open('graph.pkl', 'rb') as data:
+#     graph = pickle.load(data)
 
-# with open('graph.pkl', 'wb') as data:
-#     pickle.dump(graph, data)
+with open('graph.pkl', 'wb') as data:
+    pickle.dump(graph, data)
 
 
 def main():
-    graph.optimizeGraph()
-    graph.generateUnoptimizedGraph()
-    graph.optimizeGraph()
-    graph.generateMaximizationParams()
-    graph.tuneWeights()
-    print('Expectation: ', graph.g2oStatus)
-    print('Maximization: ', graph.maximizationSuccess)
+    graph.optimize_graph()
+    graph.generate_unoptimized_graph()
+    graph.optimize_graph()
+    graph.generate_maximization_params()
+    graph.tune_weights()
+    print('Expectation: ', graph.g2o_status)
+    print('Maximization: ', graph.maximization_success)
 
-    unoptimizedTrajectory = optimizer2map(
-        graph.vertices, graph.unoptimizedGraph)
-    optimizedTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
+    errs = np.reshape([], [0, 12])
+    unoptimizedTrajectory = optimizer_to_map(
+        graph.vertices, graph.unoptimized_graph)
+    optimizedTrajectory = optimizer_to_map(
+        graph.vertices, graph.optimized_graph)
 
-    print('Optimized chi2: ', graph.optimizedGraph.chi2())
+    print('Optimized chi2: ', graph.optimized_graph.chi2())
     weights = np.reshape([], (0, 18))
     for _ in range(6):
-        graph.emOnce()
-        print(graph.maximizationSuccess)
-        print(graph.g2oStatus)
-        print(graph.maximizationResults.message)
+        graph.expectation_maximization_once()
+        print(graph.maximization_success)
+        print(graph.g2o_status)
+        print(graph.maximization_results.message)
         weights = np.vstack([weights, graph.weights])
-        print(weights[-1])
+        errs = np.vstack([errs, checkVals(graph)])
 
-    print(graph.maximizationResults)
-    print('EM Maximization: ', graph.maximizationSuccess)
-    print('EM chi2: ', graph.optimizedGraph.chi2())
+    print(graph.maximization_results)
+    print('EM Maximization: ', graph.maximization_success)
+    print('EM chi2: ', graph.optimized_graph.chi2())
 
-    emTrajectory = optimizer2map(graph.vertices, graph.optimizedGraph)
+    emTrajectory = optimizer_to_map(graph.vertices, graph.optimized_graph)
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
@@ -87,25 +89,27 @@ def main():
     plt.show()
 
 
-def checkVals():
-    graph.generateUnoptimizedGraph()
-    graph.optimizeGraph()
-    graph.generateMaximizationParams()
+def checkVals(graph):
     errs = [[] for _ in range(18)]
     assignments = [np.where(i == 1)[0][0] for i in graph.observations]
 
     for i, assignment in enumerate(assignments):
         errs[assignment].append(graph.errors[i])
 
-    variance = [(np.array(err)**2).sum() for err in errs]
-    variance = np.array(variance) / [len(err) for err in errs]
+    errs = [errs[i] for i in range(12)]
 
-    print(variance)
-    graph.tuneWeights()
-    print(np.exp(graph.weights))
-    print(variance - np.exp(graph.weights))
+    # for err in errs:
+    #     plt.hist(err[:12])
 
-    return variance
+    # variance = [(np.array(err)**2).sum() for err in errs]
+    # variance = np.array(variance) / [len(err) for err in errs]
+
+    # print(variance)
+    # graph.tuneWeights()
+    # print(np.exp(graph.weights))
+    # print(variance - np.exp(graph.weights))
+
+    return np.array(errs)
 
 
 if __name__ == '__main__':
