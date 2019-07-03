@@ -1,7 +1,8 @@
 """Some helpful functions for visualizing and analyzing graphs.
 """
+import itertools
 import numpy as np
-from graph import VertexType
+from graph import VertexType, Graph
 
 
 def optimizer_to_map(vertices, optimizer):
@@ -37,3 +38,41 @@ def optimizer_to_map(vertices, optimizer):
 
     return {'locations': np.array(locations), 'tags': np.array(tags),
             'waypoints': np.array(waypoints)}
+
+
+def connected_components(graph):
+    """Return a list of graphs representing connecting components of
+    the input graph.
+
+    If the graph is connected, there should only be one element in the
+    output.
+
+    Args:
+        graph: A :class: Graph to be separated into connected
+            components.
+
+    Returns: A list of :class: Graph containing the connected
+        components.
+    """
+    groups = []
+    for uid in graph.edges:
+        edge = graph.edges[uid]
+        uids = {edge.startuid, edge.enduid}
+        membership = []
+        for i, group in enumerate(groups):
+            if group[0] & uids:
+                membership.append(i)
+
+        new_group = set.union(uids, *[groups[i][0] for i in membership]), \
+            set.union({uid}, *[groups[i][1] for i in membership])
+
+        membership.reverse()
+
+        for i in membership:
+            del groups[i]
+
+        groups.append(new_group)
+
+    return [Graph(vertices={k: graph.vertices[k] for k in group[0]},
+                  edges={k: graph.edges[k] for k in group[1]})
+            for group in groups]
