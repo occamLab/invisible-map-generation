@@ -16,12 +16,13 @@ def convert_vertex(vertex):
         A vertex of the new type with the same information as the
         input vertex.
     """
-    if vertex.fix_status:
-        vertextype = VertexType.DUMMY
-    elif vertex.type == 'tag':
+    if vertex.type == 'tag':
         vertextype = VertexType.TAG
     elif vertex.type == 'odometry':
-        vertextype = VertexType.ODOMETRY
+        if vertex.fix_status:
+            vertextype = VertexType.DUMMY
+        else:
+            vertextype = VertexType.ODOMETRY
     elif vertex.type == 'waypoint':
         vertextype = VertexType.WAYPOINT
     else:
@@ -29,7 +30,8 @@ def convert_vertex(vertex):
 
     return (vertex.id, Vertex(mode=vertextype,
                               estimate=np.concatenate
-                              ([vertex.translation, (vertex.rotation)])
+                              ([vertex.translation, (vertex.rotation)]),
+                              fixed=vertex.fix_status
                               ))
 
 
@@ -71,6 +73,10 @@ def convert(posegraph):
                 uid, converted = convert_vertex(vertex)
                 vertices[uid] = converted
 
+            converted_edge = convert_edge(edge)
+            # if not (vertices[converted_edge.startuid].mode == VertexType.DUMMY
+            #         or vertices[converted_edge.enduid].mode
+            #         == VertexType.DUMMY):
             edges[edge_uid] = convert_edge(edge)
             edge_uid += 1
 
@@ -83,8 +89,12 @@ def convert(posegraph):
                 uid, converted = convert_vertex(vertex)
                 vertices[uid] = converted
 
-            edges[edge_uid] = convert_edge(edge)
-            edge_uid += 1
+            converted_edge = convert_edge(edge)
+            if not (vertices[converted_edge.startuid].mode == VertexType.DUMMY
+                    or vertices[converted_edge.enduid].mode
+                    == VertexType.DUMMY):
+                edges[edge_uid] = convert_edge(edge)
+                edge_uid += 1
 
     for startid in posegraph.odometry_waypoints_edges:
         for endid in posegraph.odometry_waypoints_edges[startid]:
@@ -95,7 +105,11 @@ def convert(posegraph):
                 uid, converted = convert_vertex(vertex)
                 vertices[uid] = converted
 
-            edges[edge_uid] = convert_edge(edge)
-            edge_uid += 1
+            converted_edge = convert_edge(edge)
+            if not (vertices[converted_edge.startuid].mode == VertexType.DUMMY
+                    or vertices[converted_edge.enduid].mode
+                    == VertexType.DUMMY):
+                edges[edge_uid] = convert_edge(edge)
+                edge_uid += 1
 
     return Graph(vertices=vertices, edges=edges)
