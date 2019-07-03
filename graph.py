@@ -55,7 +55,7 @@ def graph_to_optimizer(graph):
         vertex = g2o.VertexSE3()
         vertex.set_id(i)
         vertex.set_estimate(pose_to_isometry(graph.vertices[i].estimate))
-        vertex.set_fixed(graph.vertices[i].mode == VertexType.DUMMY)
+        vertex.set_fixed(graph.vertices[i].fixed)
         optimizer.add_vertex(vertex)
 
     for i in graph.edges:
@@ -111,7 +111,7 @@ class Vertex:
     pose.
     """
 
-    def __init__(self, mode, estimate):
+    def __init__(self, mode, estimate, fixed):
         """The vertex class.
 
         Args:
@@ -120,6 +120,7 @@ class Vertex:
         """
         self.mode = mode
         self.estimate = estimate
+        self.fixed = fixed
 
 
 class Edge:
@@ -295,7 +296,10 @@ class Graph:
         self.maximization_success = results.success
         self.weights = results.x
         self.maximization_results = results
+        self.update_edges()
+        return results
 
+    def update_edges(self):
         for uid in self.edges:
             edge = self.edges[uid]
             start_mode = self.vertices[edge.startuid].mode
@@ -322,8 +326,6 @@ class Graph:
             else:
                 raise Exception(
                     'Edge of start type {} not recognized.'.format(start_mode))
-
-        return results
 
     def expectation_maximization_once(self):
         """Run one cycle of expectation maximization.
