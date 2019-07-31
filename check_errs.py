@@ -1,10 +1,20 @@
 #!/usr/bin/env python
+"""
+Plot the errors between the ARKit measurements and the g2o optimized
+measurements.
+"""
 import pickle
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
 from graph_utils import ordered_odometry_edges
 
-with open('converted-data/academic_center.pkl', 'rb') as data:
+if len(sys.argv) < 2:
+    FILENAME = 'converted-data/academic_center.pkl'
+else:
+    FILENAME = sys.argv[1]
+
+with open(FILENAME, 'rb') as data:
     GRAPH = pickle.load(data)
 
 
@@ -25,6 +35,8 @@ def margin(confidence_interval):
     return np.log((confidence_interval / 3)**2)
 
 
+# Set the variance of all the errors and set the edge weights
+# accordingly.
 GRAPH.weights = np.zeros(18)
 GRAPH.weights[:3] = margin(.8)
 GRAPH.weights[3:6] = margin(20)
