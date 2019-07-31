@@ -4,10 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from graph import isometry_to_pose
 from graph_utils import ordered_odometry_edges
-from convert_posegraph import convert
 
-with open('data/academic_center.pkl', 'rb') as data:
-    graph = convert(pickle.load(data, encoding='latin1'))
+with open('converted-data/academic_center.pkl', 'rb') as data:
+    graph = pickle.load(data)
 # with open('graph.pkl', 'rb') as data:
 #     graph = pickle.load(data)
 
@@ -62,8 +61,8 @@ def main():
     graph.optimize_graph()
     edges = ordered_odometry_edges(graph)
     errs = np.reshape([], [0, 6])
-    edge_lookup = {x.id(): isometry_to_pose(x.measurement())[
-        :6] for x in graph.optimized_graph.edges()}
+    edge_lookup = {x.id(): x.error()[:6]
+                   for x in graph.optimized_graph.edges()}
     for uid in edges[0]:
         errs = np.vstack([errs, edge_lookup[uid]])
 

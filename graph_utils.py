@@ -1,6 +1,5 @@
 """Some helpful functions for visualizing and analyzing graphs.
 """
-import itertools
 import numpy as np
 from graph import VertexType, Graph
 
@@ -102,8 +101,10 @@ def ordered_odometry_edges(graph):
         start_found_idx = end_found_idx = 0
 
         for i in range(len(segments) - 1, -1, -1):
-            current_start_found = edge.startuid == graph.edges[segments[i][-1]].enduid
-            current_end_found = edge.enduid == graph.edges[segments[i][0]].startuid
+            current_start_found = \
+                edge.startuid == graph.edges[segments[i][-1]].enduid
+            current_end_found = \
+                edge.enduid == graph.edges[segments[i][0]].startuid
 
             if current_start_found:
                 start_found = True

@@ -2,7 +2,7 @@
 
 import pickle
 import numpy as np
-from graph_utils import optimizer_to_map, connected_components, orderedOdometryEdges
+from graph_utils import optimizer_to_map, connected_components, ordered_odometry_edges
 from graph import VertexType
 import matplotlib.pyplot as plt
 from convert_posegraph import convert
@@ -11,8 +11,11 @@ from mpl_toolkits.mplot3d import Axes3D
 # with open('data/straight_back_and_forth.pkl', 'rb') as data:
 #     graph = convert(pickle.load(data, encoding='latin1'))
 
-with open('graph.pkl', 'rb') as data:
-    graph = pickle.load(data)
+with open('converted-data/straight_back_and_forth.pkl', 'rb') as data:
+    graph = pickle.load(data, encoding='latin1')
+
+with open('straight_back_and_forth.pkl', 'wb') as data:
+    pickle.dump(graph, data)
 
 
 def checkVals1(graph):
