@@ -9,6 +9,13 @@ This repository is a refactor and extension of the work done in [occamlab/assist
 
 3. Iterate on the optimization by running 'glue.py' repeatedly.
 
+# Converting old-style graphs to python3 new style graphs
+This is convoluted, since ROS depends on python2 and this project depends on python3.
+Pickle has different encoding types between both python versions.
+
+1. Convert the pickle to the new type using python2: `python2 convert_pickle.py src.pkl dest.pkl`
+2. Convert the python2 pickle to a python3 pickle: `python3 convert_pickle.py dest.pkl`
+
 ## Dependencies
 - [ARKit-ROS-Bridge](https://github.com/occamLab/ARKit-Ros-Bridge) to collect data
 - [g2opy](https://github.com/uoip/g2opy) to work with the graphs.
