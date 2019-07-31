@@ -11,3 +11,7 @@ This repository is a refactor and extension of the work done in [occamlab/assist
 
 ## Dependencies
 - [ARKit-ROS-Bridge](https://github.com/occamLab/ARKit-Ros-Bridge) to collect data
+- [g2opy](https://github.com/uoip/g2opy) to work with the graphs.
+  - There is an issue with newer versions of Eigen, a dependency of g2opy.
+    [This pull request](https://github.com/uoip/g2opy/pull/16) fixes it.
+  - If g2o is building for the wrong python version, see [this issue](https://github.com/uoip/g2opy/issues/9)
