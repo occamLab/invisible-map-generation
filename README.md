@@ -13,8 +13,10 @@ This repository is a refactor and extension of the work done in [occamlab/assist
 This is convoluted, since ROS depends on python2 and this project depends on python3.
 Pickle has different encoding types between both python versions.
 
-1. Convert the pickle to the new type using python2: `python2 convert_pickle.py src.pkl dest.pkl`
-2. Convert the python2 pickle to a python3 pickle: `python3 convert_pickle.py dest.pkl`
+1. Convert the pickle to the new type using python2: `python2 convert_pickle.py src.pkl dest.pkl`.
+   To find the  ROS datatypes, you need to `source /opt/ros/<installed_ros_distro>/setup.bash`.
+2. Convert the python2 pickle to a python3 pickle: `python3 convert_pickle.py dest.pkl`.
+
 
 ## Dependencies
 - [ARKit-ROS-Bridge](https://github.com/occamLab/ARKit-Ros-Bridge) to collect data
