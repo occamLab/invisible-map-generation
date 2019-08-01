@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import sys
 import pickle
-import convert_posegraph
+from convert_posegraph import convert
 
 if len(sys.argv) < 2:
     print("Usage: convert_pickle.py SRC DEST")
@@ -17,7 +17,7 @@ if len(sys.argv) < 3:
 
 elif len(sys.argv) < 4:
     with open(sys.argv[1], 'rb') as data:
-        GRAPH = pickle.load(data)
+        GRAPH = convert(pickle.load(data))
 
     with open(sys.argv[2], 'wb') as data:
         pickle.dump(data, GRAPH)
