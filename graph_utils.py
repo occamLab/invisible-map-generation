@@ -16,24 +16,28 @@ def optimizer_to_map(vertices, optimizer):
 
     Returns:
         A dictionary with fields 'locations', 'tags', and 'waypoints'.
-        The 'locations' key covers a (n, 3) array containing x, y, and
-        z locations of the phone at n points.
+        The 'locations' key covers a (n, 8) array containing x, y, z,
+        qx, qy, qz, qw locations of the phone as well as the vertex
+        uid at n points.
         The 'tags' and 'waypoints' keys cover the locations of the
         tags and waypoints in the same format.
     """
-    locations = np.reshape([], [0, 3])
-    tags = np.reshape([], [0, 3])
-    waypoints = np.reshape([], [0, 3])
+    locations = np.reshape([], [0, 7])
+    tags = np.reshape([], [0, 7])
+    waypoints = np.reshape([], [0, 7])
 
     for i in optimizer.vertices():
         mode = vertices[i].mode
         location = optimizer.vertex(i).estimate().translation()
+        rotation = optimizer.vertex(i).estimate().rotation().coeffs()
+        pose = np.concatenate([location, rotation, [vertices[i].id]])
+
         if mode == VertexType.ODOMETRY:
-            locations = np.vstack([locations, location])
+            locations = np.vstack([locations, pose])
         elif mode == VertexType.TAG:
-            tags = np.vstack([tags, location])
+            tags = np.vstack([tags, pose])
         elif mode == VertexType.WAYPOINT:
-            waypoints = np.vstack([waypoints, location])
+            waypoints = np.vstack([waypoints, pose])
 
     return {'locations': np.array(locations), 'tags': np.array(tags),
             'waypoints': np.array(waypoints)}
