@@ -22,15 +22,16 @@ def optimizer_to_map(vertices, optimizer):
         The 'tags' and 'waypoints' keys cover the locations of the
         tags and waypoints in the same format.
     """
-    locations = np.reshape([], [0, 7])
-    tags = np.reshape([], [0, 7])
-    waypoints = np.reshape([], [0, 7])
+    locations = np.reshape([], [0, 8])
+    tags = np.reshape([], [0, 8])
+    waypoints = np.reshape([], [0, 8])
 
     for i in optimizer.vertices():
         mode = vertices[i].mode
         location = optimizer.vertex(i).estimate().translation()
         rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-        pose = np.concatenate([location, rotation, [vertices[i].id]])
+        #pose = np.concatenate([location, rotation, [vertices[i].id]])
+        pose = np.concatenate([location, rotation, [int(i)]])
 
         if mode == VertexType.ODOMETRY:
             locations = np.vstack([locations, pose])
