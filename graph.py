@@ -36,7 +36,7 @@ def isometry_to_pose(isometry):
         [isometry.translation(), isometry.rotation().coeffs()])
 
 
-def graph_to_optimizer(graph):
+def graph_to_optimizer(graph, damping_status=False):
     """Convert a :class: graph to a :class: g2o.SparseOptimizer.
 
     Args:
@@ -160,7 +160,7 @@ class Graph:
     optimize it.
     """
 
-    def __init__(self, vertices, edges, weights=np.zeros(18)):
+    def __init__(self, vertices, edges, weights=np.zeros(18), damping_status=False):
         """The graph class.
         The graph contains a dictionary of vertices and edges, the
         keys being UIDs such as ints.
@@ -196,6 +196,8 @@ class Graph:
 
         self.unoptimized_graph = None
         self.optimized_graph = None
+        self.damping_status = damping_status
+        self.update_edge()
 
     def generate_basis_matrices(self):
         """Generate basis matrices used to show how a change in global
@@ -318,7 +320,10 @@ class Graph:
                     information = basis.dot(cov).dot(basis.T)
                     template = np.zeros([6, 6])
                     template[3:6, 3:6] = information
-                    # self.edges[uid].information = template
+                    if self.damping_status:
+                        self.edges[uid].information = template
+                    else:
+                        self.edges[uid].information = np.zeros_like(template)
                 else:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))
