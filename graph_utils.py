@@ -140,3 +140,34 @@ def ordered_odometry_edges(graph):
             segments.append([uid])
 
     return segments
+
+
+def get_subgraph(graph, start_vertex_uid, end_vertex_uid):
+    edges = ordered_odometry_edges(graph)
+    start_found = False
+    ret_graph = Graph({}, {})
+    for i, edgeuid in enumerate(edges):
+        edge = graph.edges[graphuid]
+        if edge.startuid == start_vertex_uid:
+            start_found = True
+
+        if start_found:
+            ret_graph.vertices[edge.enduid] = graph.vertex[edge.enduid]
+            ret_graph.vertices[edge.startuid] = graph.vertex[edge.startuid]
+            ret_grap.edges[edgeuid] = edge
+
+        if edge.enduid == end_vertex_uid:
+            break
+
+    # Find tags and edges connecting to the found vertices
+    for edgeuid in graph.edges:
+        edge = graph.edges[edgeuid]
+        if graph.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in ret_graph.vertices:
+                ret_graph.edges[edgeuid] = edge
+                ret_graph.vertices[edge.startuid] = graph.vertices[edge.startuid]
+
+        if graph.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in ret_graph.vertices:
+            ret_graph.edges[edgeuid] = edge
+            ret_graph.vertices[edge.enduid] = graph.vertices[edge.enduid]
+
+    return ret_graph

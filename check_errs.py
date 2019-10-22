@@ -116,6 +116,23 @@ def main():
     """
     GRAPH.generate_unoptimized_graph()
     GRAPH.optimize_graph()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
+    GRAPH.expectation_maximization_once()
+    print(GRAPH.weights)
     edges = ordered_odometry_edges(GRAPH)
     errs = np.reshape([], [0, 6])
     edge_lookup = {x.id(): x.error()[:6]
@@ -123,9 +140,10 @@ def main():
     for uid in edges[0]:
         errs = np.vstack([errs, edge_lookup[uid]])
 
+
     plot_errs(errs)
 
-    covs = errs_cov(errs, 20)
+    covs = errs_cov(errs, 32)
     plot_covs(covs)
 
     plt.show()

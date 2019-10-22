@@ -17,6 +17,7 @@ unoptimized_map = optimizer_to_map(graph.vertices, graph.unoptimized_graph)
 graph.optimize_graph()
 optimized_map = optimizer_to_map(graph.vertices, graph.optimized_graph)
 
+
 def generate_transformations(positions):
     '''This may be difficult, as querying a transform a-> b in a
     dictionary with the transform b->a must return the inverse of
@@ -28,8 +29,9 @@ def generate_transformations(positions):
     # transformations
     # for pair in pairs:
 
-        
+
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-ax.plot(unoptimized_map['locations'][:,0], unoptimized_map['locations'][:,1], unoptimized_map['locations'][:,2])
+ax.plot(unoptimized_map['locations'][:, 0], unoptimized_map['locations']
+        [:, 1], unoptimized_map['locations'][:, 2])
 plt.show()
