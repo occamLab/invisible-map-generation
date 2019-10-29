@@ -30,7 +30,7 @@ def optimizer_to_map(vertices, optimizer):
         mode = vertices[i].mode
         location = optimizer.vertex(i).estimate().translation()
         rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-        #pose = np.concatenate([location, rotation, [vertices[i].id()]])
+        #pose = np.concatenate([location, rotation, [vertices[i].id]])
         pose = np.concatenate([location, rotation, [int(i)]])
 
         if mode == VertexType.ODOMETRY:
@@ -80,15 +80,6 @@ def connected_components(graph):
     return [Graph(vertices={k: graph.vertices[k] for k in group[0]},
                   edges={k: graph.edges[k] for k in group[1]})
             for group in groups]
-
-def ordered_tag_edgees(graph):
-    tag_edges = []
-    for uid in graph.edges:
-        edge = graph.edges[uid]
-        if graph.vertices[edge.startuid].mode != VertexType.TAG and graph.vertices[edge.enduid].mode != VertexType.TAG:
-            continue
-    pass
-
 
 
 def ordered_odometry_edges(graph):

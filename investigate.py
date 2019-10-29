@@ -52,7 +52,7 @@ graph.weights[3:6] = margin(20)
 graph.weights[6:9] = margin(.4)
 graph.weights[9:12] = margin(5)
 graph.update_edges()
-print(graph.weights)
+
 
 def main():
     graph.generate_unoptimized_graph()
@@ -151,5 +151,5 @@ def checkVals(graph):
     return errs
 
 
-# if __name__ == '__main__':
-#     main()
+if __name__ == '__main__':
+    main()

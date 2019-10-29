@@ -21,8 +21,8 @@ optimized_map = optimizer_to_map(graph.vertices, graph.optimized_graph)
 def compute_transformation(start, end):
     """
     compute the transformation from start position to end
-    :param start: start position as a np array of [x, y, z, qx, qy, qz, 1]
-    :param end: end position as a np array of [x, y, z, qx, qy, qz, 1]
+    :param start: start position as a pose np array of [x, y, z, qx, qy, qz, 1]
+    :param end: end position as a pose np array of [x, y, z, qx, qy, qz, 1]
     :return: numpy array of
     """
     translation = list(end[:3] - start[:3])
@@ -33,11 +33,10 @@ def compute_transformation(start, end):
     return np.array(translation + rotation)
 
 def generate_transformations(positions):
-    """
-    Return a hashmap of transformations between pairwise positions.
-    :param positions: A list of positions as a np array of [x, y, z, qx, qy, qz, 1, vertex_id]
-    :return: Return a hashmap of
-    """
+    '''This may be difficult, as querying a transform a-> b in a
+    dictionary with the transform b->a must return the inverse of
+    b->a. It may be useful to make a separate clone of optimize_to_map
+    which makes a hashmap of vertex uids.'''
     transformations = dict()
     pairs = list(itertools.combinations(positions, 2))
     # transformations
@@ -74,6 +73,7 @@ def plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map):
     plt.xlabel('distance magnitude')
     plt.ylabel('error')
     plt.show()
+
 
 plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map)
 
