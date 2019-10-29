@@ -197,7 +197,7 @@ class Graph:
         self.unoptimized_graph = None
         self.optimized_graph = None
         self.damping_status = damping_status
-        self.update_edge()
+        self.update_edges()
 
     def generate_basis_matrices(self):
         """Generate basis matrices used to show how a change in global
