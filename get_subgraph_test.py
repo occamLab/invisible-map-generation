@@ -11,11 +11,12 @@ optimizer = graph.unoptimized_graph
 graph_map = optimizer_to_map(graph.vertices, optimizer)
 
 
-subgraph = get_subgraph(graph, 588,2000)
+subgraph = get_subgraph(graph, 588,1500)
 subgraph.generate_unoptimized_graph()
+subgraph.optimize_graph()
 
 
-subgraph_map = optimizer_to_map(subgraph.vertices, subgraph.unoptimized_graph)
+subgraph_map = optimizer_to_map(subgraph.vertices, subgraph.optimized_graph)
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
