@@ -77,8 +77,8 @@ def plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map):
 
 plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map)
 
-
-# fig = plt.figure()
-# ax = fig.add_subplot(111, projection='3d')
-# ax.plot(unoptimized_map['locations'][:, 0], unoptimized_map['locations'][:, 1], unoptimized_map['locations'][:, 2])
-# plt.show()
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.plot(unoptimized_map['locations'][:, 0], unoptimized_map['locations']
+        [:, 1], unoptimized_map['locations'][:, 2])
+plt.show()

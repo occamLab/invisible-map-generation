@@ -74,7 +74,7 @@ def main():
 
     print('Optimized chi2: ', graph.optimized_graph.chi2())
     weights = np.reshape([], (0, 18))
-    for _ in range(0):
+    for _ in range(3):
         graph.expectation_maximization_once()
         print(graph.maximization_success)
         print(graph.g2o_status)
