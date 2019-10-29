@@ -22,15 +22,15 @@ def optimizer_to_map(vertices, optimizer):
         The 'tags' and 'waypoints' keys cover the locations of the
         tags and waypoints in the same format.
     """
-    locations = np.reshape([], [0, 7])
-    tags = np.reshape([], [0, 7])
-    waypoints = np.reshape([], [0, 7])
+    locations = np.reshape([], [0, 8])
+    tags = np.reshape([], [0, 8])
+    waypoints = np.reshape([], [0, 8])
 
     for i in optimizer.vertices():
         mode = vertices[i].mode
         location = optimizer.vertex(i).estimate().translation()
         rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-        pose = np.concatenate([location, rotation, [vertices[i].id]])
+        pose = np.concatenate([location, rotation, [i]])
 
         if mode == VertexType.ODOMETRY:
             locations = np.vstack([locations, pose])
@@ -146,15 +146,15 @@ def get_subgraph(graph, start_vertex_uid, end_vertex_uid):
     edges = ordered_odometry_edges(graph)
     start_found = False
     ret_graph = Graph({}, {})
-    for i, edgeuid in enumerate(edges):
-        edge = graph.edges[graphuid]
+    for i, edgeuid in enumerate(edges[0]):
+        edge = graph.edges[edgeuid]
         if edge.startuid == start_vertex_uid:
             start_found = True
 
         if start_found:
-            ret_graph.vertices[edge.enduid] = graph.vertex[edge.enduid]
-            ret_graph.vertices[edge.startuid] = graph.vertex[edge.startuid]
-            ret_grap.edges[edgeuid] = edge
+            ret_graph.vertices[edge.enduid] = graph.vertices[edge.enduid]
+            ret_graph.vertices[edge.startuid] = graph.vertices[edge.startuid]
+            ret_graph.edges[edgeuid] = edge
 
         if edge.enduid == end_vertex_uid:
             break
