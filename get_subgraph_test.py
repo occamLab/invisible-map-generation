@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from metrics import plot_tags_distance_diff_in_maps
 from mpl_toolkits.mplot3d import Axes3D
 #data = 'converted-data/tttest.pkl'
-data = "converted-data/test1210.pkl"
+data = "converted-data/test_work.pkl"
 #data = 'converted-data/academic_center.pkl'
 with open(data, 'rb') as data:
     graph = pickle.load(data)

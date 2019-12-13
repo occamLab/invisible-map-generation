@@ -177,26 +177,7 @@ def get_tags_all_position_estimate(graph, start_vertex_uid, end_vertex_uid):
     tags = np.reshape([], [0, 8]) # [x, y, z, qx, qy, qz, 1, id]
     for edgeuid in graph.edges:
         edge = graph.edges[edgeuid]
-        if graph.vertices[edge.startuid].mode == VertexType.TAG and start_vertex_uid <= edge.enduid <= end_vertex_uid:
-            odom_transform = np.eye(4)
-            odom_position = graph.vertices[edge.enduid].estimate
-            odom_rotation = R.from_quat(odom_position[3:]).as_dcm()
-            odom_transform[:3, 3] = odom_position[:3]
-            odom_transform[:3,:3] = odom_rotation
-
-            edge_transform = np.eye(4)
-            edge_rotation = R.from_quat(edge.measurement[3:]).as_dcm()
-            edge_rotation_inv = np.linalg.inv(edge_rotation)
-            edge_transform[:3, 3] = edge.measurement[:3]
-            edge_transform[:3,:3] = edge_rotation_inv
-
-            tag_transform = odom_transform.dot(edge_transform)
-            tag_translation = tag_transform[:3, 3]
-            tag_rotation = R.from_dcm(tag_transform[:3, :3]).as_quat()
-            tag_pose = np.concatenate([tag_translation, tag_rotation, [edge.startuid]])
-            tags = np.vstack([tags, tag_pose])
-
-        if graph.vertices[edge.enduid].mode == VertexType.TAG and start_vertex_uid <= edge.startuid <= end_vertex_uid:
+        if graph.vertices[edge.startuid].mode == VertexType.ODOMETRY and graph.vertices[edge.enduid].mode == VertexType.TAG:
             odom_transform = np.eye(4)
             odom_position = graph.vertices[edge.enduid].estimate
             odom_rotation = R.from_quat(odom_position[3:]).as_dcm()
@@ -209,6 +190,7 @@ def get_tags_all_position_estimate(graph, start_vertex_uid, end_vertex_uid):
             edge_transform[:3, :3] = edge_rotation
 
             tag_transform = odom_transform.dot(edge_transform)
+            #tag_transform = edge_transform.dot(odom_transform)
             tag_translation = tag_transform[:3, 3]
             tag_rotation = R.from_dcm(tag_transform[:3, :3]).as_quat()
             tag_pose = np.concatenate([tag_translation, tag_rotation, [edge.enduid]])
