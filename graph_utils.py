@@ -164,8 +164,8 @@ def get_subgraph(graph, start_vertex_uid, end_vertex_uid):
     for edgeuid in graph.edges:
         edge = graph.edges[edgeuid]
         if graph.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in ret_graph.vertices:
-                ret_graph.edges[edgeuid] = edge
-                ret_graph.vertices[edge.startuid] = graph.vertices[edge.startuid]
+            ret_graph.edges[edgeuid] = edge
+            ret_graph.vertices[edge.startuid] = graph.vertices[edge.startuid]
 
         if graph.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in ret_graph.vertices:
             ret_graph.edges[edgeuid] = edge
@@ -173,8 +173,9 @@ def get_subgraph(graph, start_vertex_uid, end_vertex_uid):
 
     return ret_graph
 
+
 def get_tags_all_position_estimate(graph, start_vertex_uid, end_vertex_uid):
-    tags = np.reshape([], [0, 8]) # [x, y, z, qx, qy, qz, 1, id]
+    tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
     for edgeuid in graph.edges:
         edge = graph.edges[edgeuid]
         if graph.vertices[edge.startuid].mode == VertexType.ODOMETRY and graph.vertices[edge.enduid].mode == VertexType.TAG:
@@ -193,9 +194,27 @@ def get_tags_all_position_estimate(graph, start_vertex_uid, end_vertex_uid):
             #tag_transform = edge_transform.dot(odom_transform)
             tag_translation = tag_transform[:3, 3]
             tag_rotation = R.from_dcm(tag_transform[:3, :3]).as_quat()
-            tag_pose = np.concatenate([tag_translation, tag_rotation, [edge.enduid]])
+            tag_pose = np.concatenate(
+                [tag_translation, tag_rotation, [edge.enduid]])
             tags = np.vstack([tags, tag_pose])
     return tags
 
 
+def measurement_to_matrix(measurement):
+    transformation = np.eye(4)
+    transformation[:3, 3] = measurement[:3]
+    transformation[:3, :3] = R.from_quat(measurement[3:7]).as_matrix()
+    return transformation
 
+
+def integrate_path(graph, edgeuids):
+    poses = [np.array([0, 0, 0, 0, 0, 0, 1])]
+    for edgeuid in edgeuids:
+        old_pose = measurement_to_matrix(poses[-1])
+        transform = measurement_to_matrix(graph.edges[edgeuid].measurement)
+        new_pose = old_pose.dot(transform)
+        translation = new_pose[:3, 3]
+        rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
+        poses.append(np.concatenate([translation, rotation]))
+
+    return np.array(poses)
