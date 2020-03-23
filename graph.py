@@ -185,7 +185,7 @@ class Graph:
         self.original_vertices = vertices
         self.vertices = vertices
         self.weights = weights
-        self.generate_basis_matrices()
+        # self.generate_basis_matrices()
 
         self.g2o_status = -1
         self.maximization_success_status = False
