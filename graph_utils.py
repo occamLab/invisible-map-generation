@@ -174,32 +174,6 @@ def get_subgraph(graph, start_vertex_uid, end_vertex_uid):
     return ret_graph
 
 
-def get_tags_all_position_estimate(graph, start_vertex_uid, end_vertex_uid):
-    tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
-    for edgeuid in graph.edges:
-        edge = graph.edges[edgeuid]
-        if graph.vertices[edge.startuid].mode == VertexType.ODOMETRY and graph.vertices[edge.enduid].mode == VertexType.TAG:
-            odom_transform = np.eye(4)
-            odom_position = graph.vertices[edge.enduid].estimate
-            odom_rotation = R.from_quat(odom_position[3:]).as_dcm()
-            odom_transform[:3, 3] = odom_position[:3]
-            odom_transform[:3, :3] = odom_rotation
-
-            edge_transform = np.eye(4)
-            edge_rotation = R.from_quat(edge.measurement[3:]).as_dcm()
-            edge_transform[:3, 3] = edge.measurement[:3]
-            edge_transform[:3, :3] = edge_rotation
-
-            tag_transform = odom_transform.dot(edge_transform)
-            #tag_transform = edge_transform.dot(odom_transform)
-            tag_translation = tag_transform[:3, 3]
-            tag_rotation = R.from_dcm(tag_transform[:3, :3]).as_quat()
-            tag_pose = np.concatenate(
-                [tag_translation, tag_rotation, [edge.enduid]])
-            tags = np.vstack([tags, tag_pose])
-    return tags
-
-
 def measurement_to_matrix(measurement):
     transformation = np.eye(4)
     transformation[:3, 3] = measurement[:3]
@@ -207,8 +181,26 @@ def measurement_to_matrix(measurement):
     return transformation
 
 
-def integrate_path(graph, edgeuids):
-    poses = [np.array([0, 0, 0, 0, 0, 0, 1])]
+def get_tags_all_position_estimate(graph):
+    tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
+    for edgeuid in graph.edges:
+        edge = graph.edges[edgeuid]
+        if graph.vertices[edge.startuid].mode == VertexType.ODOMETRY and graph.vertices[edge.enduid].mode == VertexType.TAG:
+            odom_transform = measurement_to_matrix(
+                graph.vertices[edge.startuid].estimate)
+            edge_transform = measurement_to_matrix(edge.measurement)
+
+            tag_transform = odom_transform.dot(edge_transform)
+            tag_translation = tag_transform[:3, 3]
+            tag_rotation = R.from_matrix(tag_transform[:3, :3]).as_quat()
+            tag_pose = np.concatenate(
+                [tag_translation, tag_rotation, [edge.enduid]])
+            tags = np.vstack([tags, tag_pose])
+    return tags
+
+
+def integrate_path(graph, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])):
+    poses = [initial]
     for edgeuid in edgeuids:
         old_pose = measurement_to_matrix(poses[-1])
         transform = measurement_to_matrix(graph.edges[edgeuid].measurement)
