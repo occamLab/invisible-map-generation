@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import matplotlib.pyplot as plt
 
 import graph
 
@@ -55,10 +54,15 @@ def as_graph(dct):
 
     # The camera axis used to get tag measurements are flipped
     # relative to the phone frame used for odom measurements
-    tag_to_odom_transform = np.eye(4)
-    tag_to_odom_transform[[1,2], [1,2]] *= -1
+    tag_to_odom_transform = np.array([
+        [0, 1, 0, 0],
+        [1, 0, 0, 0],
+        [0, 0, -1, 0],
+        [0, 0, 0, 1]
+    ])
 
-    tag_edge_measurements_matrix = np.matmul(tag_to_odom_transform, tag_data[:, 1:17].reshape(-1, 4, 4))
+    tag_edge_measurements_matrix = np.matmul(
+        tag_to_odom_transform, tag_data[:, 1:17].reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
     unique_tag_ids = np.unique(tag_data[:, 0]).astype('i')
@@ -75,7 +79,6 @@ def as_graph(dct):
         tag_vertex_id_and_index_by_frame_id[tag_frame].append(
             (tag_vertex_id, tag_index))
 
-
     # Construct the dictionaries of vertices and edges
     vertices = {}
     edges = {}
@@ -86,6 +89,7 @@ def as_graph(dct):
     previous_pose_matrix = None
     counted_tag_vertex_ids = set()
     first_odom_processed = False
+    num_tag_edges = 0
 
     for i, odom_frame in enumerate(pose_data[:, 17]):
         current_odom_vertex_uid = vertex_counter
@@ -103,7 +107,8 @@ def as_graph(dct):
             if tag_vertex_id not in counted_tag_vertex_ids:
                 vertices[tag_vertex_id] = graph.Vertex(
                     mode=graph.VertexType.TAG,
-                    estimate=matrix2measurement(pose_matrices[i].dot(tag_edge_measurements_matrix[tag_index])),
+                    estimate=matrix2measurement(pose_matrices[i].dot(
+                        tag_edge_measurements_matrix[tag_index])),
                     fixed=False
                 )
                 counted_tag_vertex_ids.add(tag_vertex_id)
@@ -115,6 +120,7 @@ def as_graph(dct):
                 measurement=tag_edge_measurements[tag_index]
                 # measurement=np.array([0, 0, 0, 0, 0, 0, 1])
             )
+            num_tag_edges += 1
 
             edge_counter += 1
 
@@ -123,7 +129,8 @@ def as_graph(dct):
                 startuid=previous_vertex,
                 enduid=current_odom_vertex_uid,
                 information=np.eye(6),
-                measurement=matrix2measurement(np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
+                measurement=matrix2measurement(np.linalg.inv(
+                    previous_pose_matrix).dot(pose_matrices[i]))
             )
             edge_counter += 1
         previous_vertex = current_odom_vertex_uid
