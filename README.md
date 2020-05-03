@@ -40,3 +40,13 @@ Pickle has different encoding types between both python versions.
 - `get_subgraph_test.py`: Used to test subgraph extraction from `graph_utils.py`.
   This can be useful in assessing the jumpiness metric.
 - `metrics.py`: Going to have to remind myself of this one.
+
+## TODOS
+- Find sane weights for g2o.
+  - There seems to be a bug in the g2o optimization that may lie in the updating of edge weights (`update_edges` in `graph.py`) or the conversion of a graph to a g2o object (`graph_to_optimizer` in `graph.py`).
+    The symptom is an optimized graph where the odometry path is squished and the tags are nowhere near where they should be.
+    Adjusting the weights currently seems to do nothing.
+    
+- Test these weights against a jumpiness metric
+  - `get_subgraph` from `graph_utils.py` can be used to take a path where you walk straight back and forth between two tags repeatedly.
+    A good set of weights would make the optimized subgraph of going back and forth once match the optimized subgraph of going back and forth twice and so on.
