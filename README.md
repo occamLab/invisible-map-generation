@@ -3,11 +3,10 @@
 This repository is a refactor and extension of the work done in [occamlab/assistive_apps](https://github.com/occamLab/assistive_apps/tree/summer2018) to generate maps.
 
 ## Creating a map
-1. Collect data by running the data_collection script in [occamlab/assistive_apps](https://github.com/occamLab/assistive_apps/tree/summer2018)'s navigation_prototypes project and name the output file 'academic_center.pkl'
-
-2. Get an initial optimized graph by running this repository's 'optimization.py' file.
-
-3. Iterate on the optimization by running 'glue.py' repeatedly.
+1. Use the app in ARKit-ROS-Bridge to record a map on a phone
+2. Retrieve the map from Firebase
+3. Use `as_graph` from `convert_json.py` to convert it to a graph, see `test_json.py`
+4. Optionally save the new graph object as a pickle.
 
 # Converting old-style graphs to python3 new style graphs
 This is convoluted, since ROS depends on python2 and this project depends on python3.
