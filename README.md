@@ -24,3 +24,20 @@ Pickle has different encoding types between both python versions.
   - There is an issue with newer versions of Eigen, a dependency of g2opy.
     [This pull request](https://github.com/uoip/g2opy/pull/16) fixes it.
   - If g2o is building for the wrong python version, see [this issue](https://github.com/uoip/g2opy/issues/9).
+
+## Source Files
+- `pose_graph.py`: This file describes the old type of posegraphs and is kept as a dependency for the converter.
+- `graph.py` The new type of graph that uses the python g2o bindings.
+- `convert_pickle.py`: This converts from the old to new type of posegraph.
+- `convert_json.py`: There is new functionality to collect data straight from a phone and load a JSON file from FireBase.
+  This contains functions to convert from json to the new graph type.
+- `graph_utils.py`: Contains useful helper functions for graphs, such as converting them to a dict of arrays for plotting or integrating measurements into a path.
+- `maximization_model.py`: Contains the maximization model to use for EM. See math.pdf for details.
+- `plot_graph.py` Plot an input graph pickle.
+  
+
+## Test Files
+- `check_errs.py`: Used to plot the difference between the g2o optimized vertex positions and the original vertex estimates.
+- `get_subgraph_test.py`: Used to test subgraph extraction from `graph_utils.py`.
+  This can be useful in assessing the jumpiness metric.
+- `metrics.py`: Going to have to remind myself of this one.
