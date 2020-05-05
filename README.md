@@ -47,11 +47,11 @@ Pickle has different encoding types between both python versions.
     The symptom is an optimized graph where the odometry path is squished and the tags are nowhere near where they should be.
     Adjusting the weights currently seems to do nothing.
     
-    For example, commenting out the lines that optimize the graph in `test_json.py` yields the following unoptimized graph:
+    For example, commenting out the lines that optimize the graph in `test_json.py` yields the following unoptimized graph, which looks good:
     
     ![unoptimized graph](img/unoptimized.png)
     
-    However, the optimized graph from `test_json.py` looks like this:
+    However, the optimized graph from `test_json.py` looks like this, which somehow moved all of the tag vertices away from the odometry ones and compressed the path:
     
     ![optimized graph](img/optimized.png)
     
