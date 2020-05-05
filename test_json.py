@@ -12,10 +12,6 @@ with open('data/round1.json', 'r') as f:
 
 test_graph = convert_json.as_graph(x)
 
-# with open('converted-data/straight_back_and_forth.pkl', 'rb') as data:
-#     test_graph = pickle.load(data, encoding='latin1')
-
-
 weights = np.array([
     # -1, -1, -1, -.5, -.5, -.5,
     0.,  0.,  0., 0.,  0.,  0.,
@@ -25,11 +21,14 @@ weights = np.array([
     0.,  0.,  0., 0.,  0.,  0.
 ])
 
+# Load these weights into the graph
 test_graph.update_edges
 
+# Create the g2o object and optimize
 test_graph.generate_unoptimized_graph()
-# test_graph.optimized_graph = test_graph.unoptimized_graph
 test_graph.optimize_graph()
+
+# Change vertex estimates based off the optimized graph
 test_graph.update_vertices()
 
 resulting_map = graph_utils.optimizer_to_map(
@@ -54,5 +53,5 @@ plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='T
 plt.plot(tags[:, 0], tags[:, 1], tags[:, 2], '.', c='g', label='All Tag Edges')
 plt.legend()
 # plt.plot(path[::10, 0], path[::10, 1], path[::10, 2], '.')
-plt.savefig('demo2.png')
+plt.savefig('optimized.png')
 plt.show()
