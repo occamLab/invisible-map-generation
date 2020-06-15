@@ -133,8 +133,27 @@ def as_graph(dct):
                     previous_pose_matrix).dot(pose_matrices[i]))
             )
             edge_counter += 1
+
+        # make dummy node
+        dummy_node_uid = vertex_counter
+        vertices[dummy_node_uid] = graph.Vertex(
+            mode=graph.VertexType.DUMMY,
+            estimate=np.hstack((np.zeros(3,),odom_vertex_estimates[i][3:])),
+            fixed=True
+        )
+        vertex_counter += 1
+
+        # connect odometry to dummy node
+        edges[edge_counter] = graph.Edge(
+            startuid=current_odom_vertex_uid,
+            enduid=dummy_node_uid,
+            information=np.eye(6),
+            measurement=np.array([0, 0, 0, 0, 0, 0, 1])
+        )
+        edge_counter += 1
+
         previous_vertex = current_odom_vertex_uid
         previous_pose_matrix = pose_matrices[i]
 
-    resulting_graph = graph.Graph(vertices, edges)
+    resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', damping_status=True)
     return resulting_graph

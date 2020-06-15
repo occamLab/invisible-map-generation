@@ -22,7 +22,7 @@ weights = np.array([
 ])
 
 # Load these weights into the graph
-test_graph.update_edges
+test_graph.update_edges()
 
 # Create the g2o object and optimize
 test_graph.generate_unoptimized_graph()
@@ -32,7 +32,7 @@ test_graph.optimize_graph()
 test_graph.update_vertices()
 
 resulting_map = graph_utils.optimizer_to_map(
-    test_graph.vertices, test_graph.unoptimized_graph)
+    test_graph.vertices, test_graph.optimized_graph)
 locations = resulting_map['locations']
 tag_verts = resulting_map['tags']
 # tag_verts = 

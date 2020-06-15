@@ -74,7 +74,7 @@ def graph_to_optimizer(graph, damping_status=False):
     return optimizer
 
 
-def global_yaw_effect_basis(rotation):
+def global_yaw_effect_basis(rotation, gravity_axis='z'):
     """Form a basis which describes the effect of a change in global
     yaw on a local measurement's qx, qy, and qz.
 
@@ -89,7 +89,7 @@ def global_yaw_effect_basis(rotation):
     Returns:
         A 3x3 numpy array where the columns are the new basis.
     """
-    rotation1 = R.from_euler('z', 0.05) * rotation
+    rotation1 = R.from_euler(gravity_axis, 0.05) * rotation
     change = rotation1.as_quat()[:3] - rotation.as_quat()[:3]
     return np.linalg.svd(change[:, np.newaxis])[0]
 
@@ -160,7 +160,7 @@ class Graph:
     optimize it.
     """
 
-    def __init__(self, vertices, edges, weights=np.zeros(18), damping_status=False):
+    def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', damping_status=False):
         """The graph class.
         The graph contains a dictionary of vertices and edges, the
         keys being UIDs such as ints.
@@ -185,7 +185,8 @@ class Graph:
         self.original_vertices = vertices
         self.vertices = vertices
         self.weights = weights
-        # self.generate_basis_matrices()
+        self.gravity_axis = gravity_axis
+        self.generate_basis_matrices()
 
         self.g2o_status = -1
         self.maximization_success_status = False
@@ -216,7 +217,7 @@ class Graph:
 
                 basis_matrices[uid] = np.eye(6)
                 basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                    R.from_quat(self.edges[uid].measurement[3:7]))
+                    R.from_quat(self.edges[uid].measurement[3:7]), self.gravity_axis)
 
             else:
                 basis_matrices[uid] = np.eye(6)
