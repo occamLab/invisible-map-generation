@@ -12,13 +12,10 @@ with open('data/round1.json', 'r') as f:
 
 test_graph = convert_json.as_graph(x)
 
-weights = np.array([
-    # -1, -1, -1, -.5, -.5, -.5,
+test_graph.weights = np.array([
     0.,  0.,  0., 0.,  0.,  0.,
-    # 0.,  0.,  0., 0.,  0.,  0.,
-    # -1e16, -1e16, -1e16, -1e4, -1e4, -1e4,
-    1e32, 1e32, 1e32, 1e32, 1e32, 1e32,
-    0.,  0.,  0., 0.,  0.,  0.
+    0.,  0.,  0., 0.,  0.,  0.,
+    0.,  0.,  0., -1e1,  1e2,  1e2
 ])
 
 # Load these weights into the graph
