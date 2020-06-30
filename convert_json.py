@@ -45,7 +45,6 @@ def as_graph(dct):
     Returns:
       A graph derived from the input dictionary.
     """
-    tag_data = np.array(dct['tag_data'])
     pose_data = np.array(dct['pose_data'])
 
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
@@ -60,19 +59,23 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
-
+    tag_list_uniform = list(map(lambda x: np.asarray(x).reshape((-1, 19)), dct['tag_data']))
+    if tag_list_uniform:
+        tag_data_uniform = np.concatenate(tag_list_uniform)
+    else:
+        tag_data_uniform = np.zeros((0,19))
     tag_edge_measurements_matrix = np.matmul(
-        tag_to_odom_transform, tag_data[:, 1:17].reshape(-1, 4, 4))
+        tag_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
-    unique_tag_ids = np.unique(tag_data[:, 0]).astype('i')
+    unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(unique_tag_ids.size)))
 
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
 
-    for tag_index, (tag_id, tag_frame) in enumerate(tag_data[:, [0, 18]]):
+    for tag_index, (tag_id, tag_frame) in enumerate(tag_data_uniform[:, [0, 18]]):
         tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(
             tag_frame, [])
