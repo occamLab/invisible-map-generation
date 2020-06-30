@@ -39,6 +39,15 @@ def process_map(x):
 
     return tag_verts
 
+def make_processed_map_JSON(tag_locations):
+    tag_vertex_map = map(lambda curr_tag: {'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
+                                           'rotation': {'x': curr_tag[3],
+                                                        'y': curr_tag[4],
+                                                        'z': curr_tag[5],
+                                                        'w': curr_tag[6]},
+                                           'id': int(curr_tag[7])}, tag_locations)
+    return json.dumps({'tag_vertices': list(tag_vertex_map)})
+
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
 
@@ -52,12 +61,18 @@ ref = db.reference('/unprocessed_maps')
 to_process = ref.get()
 bucket = storage.bucket(app=app)
 # TODO: for some reason many of the maps have multiple copies of the same tag in the same frame
-for map, map_json in to_process.items():
+for map_name, map_json in to_process.items():
+    print(map_name)
     json_blob = bucket.get_blob(map_json)
     if json_blob is not None:
         json_data = json_blob.download_as_string()
         x = json.loads(json_data)
         tag_locations = process_map(x)
-        print(map_json)
+        processed_map = make_processed_map_JSON(tag_locations)
+        processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
+        processed_map_full_path = os.path.join('TestProcessed', processed_map_filename)
+        processed_map_blob = bucket.blob(processed_map_full_path)
+        processed_map_blob.upload_from_string(processed_map)
+        db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
     else:
         print("map file was missing")
