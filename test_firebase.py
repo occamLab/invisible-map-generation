@@ -46,14 +46,16 @@ def make_processed_map_JSON(tag_locations):
                                                         'z': curr_tag[5],
                                                         'w': curr_tag[6]},
                                            'id': int(curr_tag[7])}, tag_locations)
-    return json.dumps({'tag_vertices': list(tag_vertex_map)})
+    return json.dumps({'tag_vertices': list(tag_vertex_map),
+                       'odometry_vertices': [],
+                       'waypoints_vertices': []})
 
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
 
 # Initialize the app with a service account, granting admin privileges
 app = firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://invisible-map.firebaseio.com',
+    'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
     'storageBucket': 'invisible-map.appspot.com'
 })
 
