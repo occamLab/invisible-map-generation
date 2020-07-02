@@ -15,16 +15,30 @@ import os
 
 def optimize_map(x, tune_weights=False, visualize=False):
     test_graph = convert_json.as_graph(x)
-
-    test_graph.weights = np.array([
-        3.,  3.,  3., 3.,  3.,  3.,
-        1.6,  1.6,  1.6, 1.6,  1.6,  1.6,
-        0.,  0.,  0., -1e1,  3,  3
+    # higher means more noisy
+    sensible_default_weights = np.array([
+        -3.,  -3.,  -3., -3.,  -3.,  -3.,
+        -1.6,  -1.6, -1.6, -1.6,  -1.6,  -1.6,
+        0.,  0.,  0., -1,  -1,  1e2
     ])
+
+    trust_odom = np.array([
+        -3.,  -3.,  -3., -3.,  -3.,  -3.,
+        10.6,  10.6, 10.6, 10.6,  10.6,  10.6,
+        0.,  0.,  0., -1,  -1,  1e2
+    ])
+
+    trust_tags = np.array([
+        10,  10,  10, 10,  10,  10,
+        -10.6,  -10.6, -10.6, -10.6,  -10.6,  -10.6,
+        0,  0,  0, -1e2,  3,  3
+    ])
+    test_graph.weights = sensible_default_weights
 
     # Load these weights into the graph
     test_graph.update_edges()
     test_graph.generate_unoptimized_graph()
+    all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
     starting_map = graph_utils.optimizer_to_map(
         test_graph.vertices, test_graph.unoptimized_graph)
     original_tag_verts = starting_map['tags']
@@ -48,14 +62,23 @@ def optimize_map(x, tune_weights=False, visualize=False):
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
         plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-        plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c', label='Tag Vertices')
+        plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c', label='Tag Vertices Original')
         plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
         for vert in tag_verts:
             ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
         plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
+        plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
+        tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+        tag_vertex_shift = original_tag_verts - tag_verts
+        print(tag_vertex_shift)
         plt.legend()
         plt.show()
     return tag_verts
+
+def compare_std_dev(all_tags, all_tags_original):
+    return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
+            np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in np.unique(all_tags[:,-1])}
+
 
 def make_processed_map_JSON(tag_locations):
     tag_vertex_map = map(lambda curr_tag: {'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
@@ -88,11 +111,10 @@ def unprocessed_maps_callback(m):
     if type(m.data) == str:
         # a single new map just got added
         process_map(m.path.lstrip('/'), m.data, True)
-    else:
-        # this is a dictionary of all the data that is there initially
+    elif type(m.data) == dict:
+        # this will be a dictionary of all the data that is there initially
         for map_name, map_json in m.data.items():
-            pass
-            #process_map(map_name, map_json)
+            process_map(map_name, map_json, True)
 
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))

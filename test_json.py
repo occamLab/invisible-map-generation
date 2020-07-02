@@ -15,7 +15,7 @@ test_graph = convert_json.as_graph(x)
 test_graph.weights = np.array([
     0.,  0.,  0., 0.,  0.,  0.,
     0.,  0.,  0., 0.,  0.,  0.,
-    0.,  0.,  0., -1e1,  1e2,  1e2
+    0.,  0.,  0., -1e1,  -1e1,  1e1
 ])
 
 # Load these weights into the graph

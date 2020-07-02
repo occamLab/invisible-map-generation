@@ -217,7 +217,7 @@ class Graph:
 
                 basis_matrices[uid] = np.eye(6)
                 basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                    R.from_quat(self.edges[uid].measurement[3:7]), self.gravity_axis)
+                    R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
 
             else:
                 basis_matrices[uid] = np.eye(6)
