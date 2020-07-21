@@ -121,6 +121,7 @@ class Vertex:
         self.mode = mode
         self.estimate = estimate
         self.fixed = fixed
+        self.meta_data = {}
 
 
 class Edge:
@@ -325,6 +326,9 @@ class Graph:
                         self.edges[uid].information = template
                     else:
                         self.edges[uid].information = np.zeros_like(template)
+                elif end_mode == VertexType.WAYPOINT:
+                    # TODO: not sure what this should be
+                    self.edges[uid].information = np.eye(6,6)
                 else:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))

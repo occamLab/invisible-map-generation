@@ -53,7 +53,7 @@ def as_graph(dct):
 
     # The camera axis used to get tag measurements are flipped
     # relative to the phone frame used for odom measurements
-    tag_to_odom_transform = np.array([
+    camera_to_odom_transform = np.array([
         [0, 1, 0, 0],
         [1, 0, 0, 0],
         [0, 0, -1, 0],
@@ -65,7 +65,7 @@ def as_graph(dct):
     else:
         tag_data_uniform = np.zeros((0,19))
     tag_edge_measurements_matrix = np.matmul(
-        tag_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
+        camera_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
     unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
@@ -82,15 +82,44 @@ def as_graph(dct):
         tag_vertex_id_and_index_by_frame_id[tag_frame].append(
             (tag_vertex_id, tag_index))
 
+    waypoint_list_uniform = list(map(lambda x: np.asarray(x[:-1]).reshape((-1, 18)), dct.get('location_data', [])))
+    waypoint_names = list(map(lambda x: x[-1], dct.get('location_data', [])))
+    unique_waypoint_names = np.unique(waypoint_names)
+    if waypoint_list_uniform:
+        waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
+    else:
+        waypoint_data_uniform = np.zeros((0,18))
+    waypoint_edge_measurements_matrix = np.matmul(
+        camera_to_odom_transform, waypoint_data_uniform[:, :16].reshape(-1, 4, 4))
+    waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
+
+    print("overwriting edges with the identity measurement")
+    # when we have the correct transforms, we can leave this out
+    waypoint_edge_measurements[:, :-1] = 0
+    waypoint_edge_measurements[:, -1] = 1
+    waypoint_vertex_id_by_name = dict(
+        zip(unique_waypoint_names, range(unique_tag_ids.size, unique_tag_ids.size + unique_waypoint_names.size)))
+    waypoint_name_by_vertex_id = dict(zip(waypoint_vertex_id_by_name.values(), waypoint_vertex_id_by_name.keys()))
+    # Enable lookup of waypoints by the frame they appear in
+    waypoint_vertex_id_and_index_by_frame_id = {}
+
+    for waypoint_index, (waypoint_name, waypoint_frame) in enumerate(zip(waypoint_names, waypoint_data_uniform[:, 17])):
+        waypoint_vertex_id = waypoint_vertex_id_by_name[waypoint_name]
+        waypoint_vertex_id_and_index_by_frame_id[waypoint_frame] = waypoint_vertex_id_and_index_by_frame_id.get(
+            waypoint_name, [])
+        waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append(
+            (waypoint_vertex_id, waypoint_index))
+
     # Construct the dictionaries of vertices and edges
     vertices = {}
     edges = {}
-    vertex_counter = unique_tag_ids.size
+    vertex_counter = unique_tag_ids.size + unique_waypoint_names.size
     edge_counter = 0
 
     previous_vertex = None
     previous_pose_matrix = None
     counted_tag_vertex_ids = set()
+    counted_waypoint_vertex_ids = set()
     first_odom_processed = False
     num_tag_edges = 0
 
@@ -124,6 +153,28 @@ def as_graph(dct):
                 # measurement=np.array([0, 0, 0, 0, 0, 0, 1])
             )
             num_tag_edges += 1
+
+            edge_counter += 1
+
+        # Connect odom to waypoint vertex
+        for waypoint_vertex_id, waypoint_index in waypoint_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
+            if waypoint_vertex_id not in counted_waypoint_vertex_ids:
+                vertices[waypoint_vertex_id] = graph.Vertex(
+                    mode=graph.VertexType.WAYPOINT,
+                    estimate=matrix2measurement(pose_matrices[i].dot(
+                        waypoint_edge_measurements_matrix[waypoint_index])),
+                    fixed=False
+                )
+                vertices[waypoint_vertex_id].meta_data['name'] = waypoint_name_by_vertex_id[waypoint_vertex_id]
+                counted_waypoint_vertex_ids.add(waypoint_vertex_id)
+
+            edges[edge_counter] = graph.Edge(
+                startuid=current_odom_vertex_uid,
+                enduid=waypoint_vertex_id,
+                information=np.eye(6),
+                measurement=waypoint_edge_measurements[waypoint_index]
+                # measurement=np.array([0, 0, 0, 0, 0, 0, 1])
+            )
 
             edge_counter += 1
 
