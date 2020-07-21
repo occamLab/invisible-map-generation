@@ -46,9 +46,9 @@ def as_graph(dct):
       A graph derived from the input dictionary.
     """
     pose_data = np.array(dct['pose_data'])
-
+    if not pose_data.size:
+        pose_data = np.zeros((0, 18))
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
-
     odom_vertex_estimates = matrix2measurement(pose_matrices)
 
     # The camera axis used to get tag measurements are flipped
@@ -89,14 +89,9 @@ def as_graph(dct):
         waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
     else:
         waypoint_data_uniform = np.zeros((0,18))
-    waypoint_edge_measurements_matrix = np.matmul(
-        camera_to_odom_transform, waypoint_data_uniform[:, :16].reshape(-1, 4, 4))
+    waypoint_edge_measurements_matrix = waypoint_data_uniform[:, :16].reshape(-1, 4, 4)
     waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
 
-    print("overwriting edges with the identity measurement")
-    # when we have the correct transforms, we can leave this out
-    waypoint_edge_measurements[:, :-1] = 0
-    waypoint_edge_measurements[:, -1] = 1
     waypoint_vertex_id_by_name = dict(
         zip(unique_waypoint_names, range(unique_tag_ids.size, unique_tag_ids.size + unique_waypoint_names.size)))
     waypoint_name_by_vertex_id = dict(zip(waypoint_vertex_id_by_name.values(), waypoint_vertex_id_by_name.keys()))
