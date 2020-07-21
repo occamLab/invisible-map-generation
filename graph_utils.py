@@ -26,6 +26,7 @@ def optimizer_to_map(vertices, optimizer):
     locations = np.reshape([], [0, 8])
     tags = np.reshape([], [0, 8])
     waypoints = np.reshape([], [0, 8])
+    waypoint_metadata = []
 
     for i in optimizer.vertices():
         mode = vertices[i].mode
@@ -39,9 +40,10 @@ def optimizer_to_map(vertices, optimizer):
             tags = np.vstack([tags, pose])
         elif mode == VertexType.WAYPOINT:
             waypoints = np.vstack([waypoints, pose])
+            waypoint_metadata.append(vertices[i].meta_data)
 
     return {'locations': np.array(locations), 'tags': np.array(tags),
-            'waypoints': np.array(waypoints)}
+            'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
 
 def connected_components(graph):
