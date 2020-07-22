@@ -37,6 +37,8 @@ def optimizer_to_map(vertices, optimizer):
         if mode == VertexType.ODOMETRY:
             locations = np.vstack([locations, pose])
         elif mode == VertexType.TAG:
+            if 'tag_id' in vertices[i].meta_data:
+                pose[-1] = vertices[i].meta_data['tag_id']
             tags = np.vstack([tags, pose])
         elif mode == VertexType.WAYPOINT:
             waypoints = np.vstack([waypoints, pose])

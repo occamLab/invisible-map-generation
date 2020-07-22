@@ -71,6 +71,7 @@ def as_graph(dct):
     unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(unique_tag_ids.size)))
+    tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
 
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
@@ -138,6 +139,7 @@ def as_graph(dct):
                         tag_edge_measurements_matrix[tag_index])),
                     fixed=False
                 )
+                vertices[tag_vertex_id].meta_data['tag_id'] = tag_id_by_tag_vertex_id[tag_vertex_id]
                 counted_tag_vertex_ids.add(tag_vertex_id)
 
             edges[edge_counter] = graph.Edge(
@@ -145,7 +147,6 @@ def as_graph(dct):
                 enduid=tag_vertex_id,
                 information=np.eye(6),
                 measurement=tag_edge_measurements[tag_index]
-                # measurement=np.array([0, 0, 0, 0, 0, 0, 1])
             )
             num_tag_edges += 1
 

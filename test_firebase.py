@@ -65,9 +65,13 @@ def optimize_map(x, tune_weights=False, visualize=False):
         plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
         plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c', label='Tag Vertices Original')
         plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
-        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y', label='Waypoint Vertices')
         for vert in tag_verts:
             ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
+        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y', label='Waypoint Vertices')
+        for vert_idx in range(len(waypoint_verts[0])):
+            vert = waypoint_verts[1][vert_idx]
+            waypoint_name = waypoint_verts[0][vert_idx]['name']
+            ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
         plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
         plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
         tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
