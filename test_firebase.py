@@ -15,10 +15,10 @@ import os
 
 def optimize_map(x, tune_weights=False, visualize=False):
     test_graph = convert_json.as_graph(x)
-    # higher means more noisy
+    # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic, hence the large correction here)
     sensible_default_weights = np.array([
-        -3.,  -3.,  -3., -3.,  -3.,  -3.,
-        -1.6,  -1.6, -1.6, -1.6,  -1.6,  -1.6,
+        -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
+        18,  18,  18,  4,  4,  4,
         0.,  0.,  0., -1,  -1,  1e2
     ])
 
@@ -76,6 +76,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
         plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
         tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
         tag_vertex_shift = original_tag_verts - tag_verts
+        print("tag_vertex_shift", tag_vertex_shift)
         plt.legend()
         plt.show()
     return tag_verts, waypoint_verts

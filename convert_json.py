@@ -59,15 +59,21 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
-    tag_list_uniform = list(map(lambda x: np.asarray(x).reshape((-1, 19)), dct['tag_data']))
+    # TODO: can remove this when all maps have the multiply data included
+    for i, tag_measurement in enumerate(dct['tag_data']):
+        # insert missing premultiply data
+        if len(tag_measurement) == 19:
+            dct['tag_data'][i] = tag_measurement[:17] + [1] * 7 + tag_measurement[17:]
+    tag_list_uniform = list(map(lambda x: np.asarray(x).reshape((-1, 26)), dct['tag_data']))
     if tag_list_uniform:
         tag_data_uniform = np.concatenate(tag_list_uniform)
     else:
-        tag_data_uniform = np.zeros((0,19))
+        tag_data_uniform = np.zeros((0,26))
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
-
+    # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of orientation
+    tag_edge_prescaling = 1./tag_data_uniform[:, 17:17+6].reshape(-1, 6)
     unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(unique_tag_ids.size)))
@@ -76,7 +82,7 @@ def as_graph(dct):
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
 
-    for tag_index, (tag_id, tag_frame) in enumerate(tag_data_uniform[:, [0, 18]]):
+    for tag_index, (tag_id, tag_frame) in enumerate(tag_data_uniform[:, [0, -1]]):
         tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(
             tag_frame, [])
@@ -141,11 +147,11 @@ def as_graph(dct):
                 )
                 vertices[tag_vertex_id].meta_data['tag_id'] = tag_id_by_tag_vertex_id[tag_vertex_id]
                 counted_tag_vertex_ids.add(tag_vertex_id)
-
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=tag_vertex_id,
                 information=np.eye(6),
+                information_prescaling=tag_edge_prescaling[tag_index],
                 measurement=tag_edge_measurements[tag_index]
             )
             num_tag_edges += 1
@@ -168,17 +174,19 @@ def as_graph(dct):
                 startuid=current_odom_vertex_uid,
                 enduid=waypoint_vertex_id,
                 information=np.eye(6),
+                information_prescaling=None,
                 measurement=waypoint_edge_measurements[waypoint_index]
-                # measurement=np.array([0, 0, 0, 0, 0, 0, 1])
             )
 
             edge_counter += 1
 
         if previous_vertex:
+            # TODO: might want to consider prescaling based on the magnitude of the change
             edges[edge_counter] = graph.Edge(
                 startuid=previous_vertex,
                 enduid=current_odom_vertex_uid,
                 information=np.eye(6),
+                information_prescaling=None,
                 measurement=matrix2measurement(np.linalg.inv(
                     previous_pose_matrix).dot(pose_matrices[i]))
             )
@@ -198,6 +206,7 @@ def as_graph(dct):
             startuid=current_odom_vertex_uid,
             enduid=dummy_node_uid,
             information=np.eye(6),
+            information_prescaling=None,
             measurement=np.array([0, 0, 0, 0, 0, 0, 1])
         )
         edge_counter += 1

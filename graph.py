@@ -131,7 +131,7 @@ class Edge:
     and the information matrix.
     """
 
-    def __init__(self, startuid, enduid, information, measurement):
+    def __init__(self, startuid, enduid, information, information_prescaling, measurement):
         """The edge class.
 
         The arguments are a startuid, enduid, an information matrix
@@ -145,6 +145,11 @@ class Edge:
             information: A 6x6 numpy array encoding measurement
                 information. The rows and columns encode x, y, z, qx,
                 qy, and qz information.
+            information_prescaling: A 6 element numpy array encoding
+                the diagonal of a matrix that premultiplies the edge
+                information matrix specified by the weights.  If None
+                is past, then the 6 element vector is assumed to be all
+                ones
             measurement: A 7 element numpy array encoding the measured
                 transform from the start vertex to the end vertex in
                 the start vertex's coordinate frame.
@@ -153,6 +158,9 @@ class Edge:
         self.startuid = startuid
         self.enduid = enduid
         self.information = information
+        if information_prescaling is None:
+            information_prescaling = np.ones(6,)
+        self.information_prescaling = information_prescaling
         self.measurement = measurement
 
 
@@ -308,7 +316,7 @@ class Graph:
             edge = self.edges[uid]
             start_mode = self.vertices[edge.startuid].mode
             end_mode = self.vertices[edge.enduid].mode
-
+            prescalingMatrix = np.diag(self.edges[uid].information_prescaling)
             if start_mode == VertexType.ODOMETRY:
                 if end_mode == VertexType.ODOMETRY:
                     self.edges[uid].information = np.diag(
@@ -317,6 +325,7 @@ class Graph:
                     self.edges[uid].information = np.diag(
                         np.exp(-self.weights[6:12]))
                 elif end_mode == VertexType.DUMMY:
+                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems to work though)
                     basis = self.basis_matrices[uid][3:6, 3:6]
                     cov = np.diag(np.exp(-self.weights[15:18]))
                     information = basis.dot(cov).dot(basis.T)
@@ -332,7 +341,7 @@ class Graph:
                 else:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))
-
+                self.edges[uid].information = prescalingMatrix*self.edges[uid].information
             else:
                 raise Exception(
                     'Edge of start type {} not recognized.'.format(start_mode))

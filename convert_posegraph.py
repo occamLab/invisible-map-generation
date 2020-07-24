@@ -47,6 +47,7 @@ def convert_edge(edge):
     """
     return Edge(startuid=edge.start.id, enduid=edge.end.id,
                 information=edge.importance_matrix,
+                information_prescaling=None,
                 measurement=np.concatenate
                 ([edge.translation, edge.rotation]))
 
