@@ -59,7 +59,7 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
-    # TODO: can remove this when all maps have the multiply data included
+    # This next part is to support legacy maps that don't have this information
     for i, tag_measurement in enumerate(dct['tag_data']):
         # insert missing premultiply data
         if len(tag_measurement) == 19:
