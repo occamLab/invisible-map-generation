@@ -3,9 +3,9 @@
 import numpy as np
 from graph import VertexType, Graph
 from scipy.spatial.transform import Rotation as R
+from g2o import SE3Quat, EdgeProjectPSI2UV
 
-
-def optimizer_to_map(vertices, optimizer):
+def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     """Convert a :class: g2o.SparseOptimizer to a dictionary
     containing locations of the phone, tags, and waypoints.
 
@@ -14,6 +14,8 @@ def optimizer_to_map(vertices, optimizer):
             This is used to lookup the type of vertex pulled from the
             optimizer.
         optimizer: a :class: g2o.SparseOptimizer containing a map.
+        is_sparse_bundle_adjustment: True if the optimizer is based on sparse
+            bundle adjustment and False otherwise.
 
     Returns:
         A dictionary with fields 'locations', 'tags', and 'waypoints'.
@@ -24,29 +26,47 @@ def optimizer_to_map(vertices, optimizer):
         tags and waypoints in the same format.
     """
     locations = np.reshape([], [0, 8])
+    tagpoints = np.reshape([], [0, 3])
     tags = np.reshape([], [0, 8])
     waypoints = np.reshape([], [0, 8])
     waypoint_metadata = []
-
+    exaggerate_tag_corners = True
     for i in optimizer.vertices():
         mode = vertices[i].mode
-        location = optimizer.vertex(i).estimate().translation()
-        rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-        pose = np.concatenate([location, rotation, [i]])
+        if mode == VertexType.TAGPOINT:
+            location = optimizer.vertex(i).estimate()
+            if exaggerate_tag_corners:
+                location = location * np.array([10, 10, 1])
+            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+            tagpoints = np.vstack((tagpoints, tag_vert.estimate().inverse() * location))
+        else:
+            location = optimizer.vertex(i).estimate().translation()
+            rotation = optimizer.vertex(i).estimate().rotation().coeffs()
+            pose = np.concatenate([location, rotation, [i]])
 
-        if mode == VertexType.ODOMETRY:
-            locations = np.vstack([locations, pose])
-        elif mode == VertexType.TAG:
-            if 'tag_id' in vertices[i].meta_data:
-                pose[-1] = vertices[i].meta_data['tag_id']
-            tags = np.vstack([tags, pose])
-        elif mode == VertexType.WAYPOINT:
-            waypoints = np.vstack([waypoints, pose])
-            waypoint_metadata.append(vertices[i].meta_data)
+            if mode == VertexType.ODOMETRY:
+                locations = np.vstack([locations, pose])
+            elif mode == VertexType.TAG:
+                if is_sparse_bundle_adjustment:
+                    # adjusts tag based on the position of the tag center
+                    pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse()*SE3Quat(vertices[i].estimate)).to_vector()
+                if 'tag_id' in vertices[i].meta_data:
+                    pose[-1] = vertices[i].meta_data['tag_id']
+                tags = np.vstack([tags, pose])
+            elif mode == VertexType.WAYPOINT:
+                waypoints = np.vstack([waypoints, pose])
+                waypoint_metadata.append(vertices[i].meta_data)
 
-    return {'locations': np.array(locations), 'tags': np.array(tags),
+    return {'locations': np.array(locations), 'tags': np.array(tags), 'tagpoints': tagpoints,
             'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
+def find_connected_tag_vert(optimizer, location_vert):
+    # TODO: it would be nice if we didn't have to scan the entire graph
+    for edge in optimizer.edges():
+        if type(edge) == EdgeProjectPSI2UV:
+            if edge.vertex(0).id() == location_vert.id():
+                return edge.vertex(2)
+    return None
 
 def connected_components(graph):
     """Return a list of graphs representing connecting components of
@@ -80,7 +100,7 @@ def connected_components(graph):
             del groups[i]
 
         groups.append(new_group)
-
+    # TODO: copy over other information from the graph
     return [Graph(vertices={k: graph.vertices[k] for k in group[0]},
                   edges={k: graph.edges[k] for k in group[1]})
             for group in groups]
