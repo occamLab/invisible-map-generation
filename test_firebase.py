@@ -11,7 +11,18 @@ from firebase_admin import db
 from firebase_admin import credentials
 from firebase_admin import storage
 import os
+from g2o import Quaternion
 
+def axis_equal(ax):
+    # Create cubic bounding box to simulate equal aspect ratio
+    axis_range_from_limits = lambda limits: limits[1] - limits[0]
+    max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()), axis_range_from_limits(ax.get_zlim())]).max()
+    Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * (ax.get_xlim()[1] + ax.get_xlim()[0])
+    Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * (ax.get_ylim()[1] + ax.get_ylim()[0])
+    Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * (ax.get_zlim()[1] + ax.get_zlim()[0])
+    # Comment or uncomment following both lines to test the fake bounding box:
+    for xb, yb, zb in zip(Xb, Yb, Zb):
+        ax.plot([xb], [yb], [zb], 'w')
 
 def optimize_map(x, tune_weights=False, visualize=False):
     test_graph = convert_json.as_graph(x)
@@ -67,6 +78,12 @@ def optimize_map(x, tune_weights=False, visualize=False):
         plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
         for vert in tag_verts:
             ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
+        for tag_vert in tag_verts:
+            R = Quaternion(tag_vert[3:-1]).rotation_matrix()
+            axis_to_color = ['r','g','b']
+            for axis_id in range(3):
+                ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
+                          R[2, axis_id], length=1, color=axis_to_color[axis_id])
         plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y', label='Waypoint Vertices')
         for vert_idx in range(len(waypoint_verts[0])):
             vert = waypoint_verts[1][vert_idx]
@@ -77,6 +94,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
         tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
         tag_vertex_shift = original_tag_verts - tag_verts
         print("tag_vertex_shift", tag_vertex_shift)
+        axis_equal(ax)
         plt.legend()
         plt.show()
     return tag_verts, waypoint_verts
@@ -103,7 +121,7 @@ def make_processed_map_JSON(tag_locations, waypoint_locations):
                        'odometry_vertices': [],
                        'waypoints_vertices': list(waypoint_vertex_map)})
 
-def process_map(map_name, map_json, visualize=False):
+def process_map(map_name, map_json, visualize=True):
     json_blob = bucket.get_blob(map_json)
     if json_blob is not None:
         json_data = json_blob.download_as_string()
