@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from g2o import SE3Quat, CameraParameters, Quaternion
 import graph
+import itertools
 from collections import defaultdict
 
 def pose2diffs(poses):
@@ -80,18 +81,25 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
-    tag_list_uniform = list(map(lambda x: np.asarray(x).reshape((-1, 38)), dct['tag_data']))
-    if tag_list_uniform:
-        tag_data_uniform = np.concatenate(tag_list_uniform)
+    # flatten the data into individual numpy arrays that we can operate on
+    if 'tag_data' in dct:
+        tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
+        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
     else:
-        tag_data_uniform = np.zeros((0,38))
+        tag_pose_flat = np.zeros((0,16))
+        camera_intrinsics_for_tag = np.zeros((0, 4))
+        tag_corners = np.zeros((0, 8))
+        tag_ids = np.zeros((0,1), type=np.int)
+        pose_ids = np.zeros((0,1), type=np.int)
+
     tag_edge_measurements_matrix = np.matmul(
-        camera_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
-    camera_intrinsics_for_tag = tag_data_uniform[:,17:17+4]
-    tag_corners = tag_data_uniform[:,21:21+8]
+        camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
     # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of orientation
-    unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
+    unique_tag_ids = np.unique(tag_ids)
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(0,unique_tag_ids.size*5, 5)))
     tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
@@ -100,7 +108,7 @@ def as_graph(dct):
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
 
-    for tag_index, (tag_id, tag_frame) in enumerate(tag_data_uniform[:, [0, -1]]):
+    for tag_index, (tag_id, tag_frame) in enumerate(np.hstack((tag_ids, pose_ids))):
         tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(
             tag_frame, [])
@@ -141,7 +149,8 @@ def as_graph(dct):
     counted_waypoint_vertex_ids = set()
     first_odom_processed = False
     num_tag_edges = 0
-    initialize_with_averages = True
+    # DEBUG: this appears to be counterproductive
+    initialize_with_averages = False
     tag_transform_estimates = defaultdict(lambda: [])
 
     for i, odom_frame in enumerate(pose_data[:, 17]):
@@ -253,5 +262,5 @@ def as_graph(dct):
             vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
 
     # TODO: Huber delta should probably scale with pixels rather than error
-    resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', use_huber=True, huber_delta=0.1, damping_status=True)
+    resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True, use_huber=False, huber_delta=None, damping_status=True)
     return resulting_graph

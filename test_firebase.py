@@ -18,7 +18,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
     # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic, hence the large correction here)
     sensible_default_weights = np.array([
         -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
-        18,  18,  18,  4,  4,  4,
+        18,  18,  18,  18,  18,  18,
         0.,  0.,  0., -1,  -1,  1e2
     ])
 

@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import itertools
 
 import graph
 
@@ -59,17 +60,29 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
-    tag_list_uniform = list(map(lambda x: np.asarray(x).reshape((-1, 38)), dct['tag_data']))
-    if tag_list_uniform:
-        tag_data_uniform = np.concatenate(tag_list_uniform)
+    # flatten the data into individual numpy arrays that we can operate on
+    if 'tag_data' in dct:
+        tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
+        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
+        tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
     else:
-        tag_data_uniform = np.zeros((0,38))
+        tag_pose_flat = np.zeros((0,16))
+        tag_ids = np.zeros((0,1), type=np.int)
+        pose_ids = np.zeros((0,1), type=np.int)
+        tag_position_variances = np.zeros((0,3), type=np.int)
+        tag_orientation_variances = np.zeros((0,4), type=np.int)
+
     tag_edge_measurements_matrix = np.matmul(
-        camera_to_odom_transform, tag_data_uniform[:, 1:17].reshape(-1, 4, 4))
+        camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
-    # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of orientation
-    tag_edge_prescaling = 1./tag_data_uniform[:, 29:29+6].reshape(-1, 6)
-    unique_tag_ids = np.unique(tag_data_uniform[:, 0]).astype('i')
+    # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of orientation
+    # TODO: the fact that tag edge prescaling yields *worse* results probably means we are still putting too much weight on the tags
+    tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
+    #print('resetting prescaling to identity')
+    #tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
+    unique_tag_ids = np.unique(tag_ids)
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(unique_tag_ids.size)))
     tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
@@ -77,7 +90,7 @@ def as_graph(dct):
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
 
-    for tag_index, (tag_id, tag_frame) in enumerate(tag_data_uniform[:, [0, -1]]):
+    for tag_index, (tag_id, tag_frame) in enumerate(np.hstack((tag_ids, pose_ids))):
         tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(
             tag_frame, [])
@@ -147,7 +160,9 @@ def as_graph(dct):
                 enduid=tag_vertex_id,
                 information=np.eye(6),
                 information_prescaling=tag_edge_prescaling[tag_index],
-                measurement=tag_edge_measurements[tag_index]
+                measurement=tag_edge_measurements[tag_index],
+                corner_ids=None,
+                camera_intrinsics=None
             )
             num_tag_edges += 1
 
@@ -183,7 +198,9 @@ def as_graph(dct):
                 information=np.eye(6),
                 information_prescaling=None,
                 measurement=matrix2measurement(np.linalg.inv(
-                    previous_pose_matrix).dot(pose_matrices[i]))
+                    previous_pose_matrix).dot(pose_matrices[i])),
+                corner_ids=None,
+                camera_intrinsics=None
             )
             edge_counter += 1
 
@@ -202,7 +219,9 @@ def as_graph(dct):
             enduid=dummy_node_uid,
             information=np.eye(6),
             information_prescaling=None,
-            measurement=np.array([0, 0, 0, 0, 0, 0, 1])
+            measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
+            corner_ids=None,
+            camera_intrinsics=None
         )
         edge_counter += 1
 

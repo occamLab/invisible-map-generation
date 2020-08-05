@@ -318,6 +318,10 @@ class Graph:
             elif type(edge) == g2o.EdgeSE3Expmap:
                 error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
                 error_chi2 = error.log().T.dot(edge.information()).dot(error.log())
+            elif type(edge) == g2o.EdgeSE3:
+                delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
+                error = np.hstack((delta.translation() ,delta.orientation().coeffs()[:-1]))
+                error_chi2 = error.dot(edge.information()).dot(error)
             total_chi2 += error_chi2
         print("total chi2", total_chi2)
         return total_chi2
@@ -481,4 +485,8 @@ class Graph:
         """
         for uid in self.optimized_graph.vertices():
             if not self.vertices[uid].fixed:
-                self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+                if self.is_sparse_bundle_adjustment:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+                else:
+                    self.vertices[uid].estimate = isometry_to_pose(
+                        self.optimized_graph.vertices()[uid].estimate())

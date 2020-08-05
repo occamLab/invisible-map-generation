@@ -36,8 +36,8 @@ def optimize_map(x, tune_weights=False, visualize=False):
     # trying to lock orientation
     sensible_default_weights = np.array([
         -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
-        3,  3,  0,  0,  0,  0,
-        0.,  0.,  0., -1,  1e2,  1
+        18,  18,  0,  0,  0,  0,
+        0.,  0.,  0., -1,  1e2,  -1
     ])
 
     trust_odom = np.array([
@@ -73,7 +73,9 @@ def optimize_map(x, tune_weights=False, visualize=False):
     prior_map = graph_utils.optimizer_to_map(
         test_graph.vertices, test_graph.unoptimized_graph)
     resulting_map = graph_utils.optimizer_to_map(
-        test_graph.vertices, test_graph.optimized_graph)
+        test_graph.vertices,
+        test_graph.optimized_graph,
+        is_sparse_bundle_adjustment=True)
     prior_locations = locations_from_transforms(prior_map['locations'])
     locations = locations_from_transforms(resulting_map['locations'])
 
@@ -135,7 +137,7 @@ def make_processed_map_JSON(tag_locations, waypoint_locations):
                        'odometry_vertices': [],
                        'waypoints_vertices': list(waypoint_vertex_map)})
 
-def process_map(map_name, map_json, visualize=True):
+def process_map(map_name, map_json, visualize=False):
     json_blob = bucket.get_blob(map_json)
     if json_blob is not None:
         json_data = json_blob.download_as_string()
