@@ -83,9 +83,10 @@ def as_graph(dct):
     # TODO: the fact that tag edge prescaling yields *worse* results probably means we are still putting too much weight on the tags
     # trying to use the full covariance matrix
     tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
-    tag_edge_prescaling = np.array([np.linalg.inv(covar)[:-1, :-1] for covar in tag_joint_covar_matrices])
-    #print("overwriting with diagonal covariances")
-    #tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
+    tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) for covar in tag_joint_covar_matrices])
+    # DEBUG: for some reason this seems to work better than using the full covariance matrix
+    print("overwriting with diagonal covariances")
+    tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
     #print('resetting prescaling to identity')
     #tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
     unique_tag_ids = np.unique(tag_ids)

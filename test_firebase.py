@@ -121,7 +121,7 @@ def make_processed_map_JSON(tag_locations, waypoint_locations):
                        'odometry_vertices': [],
                        'waypoints_vertices': list(waypoint_vertex_map)})
 
-def process_map(map_name, map_json, visualize=True):
+def process_map(map_name, map_json, visualize=False):
     json_blob = bucket.get_blob(map_json)
     if json_blob is not None:
         json_data = json_blob.download_as_string()
