@@ -436,8 +436,10 @@ class Graph:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))
                 if self.edges[uid].information_prescaling is not None:
-                    prescalingMatrix = np.diag(self.edges[uid].information_prescaling)
-                    self.edges[uid].information = prescalingMatrix*self.edges[uid].information
+                    prescaling_matrix = self.edges[uid].information_prescaling
+                    if prescaling_matrix.ndim == 1:
+                        prescaling_matrix = np.diag(prescaling_matrix)
+                    self.edges[uid].information = prescaling_matrix*self.edges[uid].information
             else:
                 raise Exception(
                     'Edge of start type {} not recognized.'.format(start_mode))
@@ -484,9 +486,11 @@ class Graph:
         """Update the initial vertices elements with the optimized graph values.
         """
         for uid in self.optimized_graph.vertices():
-            if not self.vertices[uid].fixed:
-                if self.is_sparse_bundle_adjustment:
-                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+            if self.is_sparse_bundle_adjustment:
+                if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
                 else:
-                    self.vertices[uid].estimate = isometry_to_pose(
-                        self.optimized_graph.vertices()[uid].estimate())
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+            else:
+                self.vertices[uid].estimate = isometry_to_pose(
+                    self.optimized_graph.vertices()[uid].estimate())
