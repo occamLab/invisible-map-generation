@@ -80,13 +80,11 @@ def as_graph(dct):
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
     # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of orientation
-    # TODO: the fact that tag edge prescaling yields *worse* results probably means we are still putting too much weight on the tags
-    # trying to use the full covariance matrix
     tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
-    tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) for covar in tag_joint_covar_matrices])
-    # DEBUG: for some reason this seems to work better than using the full covariance matrix
-    print("overwriting with diagonal covariances")
-    tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
+    # TODO: for some reason we have missing measurements (all zeros).  Throw those out
+    tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1,:-1]) if np.linalg.det(covar[:-1,:-1]) !=0 else np.zeros((6,6)) for covar in tag_joint_covar_matrices])
+    #print("overwriting with diagonal covariances")
+    #tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
     #print('resetting prescaling to identity')
     #tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
     unique_tag_ids = np.unique(tag_ids)
@@ -190,8 +188,10 @@ def as_graph(dct):
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=waypoint_vertex_id,
+                corner_ids=None,
                 information=np.eye(6),
                 information_prescaling=None,
+                camera_intrinsics=None,
                 measurement=waypoint_edge_measurements[waypoint_index]
             )
 
