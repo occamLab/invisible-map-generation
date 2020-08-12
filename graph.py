@@ -22,6 +22,19 @@ def pose_to_isometry(pose):
     """
     return g2o.Isometry3d(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
+def pose_to_se3quat(pose):
+    """Convert a pose vector to a :class: g2o.Isometry3d instance.
+
+    Args:
+        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy,
+        qz, and qw respectively.
+    Returns:
+        A :class: g2o.Isometry3d instance encoding the same
+        information as the input pose.
+    """
+    return g2o.SE3Quat(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
+
+
 
 def isometry_to_pose(isometry):
     """Convert a :class: g2o.Isometry3d to a vector containing a pose.
@@ -51,26 +64,65 @@ def graph_to_optimizer(graph, damping_status=False):
     optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(
         g2o.BlockSolverSE3(g2o.LinearSolverCholmodSE3())))
 
-    for i in graph.vertices:
-        vertex = g2o.VertexSE3()
-        vertex.set_id(i)
-        vertex.set_estimate(pose_to_isometry(graph.vertices[i].estimate))
-        vertex.set_fixed(graph.vertices[i].fixed)
-        optimizer.add_vertex(vertex)
+    if graph.is_sparse_bundle_adjustment:
+        for i in graph.vertices:
+            if graph.vertices[i].mode == VertexType.TAGPOINT:
+                vertex = g2o.VertexSBAPointXYZ()
+                vertex.set_estimate(graph.vertices[i].estimate[:3])
+            else:
+                vertex = g2o.VertexSE3Expmap()
+                vertex.set_estimate(pose_to_se3quat(graph.vertices[i].estimate))
+            vertex.set_id(i)
+            vertex.set_fixed(graph.vertices[i].fixed)
+            optimizer.add_vertex(vertex)
+        cam_idx = 0
+        for i in graph.edges:
+            if graph.edges[i].corner_ids is None:
+                edge = g2o.EdgeSE3Expmap()
+                for j, k in enumerate([graph.edges[i].startuid,
+                                       graph.edges[i].enduid]):
+                    edge.set_vertex(j, optimizer.vertex(k))
+                    edge.set_measurement(pose_to_se3quat(graph.edges[i].measurement))
+                    edge.set_information(graph.edges[i].information)
+                optimizer.add_edge(edge)
+            else:
+                # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and (b) it is always the same in ARKit (at least currently)
+                cam = g2o.CameraParameters(graph.edges[i].camera_intrinsics[0], graph.edges[i].camera_intrinsics[2:], 0)
+                cam.set_id(cam_idx)
+                optimizer.add_parameter(cam)
+                for corner_idx, corner_id in enumerate(graph.edges[i].corner_ids):
+                    edge = g2o.EdgeProjectPSI2UV()
+                    edge.resize(3)
+                    edge.set_vertex(0, optimizer.vertex(corner_id))
+                    edge.set_vertex(1, optimizer.vertex(graph.edges[i].startuid))
+                    edge.set_vertex(2, optimizer.vertex(graph.edges[i].enduid))
+                    edge.set_information(graph.edges[i].information)
+                    edge.set_measurement(graph.edges[i].measurement[corner_idx*2:corner_idx*2+2])
+                    edge.set_parameter_id(0, cam_idx)
+                    if graph.use_huber:
+                        edge.set_robust_kernel(g2o.RobustKernelHuber(graph.huber_delta))
+                    optimizer.add_edge(edge)
+                cam_idx += 1
+    else:
+        for i in graph.vertices:
+            vertex = g2o.VertexSE3()
+            vertex.set_id(i)
+            vertex.set_estimate(pose_to_isometry(graph.vertices[i].estimate))
+            vertex.set_fixed(graph.vertices[i].fixed)
+            optimizer.add_vertex(vertex)
 
-    for i in graph.edges:
-        edge = g2o.EdgeSE3()
+        for i in graph.edges:
+            edge = g2o.EdgeSE3()
 
-        for j, k in enumerate([graph.edges[i].startuid,
-                               graph.edges[i].enduid]):
-            edge.set_vertex(j, optimizer.vertex(k))
+            for j, k in enumerate([graph.edges[i].startuid,
+                                   graph.edges[i].enduid]):
+                edge.set_vertex(j, optimizer.vertex(k))
 
-        edge.set_measurement(pose_to_isometry(graph.edges[i].measurement))
-        edge.set_information(graph.edges[i].information)
-        edge.set_id(i)
+            edge.set_measurement(pose_to_isometry(graph.edges[i].measurement))
+            edge.set_information(graph.edges[i].information)
+            edge.set_id(i)
 
-        optimizer.add_edge(edge)
-
+            optimizer.add_edge(edge)
     return optimizer
 
 
@@ -100,8 +152,9 @@ class VertexType(Enum):
     """
     ODOMETRY = 0
     TAG = 1
-    DUMMY = 2
-    WAYPOINT = 3
+    TAGPOINT = 2
+    DUMMY = 3
+    WAYPOINT = 4
 
 
 class Vertex:
@@ -131,7 +184,14 @@ class Edge:
     and the information matrix.
     """
 
-    def __init__(self, startuid, enduid, information, information_prescaling, measurement):
+    def __init__(self,
+                 startuid,
+                 enduid,
+                 corner_ids,
+                 information,
+                 information_prescaling,
+                 camera_intrinsics,
+                 measurement):
         """The edge class.
 
         The arguments are a startuid, enduid, an information matrix
@@ -142,6 +202,8 @@ class Edge:
                 This can be any hashable such as an int.
             enduid: The UID of the ending vertex.
                 This can be any hashable such as an int.
+            corner_ids: an array of UIDs for each of the tag corner vertices.
+                This only applies to edges to a tag
             information: A 6x6 numpy array encoding measurement
                 information. The rows and columns encode x, y, z, qx,
                 qy, and qz information.
@@ -150,6 +212,7 @@ class Edge:
                 information matrix specified by the weights.  If None
                 is past, then the 6 element vector is assumed to be all
                 ones
+            camera_intrinsics: [fx, fy, cx, cy] (only applies to tag edges)
             measurement: A 7 element numpy array encoding the measured
                 transform from the start vertex to the end vertex in
                 the start vertex's coordinate frame.
@@ -157,10 +220,10 @@ class Edge:
         """
         self.startuid = startuid
         self.enduid = enduid
+        self.corner_ids = corner_ids
         self.information = information
-        if information_prescaling is None:
-            information_prescaling = np.ones(6,)
         self.information_prescaling = information_prescaling
+        self.camera_intrinsics = camera_intrinsics
         self.measurement = measurement
 
 
@@ -169,7 +232,7 @@ class Graph:
     optimize it.
     """
 
-    def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', damping_status=False):
+    def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', is_sparse_bundle_adjustment=False, use_huber=False, huber_delta=None, damping_status=False):
         """The graph class.
         The graph contains a dictionary of vertices and edges, the
         keys being UIDs such as ints.
@@ -190,6 +253,8 @@ class Graph:
                 ..., dummy qz]
                 The weights are related to variance by variance = exp(w).
         """
+
+        self.is_sparse_bundle_adjustment = is_sparse_bundle_adjustment
         self.edges = edges
         self.original_vertices = vertices
         self.vertices = vertices
@@ -207,6 +272,8 @@ class Graph:
         self.unoptimized_graph = None
         self.optimized_graph = None
         self.damping_status = damping_status
+        self.use_huber = use_huber
+        self.huber_delta = huber_delta
         self.update_edges()
 
     def generate_basis_matrices(self):
@@ -225,9 +292,9 @@ class Graph:
                         == VertexType.DUMMY):
 
                 basis_matrices[uid] = np.eye(6)
-                basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                    R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
-
+                if not self.is_sparse_bundle_adjustment:
+                    basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
+                        R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
             else:
                 basis_matrices[uid] = np.eye(6)
 
@@ -241,6 +308,24 @@ class Graph:
         """
         self.unoptimized_graph = graph_to_optimizer(self)
 
+    def check_optimized_edges(self, g):
+        total_chi2 = 0.0
+        for edge in g.edges():
+            if type(edge) == g2o.EdgeProjectPSI2UV:
+                cam = edge.parameter(0)
+                error = edge.measurement() - cam.cam_map(edge.vertex(1).estimate()*edge.vertex(2).estimate().inverse()*edge.vertex(0).estimate())
+                error_chi2 = error.dot(edge.information()).dot(error)
+            elif type(edge) == g2o.EdgeSE3Expmap:
+                error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
+                error_chi2 = error.log().T.dot(edge.information()).dot(error.log())
+            elif type(edge) == g2o.EdgeSE3:
+                delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
+                error = np.hstack((delta.translation() ,delta.orientation().coeffs()[:-1]))
+                error_chi2 = error.dot(edge.information()).dot(error)
+            total_chi2 += error_chi2
+        print("total chi2", total_chi2)
+        return total_chi2
+
     def optimize_graph(self):
         """Optimize the graph using g2o.
 
@@ -250,7 +335,10 @@ class Graph:
 
         self.optimized_graph.initialize_optimization()
         run_status = self.optimized_graph.optimize(1024)
-
+        print("checking unoptimized edges")
+        self.check_optimized_edges(self.unoptimized_graph)
+        print("checking optimized edges")
+        self.check_optimized_edges(self.optimized_graph)
         self.g2o_status = run_status
 
     def generate_maximization_params(self):
@@ -316,21 +404,27 @@ class Graph:
             edge = self.edges[uid]
             start_mode = self.vertices[edge.startuid].mode
             end_mode = self.vertices[edge.enduid].mode
-            prescalingMatrix = np.diag(self.edges[uid].information_prescaling)
             if start_mode == VertexType.ODOMETRY:
                 if end_mode == VertexType.ODOMETRY:
                     self.edges[uid].information = np.diag(
                         np.exp(-self.weights[:6]))
                 elif end_mode == VertexType.TAG:
-                    self.edges[uid].information = np.diag(
-                        np.exp(-self.weights[6:12]))
+                    if self.is_sparse_bundle_adjustment:
+                        self.edges[uid].information = np.diag(
+                            np.exp(-self.weights[6:8]))
+                    else:
+                        self.edges[uid].information = np.diag(
+                            np.exp(-self.weights[6:12]))
                 elif end_mode == VertexType.DUMMY:
                     # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems to work though)
                     basis = self.basis_matrices[uid][3:6, 3:6]
                     cov = np.diag(np.exp(-self.weights[15:18]))
                     information = basis.dot(cov).dot(basis.T)
                     template = np.zeros([6, 6])
-                    template[3:6, 3:6] = information
+                    if self.is_sparse_bundle_adjustment:
+                        template[:3, :3] = information
+                    else:
+                        template[3:6, 3:6] = information
                     if self.damping_status:
                         self.edges[uid].information = template
                     else:
@@ -341,7 +435,11 @@ class Graph:
                 else:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))
-                self.edges[uid].information = prescalingMatrix*self.edges[uid].information
+                if self.edges[uid].information_prescaling is not None:
+                    prescaling_matrix = self.edges[uid].information_prescaling
+                    if prescaling_matrix.ndim == 1:
+                        prescaling_matrix = np.diag(prescaling_matrix)
+                    self.edges[uid].information = prescaling_matrix*self.edges[uid].information
             else:
                 raise Exception(
                     'Edge of start type {} not recognized.'.format(start_mode))
@@ -388,5 +486,11 @@ class Graph:
         """Update the initial vertices elements with the optimized graph values.
         """
         for uid in self.optimized_graph.vertices():
-            self.vertices[uid].estimate = isometry_to_pose(
-                self.optimized_graph.vertices()[uid].estimate())
+            if self.is_sparse_bundle_adjustment:
+                if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
+                else:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+            else:
+                self.vertices[uid].estimate = isometry_to_pose(
+                    self.optimized_graph.vertices()[uid].estimate())
