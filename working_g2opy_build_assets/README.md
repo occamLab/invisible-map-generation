@@ -1,6 +1,6 @@
 # Introduction
 
-To get the build of g2opy working on my (Duncan's) system (Ubuntu 20.0.4 using Python 3.8.5 in a virtual environment), I had to make the following two changes to source code in the g2opy repository. I did this by making a setup script, `g2opy_setup.sh` for g2opy that is essentially the same as the [installation instructions contained in the g2opy README](https://github.com/uoip/g2opy#Installation), but with one important change: the script replaces two files in the g2opy source code with the files in this directory.
+To get the build of g2opy working on my (Duncan's) system (Ubuntu 20.0.4 using Python 3.8.5 in a virtual environment), I had to make the following two changes to source code in the g2opy repository. I did this by making a setup script, `<root dir>/g2opy_setup.sh` for g2opy that is essentially the same as the [installation instructions contained in the g2opy README](https://github.com/uoip/g2opy#Installation), but with one important change: the script replaces two files in the g2opy source code with the files in this directory. To work correctly, the script should be run from the repository's root directory.
 
 # Change 1
 
@@ -46,6 +46,7 @@ New:
 
 ```python
 install_dir = get_python_lib()
+install_dirs = [install_dir]
 lib_file = glob.glob(__library_file__)
-assert len(lib_file) == 1
+assert len(lib_file) == 1 and len(install_dirs) >= 1
 ```
