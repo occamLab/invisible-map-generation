@@ -1,5 +1,4 @@
-# Installs g2opy. Adapted from the setup script in the g2opy repository. It may be run from any directory. Make sure to
-# source the python virtual environment you desire before running (found to work on Python 3.8.5)
+# Installs g2opy. Adapted from the setup script in the g2opy repository. It may be run from any directory.
 
 # To handle this script being run from any directory, cd into the repository's root directory
 # Absolute path to this script, e.g. /home/user/bin/foo.sh
@@ -8,7 +7,7 @@ SCRIPT=$(readlink -f "$0")
 REPODIR=$(dirname "$(dirname "$SCRIPT")")
 cd "$REPODIR" || exit
 
- Ignore cloning the repository if it already exists
+# Ignore cloning the repository if it already exists
 if [ ! -d "./g2opy/" ]
 then
   git clone https://github.com/uoip/g2opy.git
