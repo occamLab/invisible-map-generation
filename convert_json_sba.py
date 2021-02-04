@@ -68,7 +68,7 @@ def as_graph(dct):
         pose_data = np.zeros((0, 18))
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=True)
-    tag_size = 0.12065             # TODO: need to send this with the tag detection
+    tag_size = 0.173             # TODO: need to send this with the tag detection
     true_3d_points = np.array(
         [[-tag_size / 2, -tag_size / 2, 1], [tag_size / 2, -tag_size / 2, 1], [tag_size / 2, tag_size / 2, 1],
          [-tag_size / 2, tag_size / 2, 1]])
