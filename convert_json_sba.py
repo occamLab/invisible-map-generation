@@ -188,7 +188,7 @@ def as_graph(dct):
             for k, point in enumerate(true_3d_points):
                 point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * (point - np.array([0, 0, 1]))
                 cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0], camera_intrinsics_for_tag[tag_index][2:], 0)
-                print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
+                #print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=tag_vertex_id,

@@ -57,7 +57,10 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
                 waypoints = np.vstack([waypoints, pose])
                 waypoint_metadata.append(vertices[i].meta_data)
 
-    return {'locations': np.array(locations), 'tags': np.array(tags), 'tagpoints': tagpoints,
+    # convert to array for sorting
+    locations = np.array(locations)
+    locations = locations[locations[:,-1].argsort()]
+    return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
             'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
 def find_connected_tag_vert(optimizer, location_vert):
