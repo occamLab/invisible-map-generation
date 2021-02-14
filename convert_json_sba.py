@@ -68,7 +68,7 @@ def as_graph(dct):
         pose_data = np.zeros((0, 18))
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=True)
-    tag_size = 0.12065             # TODO: need to send this with the tag detection
+    tag_size = 0.173             # TODO: need to send this with the tag detection
     true_3d_points = np.array(
         [[-tag_size / 2, -tag_size / 2, 1], [tag_size / 2, -tag_size / 2, 1], [tag_size / 2, tag_size / 2, 1],
          [-tag_size / 2, tag_size / 2, 1]])
@@ -188,7 +188,7 @@ def as_graph(dct):
             for k, point in enumerate(true_3d_points):
                 point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * (point - np.array([0, 0, 1]))
                 cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0], camera_intrinsics_for_tag[tag_index][2:], 0)
-                print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
+                #print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=tag_vertex_id,
