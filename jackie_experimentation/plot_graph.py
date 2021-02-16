@@ -62,6 +62,9 @@ def parse_tag():
 
 
 def plot_translation_3D(x, y, z):
+    '''
+    Create 3D plot of the 
+    '''
     # plot 3d plot
     fig = plt.figure()
     ax = fig.gca(projection='3d')
@@ -80,7 +83,7 @@ def plot_translation_3D(x, y, z):
     
 def update(num, x, y, line):
     line.set_data(x[:num], y[:num])
-    line.axes.axis([0, 10, 0, 1])
+    line.axes.axis([-10, 10, -10, 10])
     return line,
 
 def plot_translation_2D(x, z):
@@ -90,7 +93,7 @@ def plot_translation_2D(x, z):
         title='Test Translation Mapping Data 2D Plot')
 
     ani = animation.FuncAnimation(fig, update, len(x), fargs=[x, z, line],
-                              interval=25, blit=True)
+                              interval=50, blit=True)
     ani.save('test.gif')
     plt.show()
 
