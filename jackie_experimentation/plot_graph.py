@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import mpl_toolkits.mplot3d
 import numpy as np
 import json
@@ -77,17 +78,27 @@ def plot_translation_3D(x, y, z):
 
     plt.show()
     
+def update(num, x, y, line):
+    line.set_data(x[:num], y[:num])
+    line.axes.axis([0, 10, 0, 1])
+    return line,
 
 def plot_translation_2D(x, z):
     fig, ax = plt.subplots()
-    ax.plot(x, z)
+    line, = ax.plot(x, z)
     ax.set(xlabel='x', ylabel='z',
         title='Test Translation Mapping Data 2D Plot')
+
+    ani = animation.FuncAnimation(fig, update, len(x), fargs=[x, z, line],
+                              interval=25, blit=True)
+    ani.save('test.gif')
     plt.show()
+
+
 
 
 if __name__ == "__main__":
     x, y, z = parse_odometry()
 
-    plot_translation_3D(x, y, z)
+    # plot_translation_3D(x, y, z)
     plot_translation_2D(x, z)
