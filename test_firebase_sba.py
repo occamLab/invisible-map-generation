@@ -13,6 +13,30 @@ from firebase_admin import storage
 from g2o import SE3Quat, Quaternion
 import os
 
+# higher means more noisy (note: the uncertainty estimates of translation seem
+# to be pretty over optimistic, hence the large correction here) trying to lock
+# orientation
+weights_dict = {
+    "sensible_default_weights": np.array([
+        -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
+        18,  18,  0,  0,  0,  0,
+        0.,  0.,  0., -1,  1e2,  -1
+    ]),
+    "trust_odom": np.array([
+        -3.,  -3.,  -3., -3.,  -3.,  -3.,
+        10.6,  10.6, 10.6, 10.6,  10.6,  10.6,
+        0.,  0.,  0., -1,  -1,  1e2
+    ]),
+    "trust_tags": np.array([
+        10,  10,  10, 10,  10,  10,
+        -10.6,  -10.6, -10.6, -10.6,  -10.6,  -10.6,
+        0,  0,  0, -1e2,  3,  3
+    ]),
+}
+
+selected_weights = "sensible_default_weights"
+
+
 def locations_from_transforms(locations):
     for i in range(locations.shape[0]):
         locations[i,:7] = SE3Quat(locations[i,:7]).inverse().to_vector()
@@ -32,26 +56,7 @@ def axis_equal(ax):
 
 def optimize_map(x, tune_weights=False, visualize=False):
     test_graph = convert_json_sba.as_graph(x)
-    # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic, hence the large correction here)
-    # trying to lock orientation
-    sensible_default_weights = np.array([
-        -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
-        18,  18,  0,  0,  0,  0,
-        0.,  0.,  0., -1,  1e2,  -1
-    ])
-
-    trust_odom = np.array([
-        -3.,  -3.,  -3., -3.,  -3.,  -3.,
-        10.6,  10.6, 10.6, 10.6,  10.6,  10.6,
-        0.,  0.,  0., -1,  -1,  1e2
-    ])
-
-    trust_tags = np.array([
-        10,  10,  10, 10,  10,  10,
-        -10.6,  -10.6, -10.6, -10.6,  -10.6,  -10.6,
-        0,  0,  0, -1e2,  3,  3
-    ])
-    test_graph.weights = sensible_default_weights
+    test_graph.weights = weights_dict[selected_weights]
 
     # Load these weights into the graph
     test_graph.update_edges()
