@@ -15,6 +15,19 @@ import os
 
 
 class GraphOptTester:
+
+    class OptimizationError(Exception):
+        """Exception to raise when there is an error during graph optimization
+        """
+        def __init__(self, message = None):
+            self.message = message
+
+        def __str__(self):
+            if self.message:
+                return self.__class__.__name__ + ", " + self.message
+            else:
+                return self.__class__.__name__ + " was raised"
+
     # higher means more noisy (note: the uncertainty estimates of translation seem
     # to be pretty over optimistic, hence the large correction here) trying to lock
     # orientation
@@ -35,6 +48,7 @@ class GraphOptTester:
             0, 0, 0, -1e2, 3, 3
         ]),
     }
+
     def __init__(self, selected_weights):
         # Fetch the service account key JSON file contents
         cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
@@ -60,7 +74,7 @@ class GraphOptTester:
             json_data = json_blob.download_as_bytes()
             x = json.loads(json_data)
             tag_locations, odom_locations, waypoint_locations = self.optimize_map(x, False, visualize)
-            processed_map = make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
+            processed_map = GraphOptTester.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
             processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
             processed_map_full_path = os.path.join('TestProcessed', processed_map_filename)
             processed_map_blob = self.bucket.blob(processed_map_full_path)
@@ -89,7 +103,7 @@ class GraphOptTester:
         all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
         starting_map = graph_utils.optimizer_to_map(
             test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
-        original_tag_verts = locations_from_transforms(starting_map['tags'])
+        original_tag_verts = GraphOptTester.locations_from_transforms(starting_map['tags'])
         if tune_weights:
             test_graph.expetation_maximization_once()
             print("tuned weights", test_graph.weights)
@@ -106,10 +120,10 @@ class GraphOptTester:
             test_graph.vertices,
             test_graph.optimized_graph,
             is_sparse_bundle_adjustment=True)
-        prior_locations = locations_from_transforms(prior_map['locations'])
-        locations = locations_from_transforms(resulting_map['locations'])
+        prior_locations = GraphOptTester.locations_from_transforms(prior_map['locations'])
+        locations = GraphOptTester.locations_from_transforms(resulting_map['locations'])
 
-        tag_verts = locations_from_transforms(resulting_map['tags'])
+        tag_verts = GraphOptTester.locations_from_transforms(resulting_map['tags'])
         tagpoint_positions = resulting_map['tagpoints']
         waypoint_verts = resulting_map['waypoints']
         if visualize:
@@ -137,8 +151,10 @@ class GraphOptTester:
                 vert = waypoint_verts[1][vert_idx]
                 waypoint_name = waypoint_verts[0][vert_idx]['name']
                 ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
+
             # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
-            # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
+            # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
+            #          label='All Tag Edges Original')
 
             # Commented-out: unused
             # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
@@ -147,67 +163,72 @@ class GraphOptTester:
             tag_vertex_shift = original_tag_verts - tag_verts
             print("tag_vertex_shift", tag_vertex_shift)
             plt.legend()
-            axis_equal(ax)
+            GraphOptTester.axis_equal(ax)
             plt.show()
         return tag_verts, locations, waypoint_verts
 
+    @staticmethod
+    def locations_from_transforms(locations):
+        for i in range(locations.shape[0]):
+            locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
+        return locations
 
+    @staticmethod
+    def axis_equal(ax):
+        """
+        Create cubic bounding box to simulate equal aspect ratio
+        """
+        axis_range_from_limits = lambda limits: limits[1] - limits[0]
+        max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
+                              axis_range_from_limits(ax.get_zlim())]).max()
+        Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * (
+                ax.get_xlim()[1] + ax.get_xlim()[0])
+        Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * (
+                ax.get_ylim()[1] + ax.get_ylim()[0])
+        Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * (
+                ax.get_zlim()[1] + ax.get_zlim()[0])
+        # Comment or uncomment following both lines to test the fake bounding box:
+        for xb, yb, zb in zip(Xb, Yb, Zb):
+            ax.plot([xb], [yb], [zb], 'w')
 
-def locations_from_transforms(locations):
-    for i in range(locations.shape[0]):
-        locations[i,:7] = SE3Quat(locations[i,:7]).inverse().to_vector()
-    return locations
+    @staticmethod
+    def compare_std_dev(all_tags, all_tags_original):
+        return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
+                              np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in
+                np.unique(all_tags[:, -1])}
 
-def axis_equal(ax):
-    """
-    Create cubic bounding box to simulate equal aspect ratio
-    """
-    axis_range_from_limits = lambda limits: limits[1] - limits[0]
-    max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()), axis_range_from_limits(ax.get_zlim())]).max()
-    Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * (ax.get_xlim()[1] + ax.get_xlim()[0])
-    Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * (ax.get_ylim()[1] + ax.get_ylim()[0])
-    Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * (ax.get_zlim()[1] + ax.get_zlim()[0])
-    # Comment or uncomment following both lines to test the fake bounding box:
-    for xb, yb, zb in zip(Xb, Yb, Zb):
-        ax.plot([xb], [yb], [zb], 'w')
-
-def compare_std_dev(all_tags, all_tags_original):
-    return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
-            np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in np.unique(all_tags[:,-1])}
-
-
-def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
-    tag_vertex_map = map(lambda curr_tag: {
-        'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
-        'rotation': {'x': curr_tag[3],
-                     'y': curr_tag[4],
-                     'z': curr_tag[5],
-                     'w': curr_tag[6]},
-        'id': int(curr_tag[7])}, tag_locations)
-    odom_vertex_map = map(lambda curr_odom: {
-        'translation': {'x': curr_odom[0], 'y': curr_odom[1],
-                        'z': curr_odom[2]},
-        'rotation': {'x': curr_odom[3],
-                     'y': curr_odom[4],
-                     'z': curr_odom[5],
-                     'w': curr_odom[6]},
-        'poseId': int(curr_odom[8])}, odom_locations)
-    waypoint_vertex_map = map(lambda idx: {
-        'translation': {'x': waypoint_locations[1][idx][0],
-                        'y': waypoint_locations[1][idx][1],
-                        'z': waypoint_locations[1][idx][2]},
-        'rotation': {'x': waypoint_locations[1][idx][3],
-                     'y': waypoint_locations[1][idx][4],
-                     'z': waypoint_locations[1][idx][5],
-                     'w': waypoint_locations[1][idx][6]},
-        'id': waypoint_locations[0][idx]['name']},
-                              range(len(waypoint_locations[0])))
-    return json.dumps({'tag_vertices': list(tag_vertex_map),
-                       'odometry_vertices': list(odom_vertex_map),
-                       'waypoints_vertices': list(waypoint_vertex_map)})
+    @staticmethod
+    def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
+        tag_vertex_map = map(lambda curr_tag: {
+            'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
+            'rotation': {'x': curr_tag[3],
+                         'y': curr_tag[4],
+                         'z': curr_tag[5],
+                         'w': curr_tag[6]},
+            'id': int(curr_tag[7])}, tag_locations)
+        odom_vertex_map = map(lambda curr_odom: {
+            'translation': {'x': curr_odom[0], 'y': curr_odom[1],
+                            'z': curr_odom[2]},
+            'rotation': {'x': curr_odom[3],
+                         'y': curr_odom[4],
+                         'z': curr_odom[5],
+                         'w': curr_odom[6]},
+            'poseId': int(curr_odom[8])}, odom_locations)
+        waypoint_vertex_map = map(lambda idx: {
+            'translation': {'x': waypoint_locations[1][idx][0],
+                            'y': waypoint_locations[1][idx][1],
+                            'z': waypoint_locations[1][idx][2]},
+            'rotation': {'x': waypoint_locations[1][idx][3],
+                         'y': waypoint_locations[1][idx][4],
+                         'z': waypoint_locations[1][idx][5],
+                         'w': waypoint_locations[1][idx][6]},
+            'id': waypoint_locations[0][idx]['name']},
+                                  range(len(waypoint_locations[0])))
+        return json.dumps({'tag_vertices': list(tag_vertex_map),
+                           'odometry_vertices': list(odom_vertex_map),
+                           'waypoints_vertices': list(waypoint_vertex_map)})
 
 
 if __name__ == "__main__":
     got = GraphOptTester("sensible_default_weights")
     got.firebase_listen()
-
