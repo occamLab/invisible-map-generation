@@ -160,6 +160,7 @@ def as_graph(dct):
             estimate=odom_vertex_estimates[i],
             fixed=not first_odom_processed
         )
+        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         first_odom_processed = True
 
         vertex_counter += 1
