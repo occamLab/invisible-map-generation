@@ -18,19 +18,19 @@ import os
 # orientation
 weights_dict = {
     "sensible_default_weights": np.array([
-        -6.,  -6.,  -6.,  -6.,  -6.,  -6.,
-        18,  18,  0,  0,  0,  0,
-        0.,  0.,  0., -1,  1e2,  -1
+        -6., -6., -6., -6., -6., -6.,
+        18, 18, 0, 0, 0, 0,
+        0., 0., 0., -1, 1e2, -1
     ]),
     "trust_odom": np.array([
-        -3.,  -3.,  -3., -3.,  -3.,  -3.,
-        10.6,  10.6, 10.6, 10.6,  10.6,  10.6,
-        0.,  0.,  0., -1,  -1,  1e2
+        -3., -3., -3., -3., -3., -3.,
+        10.6, 10.6, 10.6, 10.6, 10.6, 10.6,
+        0., 0., 0., -1, -1, 1e2
     ]),
     "trust_tags": np.array([
-        10,  10,  10, 10,  10,  10,
-        -10.6,  -10.6, -10.6, -10.6,  -10.6,  -10.6,
-        0,  0,  0, -1e2,  3,  3
+        10, 10, 10, 10, 10, 10,
+        -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
+        0, 0, 0, -1e2, 3, 3
     ]),
 }
 
@@ -43,7 +43,9 @@ def locations_from_transforms(locations):
     return locations
 
 def axis_equal(ax):
-    # Create cubic bounding box to simulate equal aspect ratio
+    """
+    Create cubic bounding box to simulate equal aspect ratio
+    """
     axis_range_from_limits = lambda limits: limits[1] - limits[0]
     max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()), axis_range_from_limits(ax.get_zlim())]).max()
     Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * (ax.get_xlim()[1] + ax.get_xlim()[0])
@@ -88,8 +90,6 @@ def optimize_map(x, tune_weights=False, visualize=False):
     tagpoint_positions = resulting_map['tagpoints']
     waypoint_verts = resulting_map['waypoints']
     if visualize:
-        all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
-
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
         plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
@@ -112,7 +112,11 @@ def optimize_map(x, tune_weights=False, visualize=False):
             ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
         #plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
         #plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
-        tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+
+        # Commented-out: unused
+        # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+        # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+
         tag_vertex_shift = original_tag_verts - tag_verts
         print("tag_vertex_shift", tag_vertex_shift)
         plt.legend()
@@ -126,24 +130,31 @@ def compare_std_dev(all_tags, all_tags_original):
 
 
 def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
-    tag_vertex_map = map(lambda curr_tag: {'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
-                                           'rotation': {'x': curr_tag[3],
-                                                        'y': curr_tag[4],
-                                                        'z': curr_tag[5],
-                                                        'w': curr_tag[6]},
-                                           'id': int(curr_tag[7])}, tag_locations)
-    odom_vertex_map = map(lambda curr_odom: {'translation': {'x': curr_odom[0], 'y': curr_odom[1], 'z': curr_odom[2]},
-                                             'rotation': {'x': curr_odom[3],
-                                                          'y': curr_odom[4],
-                                                          'z': curr_odom[5],
-                                                          'w': curr_odom[6]},
-                                             'poseId': int(curr_odom[8])}, odom_locations)
-    waypoint_vertex_map = map(lambda idx: {'translation': {'x': waypoint_locations[1][idx][0], 'y': waypoint_locations[1][idx][1], 'z': waypoint_locations[1][idx][2]},
-                                                     'rotation': {'x': waypoint_locations[1][idx][3],
-                                                                  'y': waypoint_locations[1][idx][4],
-                                                                  'z': waypoint_locations[1][idx][5],
-                                                                  'w': waypoint_locations[1][idx][6]},
-                                           'id': waypoint_locations[0][idx]['name']}, range(len(waypoint_locations[0])))
+    tag_vertex_map = map(lambda curr_tag: {
+        'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
+        'rotation': {'x': curr_tag[3],
+                     'y': curr_tag[4],
+                     'z': curr_tag[5],
+                     'w': curr_tag[6]},
+        'id': int(curr_tag[7])}, tag_locations)
+    odom_vertex_map = map(lambda curr_odom: {
+        'translation': {'x': curr_odom[0], 'y': curr_odom[1],
+                        'z': curr_odom[2]},
+        'rotation': {'x': curr_odom[3],
+                     'y': curr_odom[4],
+                     'z': curr_odom[5],
+                     'w': curr_odom[6]},
+        'poseId': int(curr_odom[8])}, odom_locations)
+    waypoint_vertex_map = map(lambda idx: {
+        'translation': {'x': waypoint_locations[1][idx][0],
+                        'y': waypoint_locations[1][idx][1],
+                        'z': waypoint_locations[1][idx][2]},
+        'rotation': {'x': waypoint_locations[1][idx][3],
+                     'y': waypoint_locations[1][idx][4],
+                     'z': waypoint_locations[1][idx][5],
+                     'w': waypoint_locations[1][idx][6]},
+        'id': waypoint_locations[0][idx]['name']},
+                              range(len(waypoint_locations[0])))
     return json.dumps({'tag_vertices': list(tag_vertex_map),
                        'odometry_vertices': list(odom_vertex_map),
                        'waypoints_vertices': list(waypoint_vertex_map)})
@@ -151,7 +162,7 @@ def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
 def process_map(map_name, map_json, visualize=False):
     json_blob = bucket.get_blob(map_json)
     if json_blob is not None:
-        json_data = json_blob.download_as_string()
+        json_data = json_blob.download_as_bytes()
         x = json.loads(json_data)
         tag_locations, odom_locations, waypoint_locations = optimize_map(x, False, visualize)
         processed_map = make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
@@ -173,17 +184,18 @@ def unprocessed_maps_callback(m):
         for map_name, map_json in m.data.items():
             process_map(map_name, map_json, True)
 
-# Fetch the service account key JSON file contents
-cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
+if __name__ == "__main__":
+    # Fetch the service account key JSON file contents
+    cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
 
-# Initialize the app with a service account, granting admin privileges
-app = firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
-    'storageBucket': 'invisible-map.appspot.com'
-})
+    # Initialize the app with a service account, granting admin privileges
+    app = firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
+        'storageBucket': 'invisible-map.appspot.com'
+    })
 
-ref = db.reference('/unprocessed_maps')
-to_process = ref.get()
-bucket = storage.bucket(app=app)
+    ref = db.reference('/unprocessed_maps')
+    to_process = ref.get()
+    bucket = storage.bucket(app=app)
 
-ref.listen(unprocessed_maps_callback)
+    ref.listen(unprocessed_maps_callback)
