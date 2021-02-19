@@ -13,28 +13,144 @@ from firebase_admin import storage
 from g2o import SE3Quat, Quaternion
 import os
 
-# higher means more noisy (note: the uncertainty estimates of translation seem
-# to be pretty over optimistic, hence the large correction here) trying to lock
-# orientation
-weights_dict = {
-    "sensible_default_weights": np.array([
-        -6., -6., -6., -6., -6., -6.,
-        18, 18, 0, 0, 0, 0,
-        0., 0., 0., -1, 1e2, -1
-    ]),
-    "trust_odom": np.array([
-        -3., -3., -3., -3., -3., -3.,
-        10.6, 10.6, 10.6, 10.6, 10.6, 10.6,
-        0., 0., 0., -1, -1, 1e2
-    ]),
-    "trust_tags": np.array([
-        10, 10, 10, 10, 10, 10,
-        -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
-        0, 0, 0, -1e2, 3, 3
-    ]),
-}
 
-selected_weights = "sensible_default_weights"
+class GraphOptTester:
+    # higher means more noisy (note: the uncertainty estimates of translation seem
+    # to be pretty over optimistic, hence the large correction here) trying to lock
+    # orientation
+    weights_dict = {
+        "sensible_default_weights": np.array([
+            -6., -6., -6., -6., -6., -6.,
+            18, 18, 0, 0, 0, 0,
+            0., 0., 0., -1, 1e2, -1
+        ]),
+        "trust_odom": np.array([
+            -3., -3., -3., -3., -3., -3.,
+            10.6, 10.6, 10.6, 10.6, 10.6, 10.6,
+            0., 0., 0., -1, -1, 1e2
+        ]),
+        "trust_tags": np.array([
+            10, 10, 10, 10, 10, 10,
+            -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
+            0, 0, 0, -1e2, 3, 3
+        ]),
+    }
+    def __init__(self, selected_weights):
+        # Fetch the service account key JSON file contents
+        cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
+
+        # Initialize the app with a service account, granting admin privileges
+        self.app = firebase_admin.initialize_app(cred, {
+            'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
+            'storageBucket': 'invisible-map.appspot.com'
+        })
+
+        self.ref = db.reference('/unprocessed_maps')
+        self.to_process = self.ref.get()
+        self.bucket = storage.bucket(app=self.app)
+
+        self.selected_weights = str(selected_weights)
+
+    def firebase_listen(self):
+        self.ref.listen(self.unprocessed_maps_callback)
+
+    def process_map(self, map_name, map_json, visualize=False):
+        json_blob = self.bucket.get_blob(map_json)
+        if json_blob is not None:
+            json_data = json_blob.download_as_bytes()
+            x = json.loads(json_data)
+            tag_locations, odom_locations, waypoint_locations = self.optimize_map(x, False, visualize)
+            processed_map = make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
+            processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
+            processed_map_full_path = os.path.join('TestProcessed', processed_map_filename)
+            processed_map_blob = self.bucket.blob(processed_map_full_path)
+            processed_map_blob.upload_from_string(processed_map)
+            db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
+            print("processed map", map_name)
+        else:
+            print("map file was missing")
+
+    def unprocessed_maps_callback(self, m):
+        if type(m.data) == str:
+            # a single new map just got added
+            self.process_map(m.path.lstrip('/'), m.data, True)
+        elif type(m.data) == dict:
+            # this will be a dictionary of all the data that is there initially
+            for map_name, map_json in m.data.items():
+                self.process_map(map_name, map_json, True)
+
+    def optimize_map(self, x, tune_weights=False, visualize=False):
+        test_graph = convert_json_sba.as_graph(x)
+        test_graph.weights = GraphOptTester.weights_dict[self.selected_weights]
+
+        # Load these weights into the graph
+        test_graph.update_edges()
+        test_graph.generate_unoptimized_graph()
+        all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+        starting_map = graph_utils.optimizer_to_map(
+            test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
+        original_tag_verts = locations_from_transforms(starting_map['tags'])
+        if tune_weights:
+            test_graph.expetation_maximization_once()
+            print("tuned weights", test_graph.weights)
+        # Create the g2o object and optimize
+        test_graph.generate_unoptimized_graph()
+        test_graph.optimize_graph()
+
+        # Change vertex estimates based off the optimized graph
+        test_graph.update_vertices()
+
+        prior_map = graph_utils.optimizer_to_map(
+            test_graph.vertices, test_graph.unoptimized_graph)
+        resulting_map = graph_utils.optimizer_to_map(
+            test_graph.vertices,
+            test_graph.optimized_graph,
+            is_sparse_bundle_adjustment=True)
+        prior_locations = locations_from_transforms(prior_map['locations'])
+        locations = locations_from_transforms(resulting_map['locations'])
+
+        tag_verts = locations_from_transforms(resulting_map['tags'])
+        tagpoint_positions = resulting_map['tagpoints']
+        waypoint_verts = resulting_map['waypoints']
+        if visualize:
+            f = plt.figure()
+            ax = f.add_subplot(111, projection='3d')
+            plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
+            plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
+                     label='Prior Odom Vertices')
+            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
+                     label='Tag Vertices Original')
+            plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
+            for tag_vert in tag_verts:
+                R = Quaternion(tag_vert[3:-1]).rotation_matrix()
+                axis_to_color = ['r', 'g', 'b']
+                for axis_id in range(3):
+                    ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
+                              R[2, axis_id], length=1, color=axis_to_color[axis_id])
+            plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
+                     label='Tag Corners')
+            for vert in tag_verts:
+                ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
+            plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
+                     label='Waypoint Vertices')
+            for vert_idx in range(len(waypoint_verts[0])):
+                vert = waypoint_verts[1][vert_idx]
+                waypoint_name = waypoint_verts[0][vert_idx]['name']
+                ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
+            # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
+            # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
+
+            # Commented-out: unused
+            # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+            # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+
+            tag_vertex_shift = original_tag_verts - tag_verts
+            print("tag_vertex_shift", tag_vertex_shift)
+            plt.legend()
+            axis_equal(ax)
+            plt.show()
+        return tag_verts, locations, waypoint_verts
+
 
 
 def locations_from_transforms(locations):
@@ -54,75 +170,6 @@ def axis_equal(ax):
     # Comment or uncomment following both lines to test the fake bounding box:
     for xb, yb, zb in zip(Xb, Yb, Zb):
         ax.plot([xb], [yb], [zb], 'w')
-
-
-def optimize_map(x, tune_weights=False, visualize=False):
-    test_graph = convert_json_sba.as_graph(x)
-    test_graph.weights = weights_dict[selected_weights]
-
-    # Load these weights into the graph
-    test_graph.update_edges()
-    test_graph.generate_unoptimized_graph()
-    all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
-    starting_map = graph_utils.optimizer_to_map(
-        test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
-    original_tag_verts = locations_from_transforms(starting_map['tags'])
-    if tune_weights:
-        test_graph.expetation_maximization_once()
-        print("tuned weights", test_graph.weights)
-    # Create the g2o object and optimize
-    test_graph.generate_unoptimized_graph()
-    test_graph.optimize_graph()
-
-    # Change vertex estimates based off the optimized graph
-    test_graph.update_vertices()
-
-    prior_map = graph_utils.optimizer_to_map(
-        test_graph.vertices, test_graph.unoptimized_graph)
-    resulting_map = graph_utils.optimizer_to_map(
-        test_graph.vertices,
-        test_graph.optimized_graph,
-        is_sparse_bundle_adjustment=True)
-    prior_locations = locations_from_transforms(prior_map['locations'])
-    locations = locations_from_transforms(resulting_map['locations'])
-
-    tag_verts = locations_from_transforms(resulting_map['tags'])
-    tagpoint_positions = resulting_map['tagpoints']
-    waypoint_verts = resulting_map['waypoints']
-    if visualize:
-        f = plt.figure()
-        ax = f.add_subplot(111, projection='3d')
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g', label='Prior Odom Vertices')
-        plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c', label='Tag Vertices Original')
-        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
-        for tag_vert in tag_verts:
-            R = Quaternion(tag_vert[3:-1]).rotation_matrix()
-            axis_to_color = ['r','g','b']
-            for axis_id in range(3):
-                ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
-                          R[2, axis_id], length=1, color=axis_to_color[axis_id])
-        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m', label='Tag Corners')
-        for vert in tag_verts:
-            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
-        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y', label='Waypoint Vertices')
-        for vert_idx in range(len(waypoint_verts[0])):
-            vert = waypoint_verts[1][vert_idx]
-            waypoint_name = waypoint_verts[0][vert_idx]['name']
-            ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
-        #plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
-        #plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
-
-        # Commented-out: unused
-        # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
-        # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
-
-        tag_vertex_shift = original_tag_verts - tag_verts
-        print("tag_vertex_shift", tag_vertex_shift)
-        plt.legend()
-        axis_equal(ax)
-        plt.show()
-    return tag_verts, locations, waypoint_verts
 
 def compare_std_dev(all_tags, all_tags_original):
     return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
@@ -159,43 +206,8 @@ def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
                        'odometry_vertices': list(odom_vertex_map),
                        'waypoints_vertices': list(waypoint_vertex_map)})
 
-def process_map(map_name, map_json, visualize=False):
-    json_blob = bucket.get_blob(map_json)
-    if json_blob is not None:
-        json_data = json_blob.download_as_bytes()
-        x = json.loads(json_data)
-        tag_locations, odom_locations, waypoint_locations = optimize_map(x, False, visualize)
-        processed_map = make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
-        processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
-        processed_map_full_path = os.path.join('TestProcessed', processed_map_filename)
-        processed_map_blob = bucket.blob(processed_map_full_path)
-        processed_map_blob.upload_from_string(processed_map)
-        db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
-        print("processed map", map_name)
-    else:
-        print("map file was missing")
-
-def unprocessed_maps_callback(m):
-    if type(m.data) == str:
-        # a single new map just got added
-        process_map(m.path.lstrip('/'), m.data, True)
-    elif type(m.data) == dict:
-        # this will be a dictionary of all the data that is there initially
-        for map_name, map_json in m.data.items():
-            process_map(map_name, map_json, True)
 
 if __name__ == "__main__":
-    # Fetch the service account key JSON file contents
-    cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
+    got = GraphOptTester("sensible_default_weights")
+    got.firebase_listen()
 
-    # Initialize the app with a service account, granting admin privileges
-    app = firebase_admin.initialize_app(cred, {
-        'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
-        'storageBucket': 'invisible-map.appspot.com'
-    })
-
-    ref = db.reference('/unprocessed_maps')
-    to_process = ref.get()
-    bucket = storage.bucket(app=app)
-
-    ref.listen(unprocessed_maps_callback)
