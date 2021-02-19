@@ -131,7 +131,8 @@ def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
                                              'rotation': {'x': curr_odom[3],
                                                           'y': curr_odom[4],
                                                           'z': curr_odom[5],
-                                                          'w': curr_odom[6]}}, odom_locations)
+                                                          'w': curr_odom[6]},
+                                             'poseId': int(curr_odom[8])}, odom_locations)
     waypoint_vertex_map = map(lambda idx: {'translation': {'x': waypoint_locations[1][idx][0], 'y': waypoint_locations[1][idx][1], 'z': waypoint_locations[1][idx][2]},
                                                      'rotation': {'x': waypoint_locations[1][idx][3],
                                                                   'y': waypoint_locations[1][idx][4],

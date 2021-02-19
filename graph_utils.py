@@ -25,7 +25,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
         The 'tags' and 'waypoints' keys cover the locations of the
         tags and waypoints in the same format.
     """
-    locations = np.reshape([], [0, 8])
+    locations = np.reshape([], [0, 9])
     tagpoints = np.reshape([], [0, 3])
     tags = np.reshape([], [0, 8])
     waypoints = np.reshape([], [0, 8])
@@ -42,11 +42,12 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
         else:
             location = optimizer.vertex(i).estimate().translation()
             rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-            pose = np.concatenate([location, rotation, [i]])
-
+            
             if mode == VertexType.ODOMETRY:
+                pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
                 locations = np.vstack([locations, pose])
             elif mode == VertexType.TAG:
+                pose = np.concatenate([location, rotation, [i]])
                 if is_sparse_bundle_adjustment:
                     # adjusts tag based on the position of the tag center
                     pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse()*SE3Quat(vertices[i].estimate)).to_vector()
@@ -54,6 +55,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
                     pose[-1] = vertices[i].meta_data['tag_id']
                 tags = np.vstack([tags, pose])
             elif mode == VertexType.WAYPOINT:
+                pose = np.concatenate([location, rotation, [i]])
                 waypoints = np.vstack([waypoints, pose])
                 waypoint_metadata.append(vertices[i].meta_data)
 
