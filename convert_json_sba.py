@@ -82,7 +82,7 @@ def as_graph(dct):
         [0, 0, 0, 1]
     ])
     # flatten the data into individual numpy arrays that we can operate on
-    if 'tag_data' in dct:
+    if 'tag_data' in dct and len(dct['tag_data']) > 0:
         tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
         camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
         tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
@@ -92,8 +92,8 @@ def as_graph(dct):
         tag_pose_flat = np.zeros((0,16))
         camera_intrinsics_for_tag = np.zeros((0, 4))
         tag_corners = np.zeros((0, 8))
-        tag_ids = np.zeros((0,1), type=np.int)
-        pose_ids = np.zeros((0,1), type=np.int)
+        tag_ids = np.zeros((0,1), dtype=np.int)
+        pose_ids = np.zeros((0,1), dtype=np.int)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
