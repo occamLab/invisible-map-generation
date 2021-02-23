@@ -19,7 +19,7 @@ class GraphOptTester:
     class OptimizationError(Exception):
         """Exception to raise when there is an error during graph optimization
         """
-        def __init__(self, message = None):
+        def __init__(self, message=None):
             self.message = message
 
         def __str__(self):
@@ -28,9 +28,8 @@ class GraphOptTester:
             else:
                 return self.__class__.__name__ + " was raised"
 
-    # higher means more noisy (note: the uncertainty estimates of translation seem
-    # to be pretty over optimistic, hence the large correction here) trying to lock
-    # orientation
+    # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic,
+    # hence the large correction here) trying to lock orientation
     weights_dict = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
@@ -100,13 +99,17 @@ class GraphOptTester:
         # Load these weights into the graph
         test_graph.update_edges()
         test_graph.generate_unoptimized_graph()
-        all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+
+        # Commented out: unused
+        # all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+
         starting_map = graph_utils.optimizer_to_map(
             test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
         original_tag_verts = GraphOptTester.locations_from_transforms(starting_map['tags'])
         if tune_weights:
             test_graph.expetation_maximization_once()
             print("tuned weights", test_graph.weights)
+
         # Create the g2o object and optimize
         test_graph.generate_unoptimized_graph()
         test_graph.optimize_graph()
@@ -187,6 +190,7 @@ class GraphOptTester:
                 ax.get_ylim()[1] + ax.get_ylim()[0])
         Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * (
                 ax.get_zlim()[1] + ax.get_zlim()[0])
+
         # Comment or uncomment following both lines to test the fake bounding box:
         for xb, yb, zb in zip(Xb, Yb, Zb):
             ax.plot([xb], [yb], [zb], 'w')
