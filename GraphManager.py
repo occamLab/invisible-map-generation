@@ -1,4 +1,21 @@
 #!/usr/bin/env python3
+"""
+Contains the GraphManager class and a main routine that makes use of it.
+
+Optional arguments if running this script as main:
+  -h, --help  show this help message and exit
+  -p P        Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., '-g
+              *Living_Room*' will plot any cached map with 'Living_Room' in its name); if no pattern is specified,
+              then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is
+              searched recursively, and '**/' is automatically prepended to the pattern
+  -f          Acquire maps from firebase and overwrite existing cache. Mutually exclusive with the rest of the options.
+  -F          Upload optimized any graphs to firebase that are optimized while this script is running.
+
+Notes:
+- This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
+
+Author: Duncan Mazza
+"""
 
 import argparse
 import glob
@@ -19,22 +36,26 @@ import graph_utils
 
 
 class GraphManager:
-    class OptimizationError(Exception):
-        """Exception to raise when there is an error during graph optimization
-        """
+    """Class that manages graphs by interfacing with firebase, keeping a cache of data downloaded from firebase, and
+    providing methods wrapping graph optimization and plotting capabilities.
 
-        def __init__(self, message=None):
-            self.message = message
+    Class Attributes:
+        _weights_dict (Dict[str, np.ndarray]): Maps descriptive names of weight vectors to the corresponding weight
+         vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation 
+         seem to be pretty over optimistic, hence the large correction here) for the orientation
+        _app_initialize_dict (Dict[str, str]): Used for initializing the `app` attribute
+        _unprocessed_maps_bucket_ref (str): Specifies Firebase bucket reference for unprocessed maps
+        _processed_maps_bucket_ref
 
-        def __str__(self):
-            if self.message:
-                return self.__class__.__name__ + ", " + self.message
-            else:
-                return self.__class__.__name__ + " was raised"
-
-    # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic,
-    # hence the large correction here) trying to lock orientation
-    weights_dict = {
+    Attributes:
+        _app (firebase_admin.App): App initialized with a service account, granting admin privileges
+        _bucket: Handle to a Google Cloud Storage bucket
+        _unprocessed_map_ref: Database reference representing the node for the unprocessed maps
+        _selected_weights (np.ndarray): Vector selected from the `GraphManager._weights_dict`
+        _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
+         always be located at `<path to this file>.cache/`
+    """
+    _weights_dict = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
             18, 18, 0, 0, 0, 0,
@@ -51,32 +72,48 @@ class GraphManager:
             0, 0, 0, -1e2, 3, 3
         ]),
     }
-
     _app_initialize_dict = {
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
         'storageBucket': 'invisible-map.appspot.com'
     }
-
-    # Relevant bucket references
     _unprocessed_maps_bucket_ref = "unprocessed_maps"
     _processed_maps_bucket_ref = "TestProcessed"
 
-    def __init__(self, selected_weights, cred):
-        # Initialize the app with a service account, granting admin privileges
-        self.app = firebase_admin.initialize_app(cred, GraphManager._app_initialize_dict)
-        self.bucket = storage.bucket(app=self.app)
+    def __init__(self, weights_specifier, cred):
+        """Initializes GraphManager instance (only populates instance attributes)
 
-        self.unprocessed_map_ref = db.reference("/" + GraphManager._unprocessed_maps_bucket_ref)
-        self.unprocessed_map_to_process = self.unprocessed_map_ref.get()
-
-        self.selected_weights = str(selected_weights)
+        Args:
+             weights_specifier: Used as the key to access the corresponding value in `GraphManager._weights_dict`
+             cred: Firebase credentials to pass as the first argument to `firebase_admin.initialize_app(cred, ...)`
+        """
+        self._app = firebase_admin.initialize_app(cred, GraphManager._app_initialize_dict)
+        self._bucket = storage.bucket(app=self._app)
+        self._unprocessed_map_ref = db.reference("/" + GraphManager._unprocessed_maps_bucket_ref)
+        self._selected_weights = str(weights_specifier)
         self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
 
     def firebase_listen_unprocessed_maps(self):
-        self.unprocessed_map_ref.listen(self._unprocessed_maps_callback)
+        """Invokes the `listen` method of the `_unprocessed_map_ref` attribute and provides the
+        `_unprocessed_maps_callback` method as the callback function argument.
+        """
+        self._unprocessed_map_ref.listen(self._unprocessed_maps_callback)
 
-    def process_maps(self, pattern, upload=False):
-        self._resolve_cache_folder()
+    def process_maps(self, pattern, visualize=True, upload=False):
+        """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
+
+        The `_resolve_cache_dir` method is first called, then the `glob` package is used to find matching files.
+        Matching maps' json strings are loaded, parsed, and provided to the `_process_map` method. If an exception is
+        raised in the process of loading a map or processing it, it is caught and its details are printed to the
+        command line.
+
+        Args:
+            pattern (str): Pattern to find matching cached graphs (which are stored as `.json` files. The cache
+             directory (specified by the `_cache_path` attribute) is searched recursively, and '**/' is automatically
+             prepended to the pattern.
+            visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
+            upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
+        """
+        self._resolve_cache_dir()
         matching_maps = glob.glob(os.path.join(self._cache_path, "**/" + pattern), recursive=True)
 
         if len(matching_maps) == 0:
@@ -93,14 +130,27 @@ class GraphManager:
                     os.path.sep)) + 1:])
                 map_dct = json.loads(json_string)
                 map_name = self._read_cache_directory(os.path.basename(map_json))
-                self._process_map(map_name, map_json, map_dct, True, upload)
+                self._process_map(map_name, map_json, map_dct, visualize, upload)
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
     # -- Private Methods --
 
     def _firebase_get_unprocessed_map(self, map_name, map_json):
-        json_blob = self.bucket.get_blob(map_json)
+        """Acquires a map from the specified blob and caches it.
+
+        A diagnostic message is printed if the `map_json` blob name was not found by Firebase.
+
+        Args:
+            map_name (str): Value passed as the `map_name` argument to the `_cache_map` method; the data in map_name is
+             ultimately used for uploading a map to firebase by specifying the child of the 'maps' database reference.
+            map_json (str): Value passed as the `blob_name` argument to the `get_blob` method of the `_bucket`
+             attribute.
+
+        Returns:
+            True if the map was successfully acquired and cached, and false if the map was not found by Firebase
+        """
+        json_blob = self._bucket.get_blob(map_json)
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
             json_string = json.loads(json_data)
@@ -118,14 +168,22 @@ class GraphManager:
         if upload:
             processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
             processed_map_full_path = os.path.join(GraphManager._processed_maps_bucket_ref, processed_map_filename)
-            processed_map_blob = self.bucket.blob(processed_map_full_path)
+            processed_map_blob = self._bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(processed_map_json)
             db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
         print("processed map", map_name)
 
     def _append_to_cache_directory(self, key, value):
-        assert(isinstance(key, str))
-        assert(isinstance(value, str))
+        """Appends the specified key-value pair to the dictionary stored as a json file in
+        `<cache folder>/directory.json`.
+
+        If the key already exists in the dictionary, its value is overwritten. Note that no error handling is
+        implemented.
+
+        Args:
+            key (str): Key to store `value` in
+            value (str): Value to store under `key`
+        """
         directory_json_path = os.path.join(self._cache_path, "directory.json")
         with open(directory_json_path, "r") as directory_file_read:
             directory_json = json.loads(directory_file_read.read())
@@ -137,27 +195,51 @@ class GraphManager:
             directory_file_write.close()
 
     def _read_cache_directory(self, key):
-        assert(isinstance(key, str))
+        """Reads the dictionary stored as a json file in `<cache folder>/directory.json` and returns the value
+        associated with the specified key.
+
+        Note that no error handling is implemented.
+
+        Args:
+            key (str): Key to query the dictionary
+
+        Returns:
+            Value associated with the key
+        """
         with open(os.path.join(self._cache_path, "directory.json"), "r") as directory_file:
             directory_json = json.loads(directory_file.read())
             directory_file.close()
             return directory_json[key]
 
     def _cache_map(self, bucket_ref, map_name, map_json, json_string):
-        """Saves a map to a json file in the self._cache_path directory
+        """Saves a map to a json file in cache directory.
+
+        Catches any exceptions raised and displays an appropriate diagnostic message if one is caught. All of the
+        arguments are checked to ensure that they are, in fact strings; if any are not, then a diagnostic message is
+        printed and False is returned.
 
         Arguments:
-            map_name: Name of the map (cached file is stored under the file name map_name.json)
-            json_string: Json string to write to file
+            bucket_ref (str): String specifying the bucket reference under which the map is stored; should equal one
+             of the class attributes `GraphManager._unprocessed_maps_bucket_ref` or
+             `GraphManager._processed_maps_bucket_ref`
+            map_name (str): String specifying the appropriate child node of the 'maps' node in the database; the map
+             name is mapped to the value of `map_json` in the `<cache folder>/directory.json` dictionary for later
+             reference when loading the map from cache
+            map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
+             map relative to `bucket_ref`
+            json_string (str): The json string that defines the map (this is what is written as the contents of the
+             cached map file)
 
-        Returns: True if map was successfully cached, and false otherwise
+        Returns:
+            True if map was successfully cached, and False otherwise
         """
-        for arg in [bucket_ref, map_json, json_string]:
+        for arg in [bucket_ref, map_name, map_json, json_string]:
             if not isinstance(arg, str):
                 print("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
                 return False
-        if not self._resolve_cache_folder():
-            print("Cannot cache map because cache folder cannot be created at {}".format(self._cache_path))
+        if not self._resolve_cache_dir():
+            print("Cannot cache map because cache folder existence could not be resolved at path {}".format(
+                self._cache_path))
             return False
 
         cached_file_path = os.path.join(self._cache_path, bucket_ref, map_json)
@@ -182,13 +264,19 @@ class GraphManager:
             print("Could not cache map {} due to error: {}".format(map_json, ex))
             return False
 
-    def _resolve_cache_folder(self):
+    def _resolve_cache_dir(self):
         """Returns true if the cache folder exists, and attempts to create a new one if there is none.
 
-        Two subdirectories named after the relevant bucket parents are also created.
+        The cache folder is specified by the absolute path in the `_cache_dir` attribute. Two subdirectories named
+        after the relevant bucket paths (as specified by `GraphManager._processed_maps_bucket_ref` and
+        `GraphManager._unprocessed_maps_bucket_ref` are also created. A file named `directory.json` is also created in
+        the cache folder.
+
+        This method catches all exceptions associated with creating new directories/files and displays a corresponding
+        diagnostic message.
 
         Returns:
-            True if the cache folder at self._cache_path exists after this function returns; False returned otherwise
+            True if no exceptions were caught and False otherwise
         """
         processed_path = os.path.join(self._cache_path, GraphManager._processed_maps_bucket_ref)
         unprocessed_path = os.path.join(self._cache_path, GraphManager._unprocessed_maps_bucket_ref)
@@ -214,6 +302,8 @@ class GraphManager:
             return True
 
     def _unprocessed_maps_callback(self, m):
+        """Callback function used in the `firebase_listen_unprocessed_maps` method.
+        """
         if type(m.data) == str:
             # A single new map just got added
             self._firebase_get_unprocessed_map(m.path.lstrip('/'), m.data)
@@ -223,8 +313,12 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_map(self, dct, tune_weights=False, visualize=False):
+        """Map optimization routine.
+
+        TODO: more detailed documentation
+        """
         test_graph = convert_json_sba.as_graph(dct)
-        test_graph.weights = GraphManager.weights_dict[self.selected_weights]
+        test_graph.weights = GraphManager._weights_dict[self._selected_weights]
 
         # Load these weights into the graph
         test_graph.update_edges()
@@ -310,8 +404,7 @@ class GraphManager:
 
     @staticmethod
     def axis_equal(ax):
-        """
-        Create cubic bounding box to simulate equal aspect ratio
+        """Create cubic bounding box to simulate equal aspect ratio
         """
         axis_range_from_limits = lambda limits: limits[1] - limits[0]
         max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
@@ -388,7 +481,7 @@ def make_parser():
     parser.add_argument(
         "-F",
         action="store_true",
-        help="Upload optimized graphs to firebase"
+        help="Upload optimized any graphs to firebase that are optimized while this script is running."
     )
     return parser
 
@@ -414,4 +507,4 @@ if __name__ == "__main__":
         else:
             map_pattern = "*"
 
-        graph_handler.process_maps(map_pattern, args.F)
+        graph_handler.process_maps(map_pattern, upload=args.F)
