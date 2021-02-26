@@ -5,11 +5,13 @@ Contains the GraphManager class and a main routine that makes use of it.
 Example usage that listens to the unprocessed maps database reference:
 >> python3 GraphManager.py -f
 
-Example usage that plots all graphs matching the pattern specified by the -p flag:
->> python3 GraphManager.py -p "**/*Living Room*"
+Example usage that optimizes and plots all graphs matching the pattern specified by the -p flag:
+>> python3 GraphManager.py -p "unprocessed_maps/**/*Living Room*"
 
 Notes:
 - This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
+- Known bug: The cached optimized maps cannot be re-loaded from cache (this appears to be an issue external to this
+  script)
 
 Author: Duncan Mazza
 """
@@ -39,13 +41,15 @@ class GraphManager:
          vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation 
          seem to be pretty over optimistic, hence the large correction here) for the orientation
         _app_initialize_dict (Dict[str, str]): Used for initializing the `app` attribute
-        _listen_to (str): Specifies Firebase bucket path to listen to in the `firebase_listen` method
-        _upload_to (str): Specifies the firebase bucket path to upload processed graphs to
+        _listen_to (str): Simultaneously specifies database reference to listen to in the `firebase_listen` method
+         and the cache location of any maps associated with that database reference.
+        _upload_to (str): Simultaneously specifies Firebase bucket path to upload processed graphs to and the cache
+         location of processed graphs.
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
-        _bucket: Handle to a Google Cloud Storage bucket
-        _db_ref: Database reference representing the node for the unprocessed maps
+        _bucket: Handle to the Google Cloud Storage bucket
+        _db_ref: Database reference representing the node as specified by the `GraphManager._listen_to` class attribute
         _selected_weights (np.ndarray): Vector selected from the `GraphManager._weights_dict`
         _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
          always be located at `<path to this file>.cache/`
@@ -103,13 +107,12 @@ class GraphManager:
 
         Args:
             pattern (str): Pattern to find matching cached graphs (which are stored as `.json` files. The cache
-             directory (specified by the `_cache_path` attribute) is searched recursively, and '**/' is automatically
-             prepended to the pattern.
+             directory (specified by the `_cache_path` attribute) is searched recursively
             visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
             upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
         """
         self._resolve_cache_dir()
-        matching_maps = glob.glob(os.path.join(self._cache_path, "**/" + pattern), recursive=True)
+        matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
 
         if len(matching_maps) == 0:
             print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
@@ -137,7 +140,7 @@ class GraphManager:
         A diagnostic message is printed if the `map_json` blob name was not found by Firebase.
 
         Args:
-            map_name (str): Value passed as the `map_name` argument to the `_cache_map` method; the data in map_name is
+            map_name (str): Value passed as the `map_name` argument to the `_cache_map` method; the value of map_name is
              ultimately used for uploading a map to firebase by specifying the child of the 'maps' database reference.
             map_json (str): Value passed as the `blob_name` argument to the `get_blob` method of the `_bucket`
              attribute.
@@ -163,7 +166,7 @@ class GraphManager:
             map_name (str): Specifies the child of the 'maps' database reference to upload the optimized graph to (also
              passed as the `map_name` argument to the `_cache_map` method).
             map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
-             map relative to `bucket_ref`
+             map relative to `parent_folder`
             map_dct (Dict[str, str]): Dictionary created from graph json
             visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_map` method
             upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
@@ -179,17 +182,22 @@ class GraphManager:
         """Uploads the map json string into the Firebase bucket under the path
         `<GraphManager._upload_to>/<processed_map_filename>` and updates the appropriate database reference.
 
+        Note that no exception catching is implemented.
+
         Args:
             map_name (str): Specifies the child of the 'maps' database reference to upload the optimized graph to (also
              passed as the `map_name` argument to the `_cache_map` method).
-            map_json (str): String corresponding to both the bucket blob name of the map
+            map_json (str): String corresponding to both the bucket blob name of the map.
             json_string (str): Json string of the map to upload
         """
         processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
         processed_map_full_path = GraphManager._upload_to + "/" + processed_map_filename
+        print("Attempting to upload {} to the bucket blob {}".format(map_name, processed_map_full_path))
         processed_map_blob = self._bucket.blob(processed_map_full_path)
         processed_map_blob.upload_from_string(json_string)
+        print("Succsessfully uploaded map data for {}".format(map_name))
         db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
+        print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(map_name))
 
     def _append_to_cache_directory(self, key, value):
         """Appends the specified key-value pair to the dictionary stored as a json file in
@@ -229,7 +237,7 @@ class GraphManager:
             directory_file.close()
             return directory_json[key]
 
-    def _cache_map(self, bucket_ref, map_name, map_json, json_string):
+    def _cache_map(self, parent_folder, map_name, map_json, json_string):
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised and displays an appropriate diagnostic message if one is caught. All of the
@@ -237,21 +245,19 @@ class GraphManager:
         printed and False is returned.
 
         Arguments:
-            bucket_ref (str): String specifying the bucket reference under which the map is stored; should equal one
-             of the class attributes `GraphManager._listen_to` or
-             `GraphManager._upload_to`
+            parent_folder (str): Specifies the sub-directory of the cache directory that the map is cached in
             map_name (str): String specifying the appropriate child node of the 'maps' node in the database; the map
              name is mapped to the value of `map_json` in the `<cache folder>/directory.json` dictionary for later
              reference when loading the map from cache
-            map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
-             map relative to `bucket_ref`
+            map_json (str): String corresponding to both the bucket blob name of the map; data is written to a file
+             at the path: `<cache folder>/parent_folder/<map_json>`
             json_string (str): The json string that defines the map (this is what is written as the contents of the
              cached map file)
 
         Returns:
             True if map was successfully cached, and False otherwise
         """
-        for arg in [bucket_ref, map_name, map_json, json_string]:
+        for arg in [parent_folder, map_name, map_json, json_string]:
             if not isinstance(arg, str):
                 print("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
                 return False
@@ -260,16 +266,16 @@ class GraphManager:
                 self._cache_path))
             return False
 
-        cached_file_path = os.path.join(self._cache_path, bucket_ref, map_json)
+        cached_file_path = os.path.join(self._cache_path, parent_folder, map_json)
         try:
-            map_json_split = map_json.split("/")
-            map_json_split_idx = 0
-            while map_json_split_idx < len(map_json_split) - 1:
-                dir_to_check = os.path.join(self._cache_path, bucket_ref, os.path.sep.join(map_json_split[
-                                                                                    :map_json_split_idx + 1]))
+            cache_to = os.path.join(parent_folder, map_json)
+            cache_to_split = cache_to.split(os.path.sep)
+            cache_to_split_idx = 0
+            while cache_to_split_idx < len(cache_to_split) - 1:
+                dir_to_check = os.path.join(self._cache_path, os.path.sep.join(cache_to_split[:cache_to_split_idx + 1]))
                 if not os.path.exists(dir_to_check):
                     os.mkdir(dir_to_check)
-                map_json_split_idx += 1
+                cache_to_split_idx += 1
 
             with open(cached_file_path, "w") as map_json_file:
                 map_json_file.write(json_string)
@@ -285,10 +291,7 @@ class GraphManager:
     def _resolve_cache_dir(self):
         """Returns true if the cache folder exists, and attempts to create a new one if there is none.
 
-        The cache folder is specified by the absolute path in the `_cache_dir` attribute. Two subdirectories named
-        after the relevant bucket paths (as specified by `GraphManager._upload_to` and
-        `GraphManager._listen_to` are also created. A file named `directory.json` is also created in
-        the cache folder.
+        A file named `directory.json` is also created in the cache folder.
 
         This method catches all exceptions associated with creating new directories/files and displays a corresponding
         diagnostic message.
@@ -296,15 +299,11 @@ class GraphManager:
         Returns:
             True if no exceptions were caught and False otherwise
         """
-        processed_path = os.path.join(self._cache_path, GraphManager._upload_to)
-        unprocessed_path = os.path.join(self._cache_path, GraphManager._listen_to)
-        for path in [self._cache_path, processed_path, unprocessed_path]:
-            if os.path.exists(path):
-                continue
+        if not os.path.exists(self._cache_path):
             try:
-                os.mkdir(path)
+                os.mkdir(self._cache_path)
             except Exception as ex:
-                print("Could not create a cache directory at {} due to error: {}".format(path, ex))
+                print("Could not create a cache directory at {} due to error: {}".format(self._cache_path, ex))
                 return False
 
         directory_path = os.path.join(self._cache_path, "directory.json")
