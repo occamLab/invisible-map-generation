@@ -2,14 +2,11 @@
 """
 Contains the GraphManager class and a main routine that makes use of it.
 
-Optional arguments if running this script as main:
-  -h, --help  show this help message and exit
-  -p P        Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., '-g
-              *Living_Room*' will plot any cached map with 'Living_Room' in its name); if no pattern is specified,
-              then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is
-              searched recursively, and '**/' is automatically prepended to the pattern
-  -f          Acquire maps from firebase and overwrite existing cache. Mutually exclusive with the rest of the options.
-  -F          Upload optimized any graphs to firebase that are optimized while this script is running.
+Example usage that listens to the unprocessed maps database reference:
+>> python3 GraphManager.py -f
+
+Example usage that plots all graphs matching the pattern specified by the -p flag:
+>> python3 GraphManager.py -p "**/*Living Room*"
 
 Notes:
 - This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
@@ -21,7 +18,6 @@ import argparse
 import glob
 import json
 import os
-
 import firebase_admin
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,7 +26,6 @@ from firebase_admin import db
 from firebase_admin import storage
 from g2o import SE3Quat, Quaternion
 from varname import nameof
-
 import convert_json_sba
 import graph_utils
 
@@ -44,13 +39,13 @@ class GraphManager:
          vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation 
          seem to be pretty over optimistic, hence the large correction here) for the orientation
         _app_initialize_dict (Dict[str, str]): Used for initializing the `app` attribute
-        _unprocessed_maps_bucket_ref (str): Specifies Firebase bucket reference for unprocessed maps
-        _processed_maps_bucket_ref
+        _listen_to (str): Specifies Firebase bucket path to listen to in the `firebase_listen` method
+        _upload_to (str): Specifies the firebase bucket path to upload processed graphs to
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
         _bucket: Handle to a Google Cloud Storage bucket
-        _unprocessed_map_ref: Database reference representing the node for the unprocessed maps
+        _db_ref: Database reference representing the node for the unprocessed maps
         _selected_weights (np.ndarray): Vector selected from the `GraphManager._weights_dict`
         _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
          always be located at `<path to this file>.cache/`
@@ -76,8 +71,8 @@ class GraphManager:
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
         'storageBucket': 'invisible-map.appspot.com'
     }
-    _unprocessed_maps_bucket_ref = "unprocessed_maps"
-    _processed_maps_bucket_ref = "TestProcessed"
+    _listen_to = "unprocessed_maps"
+    _upload_to = "TestProcessed"
 
     def __init__(self, weights_specifier, cred):
         """Initializes GraphManager instance (only populates instance attributes)
@@ -88,15 +83,15 @@ class GraphManager:
         """
         self._app = firebase_admin.initialize_app(cred, GraphManager._app_initialize_dict)
         self._bucket = storage.bucket(app=self._app)
-        self._unprocessed_map_ref = db.reference("/" + GraphManager._unprocessed_maps_bucket_ref)
+        self._db_ref = db.reference("/" + GraphManager._listen_to)
         self._selected_weights = str(weights_specifier)
         self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
 
-    def firebase_listen_unprocessed_maps(self):
-        """Invokes the `listen` method of the `_unprocessed_map_ref` attribute and provides the
-        `_unprocessed_maps_callback` method as the callback function argument.
+    def firebase_listen(self):
+        """Invokes the `listen` method of the `_db_ref` attribute and provides the `_df_listen_callback` method as the
+        callback function argument.
         """
-        self._unprocessed_map_ref.listen(self._unprocessed_maps_callback)
+        self._db_ref.listen(self._df_listen_callback)
 
     def process_maps(self, pattern, visualize=True, upload=False):
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
@@ -154,24 +149,47 @@ class GraphManager:
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
             json_string = json.loads(json_data)
-            self._cache_map(GraphManager._unprocessed_maps_bucket_ref, map_name, map_json, json.dumps(json_string))
+            self._cache_map(GraphManager._listen_to, map_name, map_json, json.dumps(json_string))
             return True
         else:
             print("Map '{}' was missing".format(map_name))
             return False
 
     def _process_map(self, map_name, map_json, map_dct, visualize=False, upload=False):
+        """Optimize the provided map, cache the optimized map in
+        `<cache directory>/GraphManager._upload_to`, and optionally visualize and upload the processed graph.
+
+        Args:
+            map_name (str): Specifies the child of the 'maps' database reference to upload the optimized graph to (also
+             passed as the `map_name` argument to the `_cache_map` method).
+            map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
+             map relative to `bucket_ref`
+            map_dct (Dict[str, str]): Dictionary created from graph json
+            visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_map` method
+            upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
+        """
         tag_locations, odom_locations, waypoint_locations = self._optimize_map(map_dct, False, visualize)
         processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
-        self._cache_map(GraphManager._processed_maps_bucket_ref, map_name, map_json, processed_map_json)
-
-        if upload:
-            processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
-            processed_map_full_path = os.path.join(GraphManager._processed_maps_bucket_ref, processed_map_filename)
-            processed_map_blob = self._bucket.blob(processed_map_full_path)
-            processed_map_blob.upload_from_string(processed_map_json)
-            db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
+        self._cache_map(GraphManager._upload_to, map_name, map_json, processed_map_json)
         print("processed map", map_name)
+        if upload:
+            self._upload(map_name, map_json, processed_map_json)
+
+    def _upload(self, map_name, map_json, json_string):
+        """Uploads the map json string into the Firebase bucket under the path
+        `<GraphManager._upload_to>/<processed_map_filename>` and updates the appropriate database reference.
+
+        Args:
+            map_name (str): Specifies the child of the 'maps' database reference to upload the optimized graph to (also
+             passed as the `map_name` argument to the `_cache_map` method).
+            map_json (str): String corresponding to both the bucket blob name of the map
+            json_string (str): Json string of the map to upload
+        """
+        processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
+        processed_map_full_path = GraphManager._upload_to + "/" + processed_map_filename
+        processed_map_blob = self._bucket.blob(processed_map_full_path)
+        processed_map_blob.upload_from_string(json_string)
+        db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
 
     def _append_to_cache_directory(self, key, value):
         """Appends the specified key-value pair to the dictionary stored as a json file in
@@ -220,8 +238,8 @@ class GraphManager:
 
         Arguments:
             bucket_ref (str): String specifying the bucket reference under which the map is stored; should equal one
-             of the class attributes `GraphManager._unprocessed_maps_bucket_ref` or
-             `GraphManager._processed_maps_bucket_ref`
+             of the class attributes `GraphManager._listen_to` or
+             `GraphManager._upload_to`
             map_name (str): String specifying the appropriate child node of the 'maps' node in the database; the map
              name is mapped to the value of `map_json` in the `<cache folder>/directory.json` dictionary for later
              reference when loading the map from cache
@@ -268,8 +286,8 @@ class GraphManager:
         """Returns true if the cache folder exists, and attempts to create a new one if there is none.
 
         The cache folder is specified by the absolute path in the `_cache_dir` attribute. Two subdirectories named
-        after the relevant bucket paths (as specified by `GraphManager._processed_maps_bucket_ref` and
-        `GraphManager._unprocessed_maps_bucket_ref` are also created. A file named `directory.json` is also created in
+        after the relevant bucket paths (as specified by `GraphManager._upload_to` and
+        `GraphManager._listen_to` are also created. A file named `directory.json` is also created in
         the cache folder.
 
         This method catches all exceptions associated with creating new directories/files and displays a corresponding
@@ -278,8 +296,8 @@ class GraphManager:
         Returns:
             True if no exceptions were caught and False otherwise
         """
-        processed_path = os.path.join(self._cache_path, GraphManager._processed_maps_bucket_ref)
-        unprocessed_path = os.path.join(self._cache_path, GraphManager._unprocessed_maps_bucket_ref)
+        processed_path = os.path.join(self._cache_path, GraphManager._upload_to)
+        unprocessed_path = os.path.join(self._cache_path, GraphManager._listen_to)
         for path in [self._cache_path, processed_path, unprocessed_path]:
             if os.path.exists(path):
                 continue
@@ -301,8 +319,8 @@ class GraphManager:
         else:
             return True
 
-    def _unprocessed_maps_callback(self, m):
-        """Callback function used in the `firebase_listen_unprocessed_maps` method.
+    def _df_listen_callback(self, m):
+        """Callback function used in the `firebase_listen` method.
         """
         if type(m.data) == str:
             # A single new map just got added
@@ -500,7 +518,7 @@ if __name__ == "__main__":
     graph_handler = GraphManager("sensible_default_weights", cred)
 
     if args.f:
-        graph_handler.firebase_listen_unprocessed_maps()
+        graph_handler.firebase_listen()
     else:
         if args.p:
             map_pattern = args.p
