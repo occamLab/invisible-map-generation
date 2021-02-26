@@ -18,7 +18,7 @@ import convert_json_sba
 import graph_utils
 
 
-class GraphHandler:
+class GraphManager:
     class OptimizationError(Exception):
         """Exception to raise when there is an error during graph optimization
         """
@@ -63,10 +63,10 @@ class GraphHandler:
 
     def __init__(self, selected_weights, cred):
         # Initialize the app with a service account, granting admin privileges
-        self.app = firebase_admin.initialize_app(cred, GraphHandler._app_initialize_dict)
+        self.app = firebase_admin.initialize_app(cred, GraphManager._app_initialize_dict)
         self.bucket = storage.bucket(app=self.app)
 
-        self.unprocessed_map_ref = db.reference("/" + GraphHandler._unprocessed_maps_bucket_ref)
+        self.unprocessed_map_ref = db.reference("/" + GraphManager._unprocessed_maps_bucket_ref)
         self.unprocessed_map_to_process = self.unprocessed_map_ref.get()
 
         self.selected_weights = str(selected_weights)
@@ -81,6 +81,7 @@ class GraphHandler:
 
         if len(matching_maps) == 0:
             print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
+            return
 
         for map_json_abs_path in matching_maps:
             print("Attempting to process map {}".format(map_json_abs_path))
@@ -90,8 +91,9 @@ class GraphHandler:
                     json_string_file.close()
                 map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
                     os.path.sep)) + 1:])
+                map_dct = json.loads(json_string)
                 map_name = self._read_cache_directory(os.path.basename(map_json))
-                self._process_map(map_name, map_json, json_string, True, upload)
+                self._process_map(map_name, map_json, map_dct, True, upload)
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
@@ -102,20 +104,20 @@ class GraphHandler:
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
             json_string = json.loads(json_data)
-            self._cache_map(GraphHandler._unprocessed_maps_bucket_ref, map_name, map_json, json.dumps(json_string))
+            self._cache_map(GraphManager._unprocessed_maps_bucket_ref, map_name, map_json, json.dumps(json_string))
             return True
         else:
             print("Map '{}' was missing".format(map_name))
             return False
 
-    def _process_map(self, map_name, map_json, json_string, visualize=False, upload=False):
-        tag_locations, odom_locations, waypoint_locations = self._optimize_map(json_string, False, visualize)
-        processed_map_json = GraphHandler.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
-        self._cache_map(GraphHandler._processed_maps_bucket_ref, map_name, map_json, processed_map_json)
+    def _process_map(self, map_name, map_json, map_dct, visualize=False, upload=False):
+        tag_locations, odom_locations, waypoint_locations = self._optimize_map(map_dct, False, visualize)
+        processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
+        self._cache_map(GraphManager._processed_maps_bucket_ref, map_name, map_json, processed_map_json)
 
         if upload:
             processed_map_filename = os.path.basename(map_json)[:-5] + '_processed.json'
-            processed_map_full_path = os.path.join(GraphHandler._processed_maps_bucket_ref, processed_map_filename)
+            processed_map_full_path = os.path.join(GraphManager._processed_maps_bucket_ref, processed_map_filename)
             processed_map_blob = self.bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(processed_map_json)
             db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
@@ -188,8 +190,8 @@ class GraphHandler:
         Returns:
             True if the cache folder at self._cache_path exists after this function returns; False returned otherwise
         """
-        processed_path = os.path.join(self._cache_path, GraphHandler._processed_maps_bucket_ref)
-        unprocessed_path = os.path.join(self._cache_path, GraphHandler._unprocessed_maps_bucket_ref)
+        processed_path = os.path.join(self._cache_path, GraphManager._processed_maps_bucket_ref)
+        unprocessed_path = os.path.join(self._cache_path, GraphManager._unprocessed_maps_bucket_ref)
         for path in [self._cache_path, processed_path, unprocessed_path]:
             if os.path.exists(path):
                 continue
@@ -220,9 +222,9 @@ class GraphHandler:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _optimize_map(self, x, tune_weights=False, visualize=False):
-        test_graph = convert_json_sba.as_graph(x)
-        test_graph.weights = GraphHandler.weights_dict[self.selected_weights]
+    def _optimize_map(self, dct, tune_weights=False, visualize=False):
+        test_graph = convert_json_sba.as_graph(dct)
+        test_graph.weights = GraphManager.weights_dict[self.selected_weights]
 
         # Load these weights into the graph
         test_graph.update_edges()
@@ -233,7 +235,7 @@ class GraphHandler:
 
         starting_map = graph_utils.optimizer_to_map(
             test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
-        original_tag_verts = GraphHandler.locations_from_transforms(starting_map['tags'])
+        original_tag_verts = GraphManager.locations_from_transforms(starting_map['tags'])
         if tune_weights:
             test_graph.expetation_maximization_once()
             print("tuned weights", test_graph.weights)
@@ -251,10 +253,10 @@ class GraphHandler:
             test_graph.vertices,
             test_graph.optimized_graph,
             is_sparse_bundle_adjustment=True)
-        prior_locations = GraphHandler.locations_from_transforms(prior_map['locations'])
-        locations = GraphHandler.locations_from_transforms(resulting_map['locations'])
+        prior_locations = GraphManager.locations_from_transforms(prior_map['locations'])
+        locations = GraphManager.locations_from_transforms(resulting_map['locations'])
 
-        tag_verts = GraphHandler.locations_from_transforms(resulting_map['tags'])
+        tag_verts = GraphManager.locations_from_transforms(resulting_map['tags'])
         tagpoint_positions = resulting_map['tagpoints']
         waypoint_verts = resulting_map['waypoints']
         if visualize:
@@ -294,7 +296,7 @@ class GraphHandler:
             tag_vertex_shift = original_tag_verts - tag_verts
             print("tag_vertex_shift", tag_vertex_shift)
             plt.legend()
-            GraphHandler.axis_equal(ax)
+            GraphManager.axis_equal(ax)
             plt.show()
         return tag_verts, locations, waypoint_verts
 
@@ -402,7 +404,7 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_handler = GraphHandler("sensible_default_weights", cred)
+    graph_handler = GraphManager("sensible_default_weights", cred)
 
     if args.f:
         graph_handler.firebase_listen_unprocessed_maps()
