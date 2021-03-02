@@ -10,8 +10,7 @@ Example usage that optimizes and plots all graphs matching the pattern specified
 
 Notes:
 - This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
-- Known bug: The cached optimized maps cannot be re-loaded from cache (this appears to be an issue external to this
-  script)
+- Known bug: The cached optimized maps cannot be re-loaded from cache
 
 Author: Duncan Mazza
 """
