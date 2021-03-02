@@ -145,15 +145,33 @@ class GraphManager:
                     floored_middle = (start_uid + end_uid) // 2
                     graph1_subgraph = graph_utils.get_subgraph(graph1, start_vertex_uid=start_uid,
                                                                end_vertex_uid=floored_middle)
-                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
-                    graph2_subgraph = graph_utils.get_subgraph(graph2, start_vertex_uid=floored_middle + 1,
-                                                               end_vertex_uid=end_uid)
 
                     print("\n-- Processing sub-graph without tags fixed --")
                     self._process_map(map_name, map_json, graph1_subgraph, visualize, False)
 
+                    # TODO: Pull out optimized vertices from graph1_subgraph and create graph2 from those vertices.
+                    #  Double check that the tag ids line up when replacing the vertices. Throw a warning if tag
+                    #  vertices from graph2_subgraph are not existent in graph1_subgraph (we are operating on the
+                    #  assumption that the path is cyclic), as well as vice-versa.
+
+                    # TODO: Add the capability to optimize graphs on different sets of weights for comparison of
+                    #  chi-squared values. For example, optimize graph1_subgraph on different sets of weights (e.g.,
+                    #  trust_odom vs. sensible_default_weights), and then compare to optimization of graph2_subgraph
+                    #  some fixed set of weights (e.g., sensible_default_weights).
+
+                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
+                    graph2_subgraph = graph_utils.get_subgraph(graph2, start_vertex_uid=floored_middle + 1,
+                                                               end_vertex_uid=end_uid)
+
                     print("\n-- Processing sub-graph with tags fixed --")
                     self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
+
+                    # TODO: Add comparison of chi-squared values. Reasoning: the better set of weights (used for
+                    #  optimizing graph1_subgraph) will result in graph2_subgraph having a relatively lower
+                    #  chi-squared value.
+
+                    # TODO: Sanity check with extreme weights
+
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
@@ -391,7 +409,9 @@ class GraphManager:
         prior_locations = GraphManager.locations_from_transforms(prior_map['locations'])
         locations = GraphManager.locations_from_transforms(resulting_map['locations'])
 
+        # Refer to this to get the positions of the optimized graph
         tag_verts = GraphManager.locations_from_transforms(resulting_map['tags'])
+
         tagpoint_positions = resulting_map['tagpoints']
         waypoint_verts = resulting_map['waypoints']
         if visualize:
