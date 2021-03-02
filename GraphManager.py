@@ -97,7 +97,7 @@ class GraphManager:
         """
         self._db_ref.listen(self._df_listen_callback)
 
-    def process_maps(self, pattern, visualize=True, upload=False):
+    def process_maps(self, pattern, visualize=True, upload=False, compare=False):
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         The `_resolve_cache_dir` method is first called, then the `glob` package is used to find matching files.
@@ -119,7 +119,7 @@ class GraphManager:
             return
 
         for map_json_abs_path in matching_maps:
-            print("Attempting to process map {}".format(map_json_abs_path))
+            print("\n\n---- Attempting to process map {} ----".format(map_json_abs_path))
             try:
                 with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
                     json_string = json_string_file.read()
@@ -128,7 +128,33 @@ class GraphManager:
                     os.path.sep)) + 1:])
                 map_dct = json.loads(json_string)
                 map_name = self._read_cache_directory(os.path.basename(map_json))
-                self._process_map(map_name, map_json, map_dct, visualize, upload)
+
+                if not compare:
+                    graph = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
+                    self._process_map(map_name, map_json, graph, visualize, upload)
+                else:
+                    # Let user know if incompatible arguments were passed
+                    if upload:
+                        print("'upload' and 'compare' arguments were both true, but uploading is disabled for "
+                              "comparison.")
+
+                    # Acquire sub-graphs; set one to have fixed tag vertices (graph2), and the other (graph1) to not
+                    graph1 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
+                    ordered_odometry_edges = graph_utils.ordered_odometry_edges(graph1)[0]
+                    start_uid = graph1.edges[ordered_odometry_edges[0]].startuid
+                    end_uid = graph1.edges[ordered_odometry_edges[-1]].enduid
+                    floored_middle = (start_uid + end_uid) // 2
+                    graph1_subgraph = graph_utils.get_subgraph(graph1, start_vertex_uid=start_uid,
+                                                               end_vertex_uid=floored_middle)
+                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
+                    graph2_subgraph = graph_utils.get_subgraph(graph2, start_vertex_uid=floored_middle + 1,
+                                                               end_vertex_uid=end_uid)
+
+                    print("\n-- Processing sub-graph without tags fixed --")
+                    self._process_map(map_name, map_json, graph1_subgraph, visualize, False)
+
+                    print("\n-- Processing sub-graph with tags fixed --")
+                    self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
@@ -158,7 +184,7 @@ class GraphManager:
             print("Map '{}' was missing".format(map_name))
             return False
 
-    def _process_map(self, map_name, map_json, map_dct, visualize=False, upload=False):
+    def _process_map(self, map_name, map_json, graph, visualize=False, upload=False):
         """Optimize the provided map, cache the optimized map in
         `<cache directory>/GraphManager._upload_to`, and optionally visualize and upload the processed graph.
 
@@ -167,11 +193,11 @@ class GraphManager:
              passed as the `map_name` argument to the `_cache_map` method).
             map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
              map relative to `parent_folder`
-            map_dct (Dict[str, str]): Dictionary created from graph json
-            visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_map` method
+            graph (graph.Graph): Graph to process
+            visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_graph` method
             upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
         """
-        tag_locations, odom_locations, waypoint_locations = self._optimize_map(map_dct, False, visualize)
+        tag_locations, odom_locations, waypoint_locations = self._optimize_graph(graph, False, visualize)
         processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
         self._cache_map(GraphManager._upload_to, map_name, map_json, processed_map_json)
         print("processed map", map_name)
@@ -329,40 +355,39 @@ class GraphManager:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _optimize_map(self, dct, tune_weights=False, visualize=False):
+    def _optimize_graph(self, graph, tune_weights=False, visualize=False):
         """Map optimization routine.
 
         TODO: more detailed documentation
         """
-        test_graph = convert_json_sba.as_graph(dct)
-        test_graph.weights = GraphManager._weights_dict[self._selected_weights]
+        graph.weights = GraphManager._weights_dict[self._selected_weights]
 
         # Load these weights into the graph
-        test_graph.update_edges()
-        test_graph.generate_unoptimized_graph()
+        graph.update_edges()
+        graph.generate_unoptimized_graph()
 
         # Commented out: unused
         # all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
 
         starting_map = graph_utils.optimizer_to_map(
-            test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
+            graph.vertices, graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
         original_tag_verts = GraphManager.locations_from_transforms(starting_map['tags'])
         if tune_weights:
-            test_graph.expetation_maximization_once()
-            print("tuned weights", test_graph.weights)
+            graph.expetation_maximization_once()
+            print("tuned weights", graph.weights)
 
         # Create the g2o object and optimize
-        test_graph.generate_unoptimized_graph()
-        test_graph.optimize_graph()
+        graph.generate_unoptimized_graph()
+        graph.optimize_graph()
 
         # Change vertex estimates based off the optimized graph
-        test_graph.update_vertices()
+        graph.update_vertices()
 
         prior_map = graph_utils.optimizer_to_map(
-            test_graph.vertices, test_graph.unoptimized_graph)
+            graph.vertices, graph.unoptimized_graph)
         resulting_map = graph_utils.optimizer_to_map(
-            test_graph.vertices,
-            test_graph.optimized_graph,
+            graph.vertices,
+            graph.optimized_graph,
             is_sparse_bundle_adjustment=True)
         prior_locations = GraphManager.locations_from_transforms(prior_map['locations'])
         locations = GraphManager.locations_from_transforms(resulting_map['locations'])
@@ -493,12 +518,20 @@ def make_parser():
     parser.add_argument(
         "-f",
         action="store_true",
-        help="Acquire maps from firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
+        help="Acquire maps from Firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
     )
     parser.add_argument(
         "-F",
         action="store_true",
-        help="Upload optimized any graphs to firebase that are optimized while this script is running."
+        help="Upload any graphs to Firebase that are optimized while this script is running. This option is mutually "
+             "exclusive with the -c option."
+    )
+    parser.add_argument(
+        "-c",
+        action="store_true",
+        help="Compare graph optimizations by computing two different optimizations for two sub-graphs of the "
+             "specified graph: one where the tag vertices are not fixed, and one where they are. This option is "
+             "mutually exclusive with the -F option."
     )
     return parser
 
@@ -507,9 +540,13 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
 
-    if args.f and (args.p or args.F):
-        print("Option in addition to -f specified, but -f optoin is mutually exclusive with other options due to the "
+    if args.f and (args.p or args.F or args.c):
+        print("Option in addition to -f specified, but -f option is mutually exclusive with other options due to the "
               "asynchronous nature of Firebase updating.")
+        exit()
+
+    if args.c and args.F:
+        print("Options -c and -F are mutually exclusive; uploading is disabled for graph comparison")
         exit()
 
     # Fetch the service account key JSON file contents
@@ -524,4 +561,4 @@ if __name__ == "__main__":
         else:
             map_pattern = "*"
 
-        graph_handler.process_maps(map_pattern, upload=args.F)
+        graph_handler.process_maps(map_pattern, upload=args.F, compare=args.c)

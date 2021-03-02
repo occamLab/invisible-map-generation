@@ -55,7 +55,7 @@ def se3_quat_average(transforms):
     average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
     return SE3Quat(average_as_quat, translation_average)
 
-def as_graph(dct):
+def as_graph(dct, fix_tag_vertices=False):
     """Convert a dictionary decoded from JSON into a graph.
 
     Args:
@@ -173,7 +173,7 @@ def as_graph(dct):
                 vertices[tag_vertex_id] = graph.Vertex(
                     mode=graph.VertexType.TAG,
                     estimate=current_tag_transform_estimate.to_vector(),
-                    fixed=False
+                    fixed=fix_tag_vertices
                 )
                 vertices[tag_vertex_id].meta_data['tag_id'] = tag_id_by_tag_vertex_id[tag_vertex_id]
                 for idx, true_point_3d in enumerate(true_3d_points):
