@@ -1,4 +1,4 @@
-import plot_graph
+import parse_map
 import pprint as pp
 
 class Node:
@@ -46,10 +46,8 @@ def generate_mapping_graph(x, y, z):
     map_g.show_graph()
 
 if __name__ == "__main__":
-    # x = [1, 2, 3, 4, 5, 6]
-    # y = [1, 2, 3, 4, 5, 6]
-    # z = [1, 2, 3, 4, 5, 6]
 
-    x, y, z = plot_graph.parse_odometry()
+    map = parse_map.Map_Data('marion_lower_level_map_with_poseID.json')
+    x, y, z, poseID = map.parse_odometry()
     
     generate_mapping_graph(x, y, z)
