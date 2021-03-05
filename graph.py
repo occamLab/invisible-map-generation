@@ -360,3 +360,36 @@ class Graph:
             else:
                 self.vertices[uid].estimate = isometry_to_pose(
                     self.optimized_graph.vertices()[uid].estimate())
+
+    def connected_components(self):
+        """Return a list of graphs representing connecting components of
+        the input graph.
+
+        If the graph is connected, there should only be one element in the
+        output.
+
+        Returns: A list of :class: Graph containing the connected
+            components.
+        """
+        groups = []
+        for uid in self.edges:
+            edge = self.edges[uid]
+            uids = {edge.startuid, edge.enduid}
+            membership = []
+            for i, group in enumerate(groups):
+                if group[0] & uids:
+                    membership.append(i)
+
+            new_group = set.union(uids, *[groups[i][0] for i in membership]), \
+                        set.union({uid}, *[groups[i][1] for i in membership])
+
+            membership.reverse()
+
+            for i in membership:
+                del groups[i]
+
+            groups.append(new_group)
+        # TODO: copy over other information from the graph
+        return [Graph(vertices={k: self.vertices[k] for k in group[0]},
+                      edges={k: self.edges[k] for k in group[1]})
+                for group in groups]
