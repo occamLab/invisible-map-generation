@@ -1,7 +1,7 @@
 """Some helpful functions for visualizing and analyzing graphs.
 """
 import numpy as np
-from graph import VertexType
+from graph_vertex_edge_classes import VertexType
 from scipy.spatial.transform import Rotation as R
 from g2o import SE3Quat, EdgeProjectPSI2UV
 import g2o
