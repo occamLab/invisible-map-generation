@@ -8,24 +8,17 @@ import g2o
 
 
 def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
-    """Convert a :class: g2o.SparseOptimizer to a dictionary
-    containing locations of the phone, tags, and waypoints.
+    """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
     Args:
-        vertices: A dictionary of vertices.
-            This is used to lookup the type of vertex pulled from the
-            optimizer.
+        vertices: A dictionary of vertices. This is used to lookup the type of vertex pulled from the optimizer.
         optimizer: a :class: g2o.SparseOptimizer containing a map.
-        is_sparse_bundle_adjustment: True if the optimizer is based on sparse
-            bundle adjustment and False otherwise.
+        is_sparse_bundle_adjustment: True if the optimizer is based on sparse bundle adjustment and False otherwise.
 
     Returns:
-        A dictionary with fields 'locations', 'tags', and 'waypoints'.
-        The 'locations' key covers a (n, 8) array containing x, y, z,
-        qx, qy, qz, qw locations of the phone as well as the vertex
-        uid at n points.
-        The 'tags' and 'waypoints' keys cover the locations of the
-        tags and waypoints in the same format.
+        A dictionary with fields 'locations', 'tags', and 'waypoints'. The 'locations' key covers a (n, 8) array
+         containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at n points. The 'tags' and
+          'waypoints' keys cover the locations of the tags and waypoints in the same format.
     """
     locations = np.reshape([], [0, 9])
     tagpoints = np.reshape([], [0, 3])
@@ -88,11 +81,9 @@ def pose_to_isometry(pose):
     """Convert a pose vector to a :class: g2o.Isometry3d instance.
 
     Args:
-        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy,
-        qz, and qw respectively.
+        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
     Returns:
-        A :class: g2o.Isometry3d instance encoding the same
-        information as the input pose.
+        A :class: g2o.Isometry3d instance encoding the same information as the input pose.
     """
     return g2o.Isometry3d(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
@@ -101,11 +92,9 @@ def pose_to_se3quat(pose):
     """Convert a pose vector to a :class: g2o.Isometry3d instance.
 
     Args:
-        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy,
-        qz, and qw respectively.
+        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
     Returns:
-        A :class: g2o.Isometry3d instance encoding the same
-        information as the input pose.
+        A :class: g2o.Isometry3d instance encoding the same information as the input pose.
     """
     return g2o.SE3Quat(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
@@ -116,24 +105,20 @@ def isometry_to_pose(isometry):
     Args:
         isometry: A :class: g2o.Isometry3d instance.
     Returns:
-        A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and
-        qw respectively.
+        A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
     """
     return np.concatenate(
         [isometry.translation(), isometry.rotation().coeffs()])
 
 
 def global_yaw_effect_basis(rotation, gravity_axis='z'):
-    """Form a basis which describes the effect of a change in global
-    yaw on a local measurement's qx, qy, and qz.
+    """Form a basis which describes the effect of a change in global yaw on a local measurement's qx, qy, and qz.
 
-    Since the accelerometer measures gravitational acceleration, it
-    can accurately measure the global z-azis but its measurement of
-    the orthogonal axis are less reliable.
+    Since the accelerometer measures gravitational acceleration, it can accurately measure the global z-azis but its
+    measurement of the orthogonal axis are less reliable.
 
     Args:
-        rotation: A :class: scipy.spatial.transform.Rotation encoding
-        a local rotation.
+        rotation: A :class: scipy.spatial.transform.Rotation encoding a local rotation.
         gravity_axis: A character specifying the gravity axis (e.g., 'z')
 
     Returns:

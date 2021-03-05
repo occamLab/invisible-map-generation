@@ -12,31 +12,24 @@ from maximization_model import maxweights
 
 
 class Graph:
-    """A class for the graph encoding a map with class methods to
-    optimize it.
+    """A class for the graph encoding a map with class methods to optimize it.
     """
 
     def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', is_sparse_bundle_adjustment=False,
                  use_huber=False, huber_delta=None, damping_status=False):
         """The graph class.
-        The graph contains a dictionary of vertices and edges, the
-        keys being UIDs such as ints.
-        The start and end UIDs in each edge refer to the vertices in
-        the vertices dictionary.
+        The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
+        in each edge refer to the vertices in the vertices dictionary.
 
         Args:
-            vertices: A dictionary of vertices indexed by UIDs.
-                The UID-vertices associations are referred to by the
-                startuid and enduid fields of the :class: Edge class.
+            vertices: A dictionary of vertices indexed by UIDs. The UID-vertices associations are referred to by the
+             startuid and enduid fields of the :class: Edge  class.
             edges: A dictionary of edges indexed by UIDs.
 
         Kwargs:
-            weights: An initial guess for what the weights of the model are.
-                The weights correspond to x, y, z, qx, qy, and qz
-                measurements for odometry edges, tag edges, and dummy
-                edges and has 18 elements [odometry x, odometry y,
-                ..., dummy qz]
-                The weights are related to variance by variance = exp(w).
+            weights: An initial guess for what the weights of the model are. The weights correspond to x, y, z, qx, qy,
+             and qz measurements for odometry edges, tag edges, and dummy edges and has 18 elements [odometry x,
+             odometry y, ..., dummy qz]. The weights are related to variance by variance = exp(w).
         """
 
         self.is_sparse_bundle_adjustment = is_sparse_bundle_adjustment
@@ -64,11 +57,9 @@ class Graph:
         self.basis_matrices = {}
 
     def generate_basis_matrices(self):
-        """Generate basis matrices used to show how a change in global
-        yaw changes the values of a local measurement.
+        """Generate basis matrices used to show how a change in global yaw changes the values of a local measurement.
 
-        This is used for dummy edges.
-        For other edge types, the basis is simply the identity matrix.
+        This is used for dummy edges. For other edge types, the basis is simply the identity matrix.
         """
         basis_matrices = {}
 
@@ -88,8 +79,7 @@ class Graph:
         self.basis_matrices = basis_matrices
 
     def generate_unoptimized_graph(self):
-        """Generate the unoptimized g2o graph from the current vertex
-        and edge assignments.
+        """Generate the unoptimized g2o graph from the current vertex and edge assignments.
 
         This can be optimized using :func: optimize_graph.
         """
@@ -133,11 +123,9 @@ class Graph:
     def generate_maximization_params(self):
         """Generate the arrays to be processed by the maximization model.
 
-        It sets the error field to an array of errors, as well as a
-        2-d array populated by 1-hot 18 element observation vectors
-        indicating the type of measurement.
-        The meaning of the position of the one in the observation
-        vector corresponds to the layout of the weights vector.
+        It sets the error field to an array of errors, as well as a 2-d array populated by 1-hot 18 element observation
+        vectors indicating the type of measurement. The meaning of the position of the one in the observation vector
+        corresponds to the layout of the weights vector.
         """
         errors = np.array([])
         observations = np.reshape([], [0, 18])
@@ -178,8 +166,7 @@ class Graph:
         return errors, observations
 
     def tune_weights(self):
-        """Tune the weights to maximize the likelihood of the errors
-        found between the unoptimized and optimized graphs.
+        """Tune the weights to maximize the likelihood of the errors found between the unoptimized and optimized graphs.
         """
         results = maxweights(self.observations, self.errors, self.weights)
         self.maximization_success = results.success
@@ -237,10 +224,9 @@ class Graph:
     def expectation_maximization_once(self):
         """Run one cycle of expectation maximization.
 
-        It generates an unoptimized graph from current vertex
-        estimates and edge measurements and importances, and optimizes
-        the graph.  Using the errors, it tunes the weights so that the
-        variances maximize the likelihood of each error by type.
+        It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
+        optimizes the graph.  Using the errors, it tunes the weights so that the variances maximize the likelihood of
+        each error by type.
         """
         self.generate_unoptimized_graph()
         self.optimize_graph()
@@ -253,8 +239,7 @@ class Graph:
 
         Kwargs:
             maxiter (int): The maximum amount of iterations.
-            tol (float): The maximum magnitude of the change in weight
-                vectors that will signal the end of the cycle.
+            tol (float): The maximum magnitude of the change in weight vectors that will signal the end of the cycle.
         """
         previous_weights = self.weights
 
@@ -285,14 +270,12 @@ class Graph:
                     self.optimized_graph.vertices()[uid].estimate())
 
     def connected_components(self):
-        """Return a list of graphs representing connecting components of
-        the input graph.
+        """Return a list of graphs representing connecting components of the input graph.
 
-        If the graph is connected, there should only be one element in the
-        output.
+        If the graph is connected, there should only be one element in the output.
 
-        Returns: A list of :class: Graph containing the connected
-            components.
+        Returns:
+            A list of :class: Graph containing the connected components.
         """
         groups = []
         for uid in self.edges:
@@ -322,8 +305,7 @@ class Graph:
         filled out.
 
         Returns:
-            A :class: g2o.SparseOptimizer that can be optimized via its
-            optimize class method.
+            A :class: g2o.SparseOptimizer that can be optimized via its optimize class method.
         """
         optimizer = g2o.SparseOptimizer()
         optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(
@@ -454,12 +436,11 @@ class Graph:
     def ordered_odometry_edges(self):
         """Generate a list of a list of edges ordered by start of path to end.
 
-        The lists are different connected paths.
-        As long as the graph is connected, the output list should only one
-        list of edges.
+        The lists are different connected paths. As long as the graph is connected, the output list should only one list
+        of edges.
 
-        Returns: A list of lists of edge UIDs, where each sublist is a
-            sequence of connected edges.
+        Returns:
+            A list of lists of edge UIDs, where each sublist is a sequence of connected edges.
         """
         segments = []
 
