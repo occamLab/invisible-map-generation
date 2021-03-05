@@ -7,7 +7,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import OptimizeResult
 from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
-    measurement_to_matrix
+    measurement_to_matrix, ordered_odometry_edges
 
 from maximization_model import maxweights
 
@@ -498,3 +498,33 @@ class Graph:
                     [tag_translation, tag_rotation, [edge.enduid]])
                 tags = np.vstack([tags, tag_pose])
         return tags
+
+    def get_subgraph(self, start_vertex_uid, end_vertex_uid):
+        edges = ordered_odometry_edges(self)
+        start_found = False
+        ret_graph = Graph({}, {})
+        for i, edgeuid in enumerate(edges[0]):
+            edge = self.edges[edgeuid]
+            if edge.startuid == start_vertex_uid:
+                start_found = True
+
+            if start_found:
+                ret_graph.vertices[edge.enduid] = self.vertices[edge.enduid]
+                ret_graph.vertices[edge.startuid] = self.vertices[edge.startuid]
+                ret_graph.edges[edgeuid] = edge
+
+            if edge.enduid == end_vertex_uid:
+                break
+
+        # Find tags and edges connecting to the found vertices
+        for edgeuid in self.edges:
+            edge = self.edges[edgeuid]
+            if self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in ret_graph.vertices:
+                ret_graph.edges[edgeuid] = edge
+                ret_graph.vertices[edge.startuid] = self.vertices[edge.startuid]
+
+            if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in ret_graph.vertices:
+                ret_graph.edges[edgeuid] = edge
+                ret_graph.vertices[edge.enduid] = self.vertices[edge.enduid]
+
+        return ret_graph

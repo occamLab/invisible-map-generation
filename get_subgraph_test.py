@@ -1,4 +1,4 @@
-from graph_utils import get_subgraph, optimizer_to_map, ordered_odometry_edges
+from graph_utils import optimizer_to_map, ordered_odometry_edges
 import pickle
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -8,7 +8,7 @@ data = "converted-data/test_work.pkl"
 with open(data, 'rb') as data:
     graph = pickle.load(data)
 
-graph = get_subgraph(graph, 1000, 1500)
+graph = graph.get_subgraph(1000, 1500)
 graph.generate_unoptimized_graph()
 optimizer = graph.unoptimized_graph
 graph_map = optimizer_to_map(graph.vertices, optimizer)

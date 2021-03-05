@@ -143,8 +143,7 @@ class GraphManager:
                     start_uid = graph1.edges[ordered_odometry_edges[0]].startuid
                     end_uid = graph1.edges[ordered_odometry_edges[-1]].enduid
                     floored_middle = (start_uid + end_uid) // 2
-                    graph1_subgraph = graph_utils.get_subgraph(graph1, start_vertex_uid=start_uid,
-                                                               end_vertex_uid=floored_middle)
+                    graph1_subgraph = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
 
                     print("\n-- Processing sub-graph without tags fixed --")
                     self._process_map(map_name, map_json, graph1_subgraph, visualize, False)
@@ -160,8 +159,7 @@ class GraphManager:
                     #  some fixed set of weights (e.g., sensible_default_weights).
 
                     graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
-                    graph2_subgraph = graph_utils.get_subgraph(graph2, start_vertex_uid=floored_middle + 1,
-                                                               end_vertex_uid=end_uid)
+                    graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
 
                     print("\n-- Processing sub-graph with tags fixed --")
                     self._process_map(map_name, map_json, graph2_subgraph, visualize, False)

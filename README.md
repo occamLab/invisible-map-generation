@@ -56,5 +56,4 @@ Pickle has different encoding types between both python versions.
     ![optimized graph](img/optimized.png)
     
 - Test these weights against a jumpiness metric
-  - `get_subgraph` from `graph_utils.py` can be used to take a path where you walk straight back and forth between two tags repeatedly.
-    A good set of weights would make the optimized subgraph of going back and forth once match the optimized subgraph of going back and forth twice and so on.
+  - `get_subgraph` method from `graph.py` can be used to take a path where you walk straight back and forth between two tags repeatedly. A good set of weights would make the optimized subgraph of going back and forth once match the optimized subgraph of going back and forth twice and so on.
