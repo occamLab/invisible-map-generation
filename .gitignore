@@ -10,3 +10,6 @@ venv
 
 # Pycharm workspace configuration
 .idea
+
+# Map cache folder
+**/.cache/

@@ -55,7 +55,7 @@ def se3_quat_average(transforms):
     average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
     return SE3Quat(average_as_quat, translation_average)
 
-def as_graph(dct):
+def as_graph(dct, fix_tag_vertices=False):
     """Convert a dictionary decoded from JSON into a graph.
 
     Args:
@@ -68,7 +68,7 @@ def as_graph(dct):
         pose_data = np.zeros((0, 18))
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=True)
-    tag_size = 0.12065             # TODO: need to send this with the tag detection
+    tag_size = 0.173             # TODO: need to send this with the tag detection
     true_3d_points = np.array(
         [[-tag_size / 2, -tag_size / 2, 1], [tag_size / 2, -tag_size / 2, 1], [tag_size / 2, tag_size / 2, 1],
          [-tag_size / 2, tag_size / 2, 1]])
@@ -82,7 +82,7 @@ def as_graph(dct):
         [0, 0, 0, 1]
     ])
     # flatten the data into individual numpy arrays that we can operate on
-    if 'tag_data' in dct:
+    if 'tag_data' in dct and len(dct['tag_data']) > 0:
         tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
         camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
         tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
@@ -92,8 +92,8 @@ def as_graph(dct):
         tag_pose_flat = np.zeros((0,16))
         camera_intrinsics_for_tag = np.zeros((0, 4))
         tag_corners = np.zeros((0, 8))
-        tag_ids = np.zeros((0,1), type=np.int)
-        pose_ids = np.zeros((0,1), type=np.int)
+        tag_ids = np.zeros((0,1), dtype=np.int)
+        pose_ids = np.zeros((0,1), dtype=np.int)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
@@ -160,6 +160,7 @@ def as_graph(dct):
             estimate=odom_vertex_estimates[i],
             fixed=not first_odom_processed
         )
+        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         first_odom_processed = True
 
         vertex_counter += 1
@@ -172,7 +173,7 @@ def as_graph(dct):
                 vertices[tag_vertex_id] = graph.Vertex(
                     mode=graph.VertexType.TAG,
                     estimate=current_tag_transform_estimate.to_vector(),
-                    fixed=False
+                    fixed=fix_tag_vertices
                 )
                 vertices[tag_vertex_id].meta_data['tag_id'] = tag_id_by_tag_vertex_id[tag_vertex_id]
                 for idx, true_point_3d in enumerate(true_3d_points):
@@ -188,7 +189,7 @@ def as_graph(dct):
             for k, point in enumerate(true_3d_points):
                 point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * (point - np.array([0, 0, 1]))
                 cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0], camera_intrinsics_for_tag[tag_index][2:], 0)
-                print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
+                #print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=tag_vertex_id,
