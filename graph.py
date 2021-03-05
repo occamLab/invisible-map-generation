@@ -6,7 +6,7 @@ import g2o
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import OptimizeResult
-from graph_utils import graph_to_optimizer, global_yaw_effect_basis, isometry_to_pose
+from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose
 
 from maximization_model import maxweights
 
@@ -172,7 +172,7 @@ class Graph:
 
         This can be optimized using :func: optimize_graph.
         """
-        self.unoptimized_graph = graph_to_optimizer(self)
+        self.unoptimized_graph = self.graph_to_optimizer()
 
     def check_optimized_edges(self, g):
         total_chi2 = 0.0
@@ -197,7 +197,7 @@ class Graph:
 
         It sets the g2o_status attribute to the g2o success output.
         """
-        self.optimized_graph = graph_to_optimizer(self)
+        self.optimized_graph = self.graph_to_optimizer()
 
         self.optimized_graph.initialize_optimization()
         run_status = self.optimized_graph.optimize(1024)
@@ -393,3 +393,78 @@ class Graph:
         return [Graph(vertices={k: self.vertices[k] for k in group[0]},
                       edges={k: self.edges[k] for k in group[1]})
                 for group in groups]
+
+    def graph_to_optimizer(self):
+        """Convert a :class: graph to a :class: g2o.SparseOptimizer.  Only the edges and vertices fields need to be
+        filled out.
+
+        Returns:
+            A :class: g2o.SparseOptimizer that can be optimized via its
+            optimize class method.
+        """
+        optimizer = g2o.SparseOptimizer()
+        optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(
+            g2o.BlockSolverSE3(g2o.LinearSolverCholmodSE3())))
+
+        if self.is_sparse_bundle_adjustment:
+            for i in self.vertices:
+                if self.vertices[i].mode == VertexType.TAGPOINT:
+                    vertex = g2o.VertexSBAPointXYZ()
+                    vertex.set_estimate(self.vertices[i].estimate[:3])
+                else:
+                    vertex = g2o.VertexSE3Expmap()
+                    vertex.set_estimate(pose_to_se3quat(self.vertices[i].estimate))
+                vertex.set_id(i)
+                vertex.set_fixed(self.vertices[i].fixed)
+                optimizer.add_vertex(vertex)
+            cam_idx = 0
+            for i in self.edges:
+                if self.edges[i].corner_ids is None:
+                    edge = g2o.EdgeSE3Expmap()
+                    for j, k in enumerate([self.edges[i].startuid,
+                                           self.edges[i].enduid]):
+                        edge.set_vertex(j, optimizer.vertex(k))
+                        edge.set_measurement(pose_to_se3quat(self.edges[i].measurement))
+                        edge.set_information(self.edges[i].information)
+                    optimizer.add_edge(edge)
+                else:
+                    # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
+                    # (b) it is always the same in ARKit (at least currently)
+                    cam = g2o.CameraParameters(self.edges[i].camera_intrinsics[0],
+                                               self.edges[i].camera_intrinsics[2:], 0)
+                    cam.set_id(cam_idx)
+                    optimizer.add_parameter(cam)
+                    for corner_idx, corner_id in enumerate(self.edges[i].corner_ids):
+                        edge = g2o.EdgeProjectPSI2UV()
+                        edge.resize(3)
+                        edge.set_vertex(0, optimizer.vertex(corner_id))
+                        edge.set_vertex(1, optimizer.vertex(self.edges[i].startuid))
+                        edge.set_vertex(2, optimizer.vertex(self.edges[i].enduid))
+                        edge.set_information(self.edges[i].information)
+                        edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
+                        edge.set_parameter_id(0, cam_idx)
+                        if self.use_huber:
+                            edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
+                        optimizer.add_edge(edge)
+                    cam_idx += 1
+        else:
+            for i in self.vertices:
+                vertex = g2o.VertexSE3()
+                vertex.set_id(i)
+                vertex.set_estimate(pose_to_isometry(self.vertices[i].estimate))
+                vertex.set_fixed(self.vertices[i].fixed)
+                optimizer.add_vertex(vertex)
+
+            for i in self.edges:
+                edge = g2o.EdgeSE3()
+
+                for j, k in enumerate([self.edges[i].startuid,
+                                       self.edges[i].enduid]):
+                    edge.set_vertex(j, optimizer.vertex(k))
+
+                edge.set_measurement(pose_to_isometry(self.edges[i].measurement))
+                edge.set_information(self.edges[i].information)
+                edge.set_id(i)
+
+                optimizer.add_edge(edge)
+        return optimizer
