@@ -194,19 +194,6 @@ def get_tags_all_position_estimate(graph):
     return tags
 
 
-def integrate_path(graph, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])):
-    poses = [initial]
-    for edgeuid in edgeuids:
-        old_pose = measurement_to_matrix(poses[-1])
-        transform = measurement_to_matrix(graph.edges[edgeuid].measurement)
-        new_pose = old_pose.dot(transform)
-        translation = new_pose[:3, 3]
-        rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
-        poses.append(np.concatenate([translation, rotation]))
-
-    return np.array(poses)
-
-
 def pose_to_isometry(pose):
     """Convert a pose vector to a :class: g2o.Isometry3d instance.
 

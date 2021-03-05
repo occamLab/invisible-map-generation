@@ -6,7 +6,8 @@ import g2o
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import OptimizeResult
-from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose
+from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
+    measurement_to_matrix
 
 from maximization_model import maxweights
 
@@ -468,3 +469,14 @@ class Graph:
 
                 optimizer.add_edge(edge)
         return optimizer
+
+    def integrate_path(self, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])):
+        poses = [initial]
+        for edgeuid in edgeuids:
+            old_pose = measurement_to_matrix(poses[-1])
+            transform = measurement_to_matrix(self.edges[edgeuid].measurement)
+            new_pose = old_pose.dot(transform)
+            translation = new_pose[:3, 3]
+            rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
+            poses.append(np.concatenate([translation, rotation]))
+        return np.array(poses)
