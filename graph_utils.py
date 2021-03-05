@@ -1,7 +1,7 @@
 """Some helpful functions for visualizing and analyzing graphs.
 """
 import numpy as np
-from graph import VertexType, Graph
+from graph import VertexType
 from scipy.spatial.transform import Rotation as R
 from g2o import SE3Quat, EdgeProjectPSI2UV
 import g2o
@@ -44,7 +44,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
         else:
             location = optimizer.vertex(i).estimate().translation()
             rotation = optimizer.vertex(i).estimate().rotation().coeffs()
-            
+
             if mode == VertexType.ODOMETRY:
                 pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
                 locations = np.vstack([locations, pose])
@@ -52,7 +52,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
                 pose = np.concatenate([location, rotation, [i]])
                 if is_sparse_bundle_adjustment:
                     # adjusts tag based on the position of the tag center
-                    pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse()*SE3Quat(vertices[i].estimate)).to_vector()
+                    pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse() * SE3Quat(vertices[i].estimate)).to_vector()
                 if 'tag_id' in vertices[i].meta_data:
                     pose[-1] = vertices[i].meta_data['tag_id']
                 tags = np.vstack([tags, pose])
@@ -63,7 +63,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
 
     # convert to array for sorting
     locations = np.array(locations)
-    locations = locations[locations[:,-1].argsort()]
+    locations = locations[locations[:, -1].argsort()]
     return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
             'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
@@ -134,6 +134,7 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
     Args:
         rotation: A :class: scipy.spatial.transform.Rotation encoding
         a local rotation.
+        gravity_axis: A character specifying the gravity axis (e.g., 'z')
 
     Returns:
         A 3x3 numpy array where the columns are the new basis.

@@ -143,6 +143,8 @@ class Graph:
         self.huber_delta = huber_delta
         self.update_edges()
 
+        self.basis_matrices = {}
+
     def generate_basis_matrices(self):
         """Generate basis matrices used to show how a change in global
         yaw changes the values of a local measurement.
@@ -154,7 +156,7 @@ class Graph:
 
         for uid in self.edges:
             if (self.vertices[self.edges[uid].startuid].mode
-                    == VertexType.DUMMY) \
+                == VertexType.DUMMY) \
                     != (self.vertices[self.edges[uid].enduid].mode
                         == VertexType.DUMMY):
 
@@ -175,19 +177,21 @@ class Graph:
         """
         self.unoptimized_graph = self.graph_to_optimizer()
 
-    def check_optimized_edges(self, g):
+    @staticmethod
+    def check_optimized_edges(g):
         total_chi2 = 0.0
         for edge in g.edges():
             if type(edge) == g2o.EdgeProjectPSI2UV:
                 cam = edge.parameter(0)
-                error = edge.measurement() - cam.cam_map(edge.vertex(1).estimate()*edge.vertex(2).estimate().inverse()*edge.vertex(0).estimate())
+                error = edge.measurement() - cam.cam_map(
+                    edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
                 error_chi2 = error.dot(edge.information()).dot(error)
             elif type(edge) == g2o.EdgeSE3Expmap:
                 error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
                 error_chi2 = error.log().T.dot(edge.information()).dot(error.log())
             elif type(edge) == g2o.EdgeSE3:
                 delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
-                error = np.hstack((delta.translation() ,delta.orientation().coeffs()[:-1]))
+                error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
                 error_chi2 = error.dot(edge.information()).dot(error)
             total_chi2 += error_chi2
         print("total chi2", total_chi2)
@@ -283,7 +287,8 @@ class Graph:
                         self.edges[uid].information = np.diag(
                             np.exp(-self.weights[6:12]))
                 elif end_mode == VertexType.DUMMY:
-                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems to work though)
+                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
+                    #  to work though)
                     basis = self.basis_matrices[uid][3:6, 3:6]
                     cov = np.diag(np.exp(-self.weights[15:18]))
                     information = basis.dot(cov).dot(basis.T)
@@ -298,7 +303,7 @@ class Graph:
                         self.edges[uid].information = np.zeros_like(template)
                 elif end_mode == VertexType.WAYPOINT:
                     # TODO: not sure what this should be
-                    self.edges[uid].information = np.eye(6,6)
+                    self.edges[uid].information = np.eye(6, 6)
                 else:
                     raise Exception(
                         'Edge of end type {} not recognized.'.format(end_mode))
@@ -306,7 +311,7 @@ class Graph:
                     prescaling_matrix = self.edges[uid].information_prescaling
                     if prescaling_matrix.ndim == 1:
                         prescaling_matrix = np.diag(prescaling_matrix)
-                    self.edges[uid].information = prescaling_matrix*self.edges[uid].information
+                    self.edges[uid].information = prescaling_matrix * self.edges[uid].information
             else:
                 raise Exception(
                     'Edge of start type {} not recognized.'.format(start_mode))
@@ -334,7 +339,6 @@ class Graph:
                 vectors that will signal the end of the cycle.
         """
         previous_weights = self.weights
-        new_weights = self.weights
 
         i = 0
         while i < maxiter:
@@ -382,7 +386,7 @@ class Graph:
                     membership.append(i)
 
             new_group = set.union(uids, *[groups[i][0] for i in membership]), \
-                        set.union({uid}, *[groups[i][1] for i in membership])
+                set.union({uid}, *[groups[i][1] for i in membership])
 
             membership.reverse()
 
@@ -485,8 +489,8 @@ class Graph:
         tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
         for edgeuid in self.edges:
             edge = self.edges[edgeuid]
-            if self.vertices[edge.startuid].mode == VertexType.ODOMETRY and self.vertices[
-                edge.enduid].mode == VertexType.TAG:
+            if self.vertices[edge.startuid].mode == VertexType.ODOMETRY and self.vertices[edge.enduid].mode == \
+                    VertexType.TAG:
                 odom_transform = measurement_to_matrix(
                     self.vertices[edge.startuid].estimate)
                 edge_transform = measurement_to_matrix(edge.measurement)
@@ -535,9 +539,6 @@ class Graph:
         The lists are different connected paths.
         As long as the graph is connected, the output list should only one
         list of edges.
-
-        Args:
-            graph: The graph to extract the ordered edges from.
 
         Returns: A list of lists of edge UIDs, where each sublist is a
             sequence of connected edges.
