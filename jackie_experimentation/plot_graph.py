@@ -3,10 +3,11 @@ import matplotlib.animation as animation
 import mpl_toolkits.mplot3d
 import numpy as np
 import json
+import os
 
 
 # load mapping data
-with open("data/marion_lower_level_map.json", "r") as read_file:
+with open('marion_lower_level_map_with_poseID.json', "r") as read_file:
     mapping_data = json.load(read_file)
     odometry_data = mapping_data["odometry_vertices"]
     tag_data = mapping_data["tag_vertices"]
@@ -41,12 +42,13 @@ def parse_odometry():
     '''
     Parses odometry data and returns numpy translation arrays
     '''
-    trans_x, trans_y, trans_z = [], [], []
+    trans_x, trans_y, trans_z, poseID = [], [], [], []
     for pt in odometry_data:
         trans_x.append(pt["translation"]["x"])
         trans_y.append(pt["translation"]["y"])
         trans_z.append(pt["translation"]["z"])
-    return np.array(trans_x), np.array(trans_y), np.array(trans_z)
+        poseID.append(pt["poseId"])
+    return np.array(trans_x), np.array(trans_y), np.array(trans_z), np.array(poseID)
 
 
 def parse_tag():
@@ -93,15 +95,21 @@ def plot_translation_2D(x, z):
         title='Test Translation Mapping Data 2D Plot')
 
     ani = animation.FuncAnimation(fig, update, len(x), fargs=[x, z, line],
-                              interval=50, blit=True)
-    ani.save('test.gif')
+                              interval=100, blit=True, save_count=1490)
+
+    ani.save('test.mp4',fps=10, extra_args=['-vcodec', 'libx264'])
     plt.show()
 
-
-
-
 if __name__ == "__main__":
-    x, y, z = parse_odometry()
+    x, y, z, poseID = parse_odometry()
 
     # plot_translation_3D(x, y, z)
-    plot_translation_2D(x, z)
+    # print(len(x))
+
+# ffmpeg -i marion_recording.mp4 -i test.mp4 -filter_complex \
+# "[0:v][1:v]hstack=inputs=2[v]; \
+#  [0:a][1:a]amerge[a]" \
+# -map "[v]" -map "[a]" -ac 2 output.mp4
+
+# ffmpeg -i marion_recording.mp4 -i test.mp4 -r 30 -filter_complex "[0:v]scale=640:480, setpts=PTS-STARTPTS, pad=1280:720:0:120[left]; [1:v]scale=640:480, setpts=PTS-STARTPTS, pad=640:720:0:120[right]; [left][right]overlay=w; amerge,pan=stereo:c0<c0+c2:c1<c1+c3" -vcodec libx264 -acodec aac -strict experimental output.mp4
+# ffmpeg -i marion_recording.mp4 -i test.mp4 -filter_complex hstack output.mp4
