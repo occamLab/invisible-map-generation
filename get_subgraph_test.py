@@ -1,4 +1,4 @@
-from graph_utils import optimizer_to_map, ordered_odometry_edges
+from graph_utils import optimizer_to_map
 import pickle
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D

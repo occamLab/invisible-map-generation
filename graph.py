@@ -7,7 +7,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import OptimizeResult
 from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
-    measurement_to_matrix, ordered_odometry_edges
+    measurement_to_matrix
 
 from maximization_model import maxweights
 
@@ -500,7 +500,7 @@ class Graph:
         return tags
 
     def get_subgraph(self, start_vertex_uid, end_vertex_uid):
-        edges = ordered_odometry_edges(self)
+        edges = self.ordered_odometry_edges()
         start_found = False
         ret_graph = Graph({}, {})
         for i, edgeuid in enumerate(edges[0]):
@@ -528,3 +528,63 @@ class Graph:
                 ret_graph.vertices[edge.enduid] = self.vertices[edge.enduid]
 
         return ret_graph
+
+    def ordered_odometry_edges(self):
+        """Generate a list of a list of edges ordered by start of path to end.
+
+        The lists are different connected paths.
+        As long as the graph is connected, the output list should only one
+        list of edges.
+
+        Args:
+            graph: The graph to extract the ordered edges from.
+
+        Returns: A list of lists of edge UIDs, where each sublist is a
+            sequence of connected edges.
+        """
+        segments = []
+
+        for uid in self.edges:
+            edge = self.edges[uid]
+            if self.vertices[edge.startuid].mode != VertexType.ODOMETRY \
+                    or self.vertices[edge.enduid].mode != VertexType.ODOMETRY:
+                continue
+            start_found = end_found = False
+            start_found_idx = end_found_idx = 0
+
+            for i in range(len(segments) - 1, -1, -1):
+                current_start_found = \
+                    edge.startuid == self.edges[segments[i][-1]].enduid
+                current_end_found = \
+                    edge.enduid == self.edges[segments[i][0]].startuid
+
+                if current_start_found:
+                    start_found = True
+                    start_found_idx = i
+
+                elif current_end_found:
+                    end_found = True
+                    end_found_idx = i
+
+                if current_start_found and end_found:
+                    segments[i].append(uid)
+                    segments[i].extend(segments[end_found_idx])
+                    del segments[end_found_idx]
+                    break
+
+                elif current_end_found and start_found:
+                    segments[start_found_idx].append(uid)
+                    segments[i] = segments[start_found_idx] + segments[i]
+                    del segments[start_found_idx]
+                    break
+
+            if start_found and not end_found:
+                segments[start_found_idx].append(uid)
+
+            elif end_found and not start_found:
+                segments[end_found_idx].insert(0, uid)
+
+            elif not (start_found or end_found):
+                segments.append([uid])
+
+        return segments
