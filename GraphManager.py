@@ -31,6 +31,7 @@ import convert_json_sba
 import graph_utils
 
 
+# noinspection PyPep8Naming
 class GraphManager:
     """Class that manages graphs by interfacing with firebase, keeping a cache of data downloaded from firebase, and
     providing methods wrapping graph optimization and plotting capabilities.
@@ -77,14 +78,15 @@ class GraphManager:
     _listen_to = "unprocessed_maps"
     _upload_to = "TestProcessed"
 
-    def __init__(self, weights_specifier, cred):
+    def __init__(self, weights_specifier, firebase_creds):
         """Initializes GraphManager instance (only populates instance attributes)
 
         Args:
              weights_specifier: Used as the key to access the corresponding value in `GraphManager._weights_dict`
-             cred: Firebase credentials to pass as the first argument to `firebase_admin.initialize_app(cred, ...)`
+             firebase_creds: Firebase credentials to pass as the first argument to `firebase_admin.initialize_app(cred,
+             ...)`
         """
-        self._app = firebase_admin.initialize_app(cred, GraphManager._app_initialize_dict)
+        self._app = firebase_admin.initialize_app(firebase_creds, GraphManager._app_initialize_dict)
         self._bucket = storage.bucket(app=self._app)
         self._db_ref = db.reference("/" + GraphManager._listen_to)
         self._selected_weights = str(weights_specifier)
@@ -109,6 +111,8 @@ class GraphManager:
              directory (specified by the `_cache_path` attribute) is searched recursively
             visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
             upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
+            compare (bool): If true, run the routine for comparing graph optimization (TODO: add more info here once
+            completed)
         """
         self._resolve_cache_dir()
         matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
@@ -236,7 +240,7 @@ class GraphManager:
         print("Attempting to upload {} to the bucket blob {}".format(map_name, processed_map_full_path))
         processed_map_blob = self._bucket.blob(processed_map_full_path)
         processed_map_blob.upload_from_string(json_string)
-        print("Succsessfully uploaded map data for {}".format(map_name))
+        print("Successfully uploaded map data for {}".format(map_name))
         db.reference('maps').child(map_name).child('map_file').set(processed_map_full_path)
         print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(map_name))
 
@@ -468,12 +472,12 @@ class GraphManager:
         axis_range_from_limits = lambda limits: limits[1] - limits[0]
         max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
                               axis_range_from_limits(ax.get_zlim())]).max()
-        Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * (
-                ax.get_xlim()[1] + ax.get_xlim()[0])
-        Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * (
-                ax.get_ylim()[1] + ax.get_ylim()[0])
-        Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * (
-                ax.get_zlim()[1] + ax.get_zlim()[0])
+        Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
+            (ax.get_xlim()[1] + ax.get_xlim()[0])
+        Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
+            (ax.get_ylim()[1] + ax.get_ylim()[0])
+        Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * \
+            (ax.get_zlim()[1] + ax.get_zlim()[0])
 
         # Comment or uncomment following both lines to test the fake bounding box:
         for xb, yb, zb in zip(Xb, Yb, Zb):
@@ -485,6 +489,7 @@ class GraphManager:
                               np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in
                 np.unique(all_tags[:, -1])}
 
+    # noinspection PyPep8Naming
     @staticmethod
     def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
         tag_vertex_map = map(lambda curr_tag: {
@@ -510,21 +515,20 @@ class GraphManager:
                          'y': waypoint_locations[1][idx][4],
                          'z': waypoint_locations[1][idx][5],
                          'w': waypoint_locations[1][idx][6]},
-            'id': waypoint_locations[0][idx]['name']},
-                                  range(len(waypoint_locations[0])))
+            'id': waypoint_locations[0][idx]['name']}, range(len(waypoint_locations[0])))
         return json.dumps({'tag_vertices': list(tag_vertex_map),
                            'odometry_vertices': list(odom_vertex_map),
                            'waypoints_vertices': list(waypoint_vertex_map)})
 
 
 def make_parser():
-    """Makes an argument parser object for this program
+    """Makes an argument p object for this program
 
     Returns:
-        Argument parser
+        Argument p
     """
-    parser = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot")
-    parser.add_argument(
+    p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot")
+    p.add_argument(
         "-p",
         type=str,
         help="Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., "
@@ -532,25 +536,25 @@ def make_parser():
              "then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is searched "
              "recursively, and '**/' is automatically prepended to the pattern"
     )
-    parser.add_argument(
+    p.add_argument(
         "-f",
         action="store_true",
         help="Acquire maps from Firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
     )
-    parser.add_argument(
+    p.add_argument(
         "-F",
         action="store_true",
         help="Upload any graphs to Firebase that are optimized while this script is running. This option is mutually "
              "exclusive with the -c option."
     )
-    parser.add_argument(
+    p.add_argument(
         "-c",
         action="store_true",
         help="Compare graph optimizations by computing two different optimizations for two sub-graphs of the "
              "specified graph: one where the tag vertices are not fixed, and one where they are. This option is "
              "mutually exclusive with the -F option."
     )
-    return parser
+    return p
 
 
 if __name__ == "__main__":
