@@ -1,4 +1,4 @@
-from graph_utils import get_subgraph, optimizer_to_map, get_tags_all_position_estimate, ordered_odometry_edges
+from graph_utils import get_subgraph, optimizer_to_map, ordered_odometry_edges
 import pickle
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -14,7 +14,7 @@ optimizer = graph.unoptimized_graph
 graph_map = optimizer_to_map(graph.vertices, optimizer)
 
 
-tags_estimate = get_tags_all_position_estimate(graph)
+tags_estimate = graph.get_tags_all_position_estimate()
 
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')

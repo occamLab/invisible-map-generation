@@ -176,24 +176,6 @@ def measurement_to_matrix(measurement):
     return transformation
 
 
-def get_tags_all_position_estimate(graph):
-    tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
-    for edgeuid in graph.edges:
-        edge = graph.edges[edgeuid]
-        if graph.vertices[edge.startuid].mode == VertexType.ODOMETRY and graph.vertices[edge.enduid].mode == VertexType.TAG:
-            odom_transform = measurement_to_matrix(
-                graph.vertices[edge.startuid].estimate)
-            edge_transform = measurement_to_matrix(edge.measurement)
-
-            tag_transform = odom_transform.dot(edge_transform)
-            tag_translation = tag_transform[:3, 3]
-            tag_rotation = R.from_matrix(tag_transform[:3, :3]).as_quat()
-            tag_pose = np.concatenate(
-                [tag_translation, tag_rotation, [edge.enduid]])
-            tags = np.vstack([tags, tag_pose])
-    return tags
-
-
 def pose_to_isometry(pose):
     """Convert a pose vector to a :class: g2o.Isometry3d instance.
 

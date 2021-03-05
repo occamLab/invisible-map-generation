@@ -74,7 +74,7 @@ class Edge:
                 information. The rows and columns encode x, y, z, qx,
                 qy, and qz information.
             information_prescaling: A 6 element numpy array encoding
-                the diagonal of a matrix that premultiplies the edge
+                the diagonal of a matrix that pre-multiplies the edge
                 information matrix specified by the weights.  If None
                 is past, then the 6 element vector is assumed to be all
                 ones
@@ -480,3 +480,21 @@ class Graph:
             rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
             poses.append(np.concatenate([translation, rotation]))
         return np.array(poses)
+
+    def get_tags_all_position_estimate(self):
+        tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
+        for edgeuid in self.edges:
+            edge = self.edges[edgeuid]
+            if self.vertices[edge.startuid].mode == VertexType.ODOMETRY and self.vertices[
+                edge.enduid].mode == VertexType.TAG:
+                odom_transform = measurement_to_matrix(
+                    self.vertices[edge.startuid].estimate)
+                edge_transform = measurement_to_matrix(edge.measurement)
+
+                tag_transform = odom_transform.dot(edge_transform)
+                tag_translation = tag_transform[:3, 3]
+                tag_rotation = R.from_matrix(tag_transform[:3, :3]).as_quat()
+                tag_pose = np.concatenate(
+                    [tag_translation, tag_rotation, [edge.enduid]])
+                tags = np.vstack([tags, tag_pose])
+        return tags
