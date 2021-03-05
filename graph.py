@@ -22,6 +22,7 @@ def pose_to_isometry(pose):
     """
     return g2o.Isometry3d(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
+
 def pose_to_se3quat(pose):
     """Convert a pose vector to a :class: g2o.Isometry3d instance.
 
@@ -33,7 +34,6 @@ def pose_to_se3quat(pose):
         information as the input pose.
     """
     return g2o.SE3Quat(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
-
 
 
 def isometry_to_pose(isometry):
@@ -86,7 +86,8 @@ def graph_to_optimizer(graph, damping_status=False):
                     edge.set_information(graph.edges[i].information)
                 optimizer.add_edge(edge)
             else:
-                # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and (b) it is always the same in ARKit (at least currently)
+                # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and (b)
+                # it is always the same in ARKit (at least currently)
                 cam = g2o.CameraParameters(graph.edges[i].camera_intrinsics[0], graph.edges[i].camera_intrinsics[2:], 0)
                 cam.set_id(cam_idx)
                 optimizer.add_parameter(cam)
@@ -232,7 +233,8 @@ class Graph:
     optimize it.
     """
 
-    def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', is_sparse_bundle_adjustment=False, use_huber=False, huber_delta=None, damping_status=False):
+    def __init__(self, vertices, edges, weights=np.zeros(18), gravity_axis='z', is_sparse_bundle_adjustment=False,
+                 use_huber=False, huber_delta=None, damping_status=False):
         """The graph class.
         The graph contains a dictionary of vertices and edges, the
         keys being UIDs such as ints.

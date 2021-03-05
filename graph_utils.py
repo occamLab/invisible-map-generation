@@ -5,6 +5,7 @@ from graph import VertexType, Graph
 from scipy.spatial.transform import Rotation as R
 from g2o import SE3Quat, EdgeProjectPSI2UV
 
+
 def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     """Convert a :class: g2o.SparseOptimizer to a dictionary
     containing locations of the phone, tags, and waypoints.
@@ -65,6 +66,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
             'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
+
 def find_connected_tag_vert(optimizer, location_vert):
     # TODO: it would be nice if we didn't have to scan the entire graph
     for edge in optimizer.edges():
@@ -72,6 +74,7 @@ def find_connected_tag_vert(optimizer, location_vert):
             if edge.vertex(0).id() == location_vert.id():
                 return edge.vertex(2)
     return None
+
 
 def connected_components(graph):
     """Return a list of graphs representing connecting components of
