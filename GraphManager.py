@@ -31,10 +31,6 @@ import convert_json_sba
 import graph_utils
 
 
-# noinspection PyPep8Naming
-from graph_vertex_edge_classes import VertexType
-
-
 class GraphManager:
     """Class that manages graphs by interfacing with firebase, keeping a cache of data downloaded from firebase, and
     providing methods wrapping graph optimization and plotting capabilities.
@@ -75,7 +71,7 @@ class GraphManager:
         ]),
     }
 
-    _comparison_graph1_subgraph_weights = ["trust_odom", "trust_tags"]
+    _comparison_graph1_subgraph_weights = ["sensible_default_weights", "trust_odom", "trust_tags"]
 
     _app_initialize_dict = {
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
@@ -147,6 +143,7 @@ class GraphManager:
                         print("'upload' and 'compare' arguments were both true, but uploading is disabled for "
                               "comparison.")
 
+                    results = "\n### Results  ###\n"
                     # Iterate though set of weights to apply to the graph that has fixed tag vertices
                     for weights_key in GraphManager._comparison_graph1_subgraph_weights:
                         # Acquire sub-graphs; set one to have fixed tag vertices (graph2), and the other (graph1) to not
@@ -159,7 +156,8 @@ class GraphManager:
 
                         print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(
                             weights_key))
-                        self._process_map(map_name, map_json, graph1_subgraph, visualize, False, weights_key)
+                        pre_fixed_chi_sqr = self._process_map(map_name, map_json, graph1_subgraph, visualize, False,
+                                                      weights_key)
 
                         print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(
                             self._selected_weights))
@@ -180,13 +178,15 @@ class GraphManager:
                             print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
                                   "graph2_subgraph".format(missing_vertex_count, "icies" if missing_vertex_count > 1 else "ex"))
 
-                        self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
-
-                        # TODO: Add comparison of chi-squared values. Reasoning: the better set of weights (used for
-                        #  optimizing graph1_subgraph) will result in graph2_subgraph having a relatively lower
-                        #  chi-squared value.
+                        fixed_tag_chi_sqr = self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
+                        results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
+                                   "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
+                                   "Abs(delta chi-sqr): {}\n\n".format(weights_key, pre_fixed_chi_sqr,
+                                                                       self._selected_weights, fixed_tag_chi_sqr,
+                                                                       abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
 
                         # TODO: Sanity check with extreme weights
+                    print(results)
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
@@ -229,12 +229,14 @@ class GraphManager:
             visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_graph` method
             upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
         """
-        tag_locations, odom_locations, waypoint_locations = self._optimize_graph(graph, False, visualize, weights_key)
+        tag_locations, odom_locations, waypoint_locations, opt_chi_sqr = self._optimize_graph(graph, False, visualize,
+                                                                                    weights_key)
         processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
         self._cache_map(GraphManager._upload_to, map_name, map_json, processed_map_json)
         print("processed map", map_name)
         if upload:
             self._upload(map_name, map_json, processed_map_json)
+        return opt_chi_sqr
 
     def _upload(self, map_name, map_json, json_string):
         """Uploads the map json string into the Firebase bucket under the path
@@ -411,7 +413,7 @@ class GraphManager:
 
         # Create the g2o object and optimize
         graph.generate_unoptimized_graph()
-        graph.optimize_graph()
+        opt_chi_sqr = graph.optimize_graph()
 
         # Change vertex estimates based off the optimized graph
         graph.update_vertices()
@@ -469,7 +471,7 @@ class GraphManager:
             plt.legend()
             GraphManager.axis_equal(ax)
             plt.show()
-        return tag_verts, locations, waypoint_verts
+        return tag_verts, locations, waypoint_verts, opt_chi_sqr
 
     # -- Static Methods --
 
@@ -568,6 +570,11 @@ def make_parser():
              "specified graph: one where the tag vertices are not fixed, and one where they are. This option is "
              "mutually exclusive with the -F option."
     )
+    p.add_argument(
+        "-v",
+        action="store_true",
+        help="Visualize plots"
+    )
     return p
 
 
@@ -596,4 +603,4 @@ if __name__ == "__main__":
         else:
             map_pattern = "*"
 
-        graph_handler.process_maps(map_pattern, upload=args.F, compare=args.c)
+        graph_handler.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c)

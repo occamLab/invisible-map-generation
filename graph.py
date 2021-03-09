@@ -117,8 +117,9 @@ class Graph:
         print("checking unoptimized edges")
         self.check_optimized_edges(self.unoptimized_graph)
         print("checking optimized edges")
-        self.check_optimized_edges(self.optimized_graph)
+        optimized_chi_sqr = self.check_optimized_edges(self.optimized_graph)
         self.g2o_status = run_status
+        return optimized_chi_sqr
 
     def generate_maximization_params(self):
         """Generate the arrays to be processed by the maximization model.
