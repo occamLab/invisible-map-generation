@@ -74,6 +74,9 @@ class GraphManager:
             0, 0, 0, -1e2, 3, 3
         ]),
     }
+
+    _comparison_graph1_subgraph_weights = ["trust_odom", "trust_tags"]
+
     _app_initialize_dict = {
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
         'storageBucket': 'invisible-map.appspot.com'
@@ -144,48 +147,46 @@ class GraphManager:
                         print("'upload' and 'compare' arguments were both true, but uploading is disabled for "
                               "comparison.")
 
-                    # Acquire sub-graphs; set one to have fixed tag vertices (graph2), and the other (graph1) to not
-                    graph1 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
-                    ordered_odometry_edges = graph1.ordered_odometry_edges()[0]
-                    start_uid = graph1.edges[ordered_odometry_edges[0]].startuid
-                    end_uid = graph1.edges[ordered_odometry_edges[-1]].enduid
-                    floored_middle = (start_uid + end_uid) // 2
-                    graph1_subgraph = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
+                    # Iterate though set of weights to apply to the graph that has fixed tag vertices
+                    for weights_key in GraphManager._comparison_graph1_subgraph_weights:
+                        # Acquire sub-graphs; set one to have fixed tag vertices (graph2), and the other (graph1) to not
+                        graph1 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
+                        ordered_odometry_edges = graph1.ordered_odometry_edges()[0]
+                        start_uid = graph1.edges[ordered_odometry_edges[0]].startuid
+                        end_uid = graph1.edges[ordered_odometry_edges[-1]].enduid
+                        floored_middle = (start_uid + end_uid) // 2
+                        graph1_subgraph = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
 
-                    print("\n-- Processing sub-graph without tags fixed --")
-                    self._process_map(map_name, map_json, graph1_subgraph, visualize, False)
+                        print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(
+                            weights_key))
+                        self._process_map(map_name, map_json, graph1_subgraph, visualize, False, weights_key)
 
-                    print("\n-- Processing sub-graph with tags fixed --")
+                        print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(
+                            self._selected_weights))
 
-                    # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to
-                    # graph2_subgraph
-                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
-                    graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
-                    opt_tag_verts = graph1_subgraph.get_tag_verts()
-                    missing_vertex_count = 0
-                    for opt_vert in opt_tag_verts:
-                        if not graph2_subgraph.vertices.__contains__(opt_vert):
-                            missing_vertex_count += 1
-                            continue
-                        graph2_subgraph.vertices[opt_vert].estimate = graph1_subgraph.vertices[opt_vert].estimate
+                        # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to
+                        # graph2_subgraph
+                        graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
+                        graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
+                        opt_tag_verts = graph1_subgraph.get_tag_verts()
+                        missing_vertex_count = 0
+                        for opt_vert in opt_tag_verts:
+                            if not graph2_subgraph.vertices.__contains__(opt_vert):
+                                missing_vertex_count += 1
+                                continue
+                            graph2_subgraph.vertices[opt_vert].estimate = graph1_subgraph.vertices[opt_vert].estimate
 
-                    if missing_vertex_count > 0:
-                        print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
-                              "graph2_subgraph".format(missing_vertex_count, "icies" if missing_vertex_count > 1 else "ex"))
+                        if missing_vertex_count > 0:
+                            print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
+                                  "graph2_subgraph".format(missing_vertex_count, "icies" if missing_vertex_count > 1 else "ex"))
 
-                    # TODO: Add the capability to optimize graphs on different sets of weights for comparison of
-                    #  chi-squared values. For example, optimize graph1_subgraph on different sets of weights (e.g.,
-                    #  trust_odom vs. sensible_default_weights), and then compare to optimization of graph2_subgraph
-                    #  some fixed set of weights (e.g., sensible_default_weights).
+                        self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
 
-                    self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
+                        # TODO: Add comparison of chi-squared values. Reasoning: the better set of weights (used for
+                        #  optimizing graph1_subgraph) will result in graph2_subgraph having a relatively lower
+                        #  chi-squared value.
 
-                    # TODO: Add comparison of chi-squared values. Reasoning: the better set of weights (used for
-                    #  optimizing graph1_subgraph) will result in graph2_subgraph having a relatively lower
-                    #  chi-squared value.
-
-                    # TODO: Sanity check with extreme weights
-
+                        # TODO: Sanity check with extreme weights
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
 
@@ -215,7 +216,7 @@ class GraphManager:
             print("Map '{}' was missing".format(map_name))
             return False
 
-    def _process_map(self, map_name, map_json, graph, visualize=False, upload=False):
+    def _process_map(self, map_name, map_json, graph, visualize=False, upload=False, weights_key=None):
         """Optimize the provided map, cache the optimized map in
         `<cache directory>/GraphManager._upload_to`, and optionally visualize and upload the processed graph.
 
@@ -228,7 +229,7 @@ class GraphManager:
             visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_graph` method
             upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
         """
-        tag_locations, odom_locations, waypoint_locations = self._optimize_graph(graph, False, visualize)
+        tag_locations, odom_locations, waypoint_locations = self._optimize_graph(graph, False, visualize, weights_key)
         processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
         self._cache_map(GraphManager._upload_to, map_name, map_json, processed_map_json)
         print("processed map", map_name)
@@ -386,12 +387,13 @@ class GraphManager:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _optimize_graph(self, graph, tune_weights=False, visualize=False):
+    def _optimize_graph(self, graph, tune_weights=False, visualize=False, weights_key = None):
         """Map optimization routine.
 
         TODO: more detailed documentation
         """
-        graph.weights = GraphManager._weights_dict[self._selected_weights]
+        graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else \
+            self._selected_weights]
 
         # Load these weights into the graph
         graph.update_edges()
