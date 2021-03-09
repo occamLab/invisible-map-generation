@@ -174,6 +174,9 @@ class GraphManager:
                                 continue
                             graph2_subgraph.vertices[opt_vert].estimate = graph1_subgraph.vertices[opt_vert].estimate
 
+                        # TODO: also check if nodes are in the second sub-graph and not in the first (and then remove
+                        #  that node and all of its edges from the second graph)
+
                         if missing_vertex_count > 0:
                             print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
                                   "graph2_subgraph".format(missing_vertex_count, "icies" if missing_vertex_count > 1 else "ex"))
@@ -186,6 +189,10 @@ class GraphManager:
                                                                        abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
 
                         # TODO: Sanity check with extreme weights
+
+                        # TODO: Visualize the chi2 in the graph plot (e.g., color-code nodes based on chi2 of edges);
+                        #  maybe also sync up with Jacquie re: her plotting efforts? Add another field to json of the
+                        #  map
                     print(results)
             except Exception as ex:
                 print("Could not process cached map at {} due to error: {}".format(map_json_abs_path, ex))
