@@ -32,6 +32,9 @@ import graph_utils
 
 
 # noinspection PyPep8Naming
+from graph_vertex_edge_classes import VertexType
+
+
 class GraphManager:
     """Class that manages graphs by interfacing with firebase, keeping a cache of data downloaded from firebase, and
     providing methods wrapping graph optimization and plotting capabilities.
@@ -152,20 +155,29 @@ class GraphManager:
                     print("\n-- Processing sub-graph without tags fixed --")
                     self._process_map(map_name, map_json, graph1_subgraph, visualize, False)
 
-                    # TODO: Pull out optimized vertices from graph1_subgraph and create graph2 from those vertices.
-                    #  Double check that the tag ids line up when replacing the vertices. Throw a warning if tag
-                    #  vertices from graph2_subgraph are not existent in graph1_subgraph (we are operating on the
-                    #  assumption that the path is cyclic), as well as vice-versa.
+                    print("\n-- Processing sub-graph with tags fixed --")
+
+                    # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to
+                    # graph2_subgraph
+                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
+                    graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
+                    opt_tag_verts = graph1_subgraph.get_tag_verts()
+                    missing_vertex_count = 0
+                    for opt_vert in opt_tag_verts:
+                        if not graph2_subgraph.vertices.__contains__(opt_vert):
+                            missing_vertex_count += 1
+                            continue
+                        graph2_subgraph.vertices[opt_vert].estimate = graph1_subgraph.vertices[opt_vert].estimate
+
+                    if missing_vertex_count > 0:
+                        print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
+                              "graph2_subgraph".format(missing_vertex_count, "icies" if missing_vertex_count > 1 else "ex"))
 
                     # TODO: Add the capability to optimize graphs on different sets of weights for comparison of
                     #  chi-squared values. For example, optimize graph1_subgraph on different sets of weights (e.g.,
                     #  trust_odom vs. sensible_default_weights), and then compare to optimization of graph2_subgraph
                     #  some fixed set of weights (e.g., sensible_default_weights).
 
-                    graph2 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=True)
-                    graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
-
-                    print("\n-- Processing sub-graph with tags fixed --")
                     self._process_map(map_name, map_json, graph2_subgraph, visualize, False)
 
                     # TODO: Add comparison of chi-squared values. Reasoning: the better set of weights (used for

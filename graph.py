@@ -433,6 +433,13 @@ class Graph:
 
         return ret_graph
 
+    def get_tag_verts(self):
+        tag_verts = []
+        for vertex in self.vertices:
+            if self.vertices[vertex].mode == VertexType.TAG:
+                tag_verts.append(vertex)
+        return tag_verts
+
     def ordered_odometry_edges(self):
         """Generate a list of a list of edges ordered by start of path to end.
 
