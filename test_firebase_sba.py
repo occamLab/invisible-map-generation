@@ -61,7 +61,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
         test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
     original_tag_verts = locations_from_transforms(starting_map['tags'])
     if tune_weights:
-        test_graph.expetation_maximization_once()
+        test_graph.expectation_maximization_once()
         print("tuned weights", test_graph.weights)
     # Create the g2o object and optimize
     test_graph.generate_unoptimized_graph()
