@@ -39,6 +39,9 @@ class Graph:
 
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
         self.edges: Dict[int, Edge] = edges
+        self.verts_to_edges: Dict[int, List[int]] = {}
+        self.generate_verts_to_edges_mapping()
+
         self.vertices: Dict[int, Vertex] = vertices
         self.original_vertices = vertices
         self.weights: np.ndarray = weights
@@ -69,6 +72,17 @@ class Graph:
         This can be optimized using :func: optimize_graph.
         """
         self.unoptimized_graph = self.graph_to_optimizer()
+
+    def generate_verts_to_edges_mapping(self) -> None:
+        """Populates the `verts_to_edges` attribute such that it maps vertex UIDs to edge UIDs.
+        """
+        for edge_uid in self.edges:
+            edge = self.edges[edge_uid]
+            for vertex_uid in [edge.startuid, edge.enduid]:
+                if self.verts_to_edges.__contains__(vertex_uid):
+                    self.verts_to_edges[vertex_uid].append(edge_uid)
+                else:
+                    self.verts_to_edges[vertex_uid] = [edge_uid,]
 
     @staticmethod
     def check_optimized_edges(graph: g2o.SparseOptimizer) -> float:
@@ -196,6 +210,19 @@ class Graph:
 
                 optimizer.add_edge(edge)
         return optimizer
+
+    def delete_tag_vertex(self, vertex_uid: int):
+        if self.vertices[vertex_uid] != VertexType.TAG:
+            raise Exception("Specified vertex for deletion is not a tag vertex")
+
+        # Delete connected edge(s)
+        connected_edges = self.verts_to_edges[vertex_uid]
+        for edge_uid in connected_edges:
+            self.edges.__delitem__(edge_uid)
+
+        # Delete vertex
+        self.verts_to_edges.__delitem__(vertex_uid)
+        self.vertices.__delitem__(vertex_uid)
 
     # -- Utility methods --
 

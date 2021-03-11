@@ -140,26 +140,38 @@ class GraphManager:
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(
                 self._selected_weights))
 
-            # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to
-            # graph2_subgraph
+            # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to graph2_subgraph;
+            # check whether there are any vertices present in graph1_subgraph that are not present in graph2_subgraph
+            # (print warning of how many vertices fit this criteria if nonzero)
             graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
             graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1,
                                                   end_vertex_uid=end_uid)
-            opt_tag_verts = graph1_subgraph.get_tag_verts()
             missing_vertex_count = 0
-            for opt_vert in opt_tag_verts:
-                if not graph2_subgraph.vertices.__contains__(opt_vert):
+            for graph1_sg_vert in graph1_subgraph.get_tag_verts():
+                if not graph2_subgraph.vertices.__contains__(graph1_sg_vert):
                     missing_vertex_count += 1
                     continue
-                graph2_subgraph.vertices[opt_vert].estimate = graph1_subgraph.vertices[opt_vert].estimate
-
-            # TODO: also check if nodes are in the second sub-graph and not in the first (and then remove
-            #  that node and all of its edges from the second graph)
+                graph2_subgraph.vertices[graph1_sg_vert].estimate = graph1_subgraph.vertices[graph1_sg_vert].estimate
 
             if missing_vertex_count > 0:
-                print("Warning: {} vert{} missing when transferring tag estimates from graph1_subgraph to "
-                      "graph2_subgraph".format(missing_vertex_count,
-                                               "icies" if missing_vertex_count > 1 else "ex"))
+                print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
+                      "{} ignored)".format(missing_vertex_count, "vertices" if missing_vertex_count > 1 else
+                                           "vertex", "these were" if missing_vertex_count > 1 else "this was"))
+
+            # Check whether there are any tag vertices present in graph2_subgraph that are not present in the
+            # graph1_subgraph; for each occurrence of this, delete the vertex from graph2_subgraph. After check is
+            # complete, print a warning of how many vertices were deleted if nonzero.
+            deleted_vertex_count = 0
+            for graph2_sg_vert in graph2_subgraph.get_tag_verts():
+                if not graph1_subgraph.vertices.__contains__(graph2_sg_vert):
+                    graph2_subgraph.delete_tag_vertex(graph2_sg_vert)
+                    deleted_vertex_count += 1
+
+            if deleted_vertex_count > 0:
+                print("Warning: {} {} present in second subgraph that are not present in the first subgraph ("
+                      "{} deleted from the second subgraph)"
+                      .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
+                              "these were" if deleted_vertex_count > 1 else "this was"))
 
             fixed_tag_chi_sqr, _ = self._process_map(map_info, graph2_subgraph, visualize, False)
             results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
