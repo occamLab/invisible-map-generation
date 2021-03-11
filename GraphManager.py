@@ -133,25 +133,23 @@ class GraphManager:
             floored_middle = (start_uid + end_uid) // 2
             graph1_subgraph = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
 
-            print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(
-                weights_key))
+            print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(weights_key))
             pre_fixed_chi_sqr, _ = self._process_map(map_info, graph1_subgraph, visualize, False, weights_key)
 
-            print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(
-                self._selected_weights))
+            print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
 
             # Get optimized tag vertices from graph1_subgraph and transfer their estimated positions to graph2_subgraph;
             # check whether there are any vertices present in graph1_subgraph that are not present in graph2_subgraph
             # (print warning of how many vertices fit this criteria if nonzero)
             graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
-            graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1,
-                                                  end_vertex_uid=end_uid)
+            graph2_subgraph = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
             missing_vertex_count = 0
             for graph1_sg_vert in graph1_subgraph.get_tag_verts():
                 if not graph2_subgraph.vertices.__contains__(graph1_sg_vert):
                     missing_vertex_count += 1
-                    continue
-                graph2_subgraph.vertices[graph1_sg_vert].estimate = graph1_subgraph.vertices[graph1_sg_vert].estimate
+                else:
+                    graph2_subgraph.vertices[graph1_sg_vert].estimate = \
+                        graph1_subgraph.vertices[graph1_sg_vert].estimate
 
             if missing_vertex_count > 0:
                 print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
@@ -176,9 +174,9 @@ class GraphManager:
             fixed_tag_chi_sqr, _ = self._process_map(map_info, graph2_subgraph, visualize, False)
             results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
-                       "Abs(delta chi-sqr): {}\n\n".format(weights_key, pre_fixed_chi_sqr,
-                                                           self._selected_weights, fixed_tag_chi_sqr,
-                                                           abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
+                       "Abs(delta chi-sqr): {}\n\n"\
+                .format(weights_key, pre_fixed_chi_sqr, self._selected_weights, fixed_tag_chi_sqr,
+                        abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
 
             # TODO: Sanity check with extreme weights
 
