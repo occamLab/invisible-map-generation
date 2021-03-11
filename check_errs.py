@@ -132,7 +132,7 @@ def main():
     print(GRAPH.weights)
     GRAPH.expectation_maximization_once()
     print(GRAPH.weights)
-    edges = GRAPH.ordered_odometry_edges()
+    edges = GRAPH.get_ordered_odometry_edges()
     errs = np.reshape([], [0, 6])
     edge_lookup = {x.id(): x.error()[:6]
                    for x in GRAPH.optimized_graph.edges()}

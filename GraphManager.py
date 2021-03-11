@@ -148,7 +148,7 @@ class GraphManager:
                     for weights_key in GraphManager._comparison_graph1_subgraph_weights:
                         # Acquire sub-graphs; set one to have fixed tag vertices (graph2), and the other (graph1) to not
                         graph1 = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
-                        ordered_odometry_edges = graph1.ordered_odometry_edges()[0]
+                        ordered_odometry_edges = graph1.get_ordered_odometry_edges()[0]
                         start_uid = graph1.edges[ordered_odometry_edges[0]].startuid
                         end_uid = graph1.edges[ordered_odometry_edges[-1]].enduid
                         floored_middle = (start_uid + end_uid) // 2

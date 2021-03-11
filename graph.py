@@ -61,23 +61,7 @@ class Graph:
 
         self.basis_matrices = {}
 
-    def generate_basis_matrices(self) -> None:
-        """Generate basis matrices used to show how a change in global yaw changes the values of a local measurement.
-
-        This is used for dummy edges. For other edge types, the basis is simply the identity matrix.
-        """
-        basis_matrices = {}
-
-        for uid in self.edges:
-            if (self.vertices[self.edges[uid].startuid].mode == VertexType.DUMMY) \
-                    != (self.vertices[self.edges[uid].enduid].mode == VertexType.DUMMY):
-                basis_matrices[uid] = np.eye(6)
-                if not self.is_sparse_bundle_adjustment:
-                    basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                        R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
-            else:
-                basis_matrices[uid] = np.eye(6)
-        self.basis_matrices = basis_matrices
+    # -- Optimization-related methods --
 
     def generate_unoptimized_graph(self) -> None:
         """Generate the unoptimized g2o graph from the current vertex and edge assignments.
@@ -139,183 +123,6 @@ class Graph:
 
         self.g2o_status = run_status
         return optimized_chi_sqr
-
-    def generate_maximization_params(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Generate the arrays to be processed by the maximization model.
-
-        Sets the error field to an array of errors, as well as a 2-d array populated by 1-hot 18 element observation
-        vectors indicating the type of measurement. The meaning of the position of the one in the observation vector
-        corresponds to the layout of the weights vector.
-
-        Returns:
-            Errors and observations
-        """
-        errors = np.array([])
-        observations = np.reshape([], [0, 18])
-        optimized_edges = {edge.id(): edge for edge in list(
-            self.optimized_graph.edges())}
-
-        for uid in self.edges:
-            edge = self.edges[uid]
-            start_mode = self.vertices[edge.startuid].mode
-            end_mode = self.vertices[edge.enduid].mode
-
-            if end_mode != VertexType.WAYPOINT:
-                errors = np.hstack(
-                    [errors, self.basis_matrices[uid].T.dot(
-                        optimized_edges[uid].error())])
-
-            if start_mode == VertexType.ODOMETRY:
-                if end_mode == VertexType.ODOMETRY:
-                    observations = np.vstack([observations, np.eye(6, 18)])
-                elif end_mode == VertexType.TAG:
-                    observations = np.vstack([observations, np.eye(6, 18, 6)])
-                elif end_mode == VertexType.DUMMY:
-                    observations = np.vstack([observations, np.eye(6, 18, 12)])
-                elif end_mode == VertexType.WAYPOINT:
-                    continue
-                else:
-                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
-                                                                                                            end_mode))
-            else:
-                raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
-                                                                                                        end_mode))
-
-        self.errors = errors
-        self.observations = observations
-        return errors, observations
-
-    def tune_weights(self):
-        """Tune the weights to maximize the likelihood of the errors found between the unoptimized and optimized graphs.
-        """
-        results = maxweights(self.observations, self.errors, self.weights)
-        self.maximization_success = results.success
-        self.weights = results.x
-        self.maximization_results = results
-        self.update_edges()
-        return results
-
-    def update_edges(self) -> None:
-        """Populates the information attribute of each of the edges.
-
-        Raises:
-            Exception if an edge is encountered whose start mode is not an odometry node
-        """
-        for uid in self.edges:
-            edge = self.edges[uid]
-            start_mode = self.vertices[edge.startuid].mode
-            end_mode = self.vertices[edge.enduid].mode
-            if start_mode == VertexType.ODOMETRY:
-                if end_mode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(np.exp(-self.weights[:6]))
-                elif end_mode == VertexType.TAG:
-                    if self.is_sparse_bundle_adjustment:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:8]))
-                    else:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:12]))
-                elif end_mode == VertexType.DUMMY:
-                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
-                    #  to work though)
-                    basis = self.basis_matrices[uid][3:6, 3:6]
-                    cov = np.diag(np.exp(-self.weights[15:18]))
-                    information = basis.dot(cov).dot(basis.T)
-                    template = np.zeros([6, 6])
-
-                    if self.is_sparse_bundle_adjustment:
-                        template[:3, :3] = information
-                    else:
-                        template[3:6, 3:6] = information
-
-                    if self.damping_status:
-                        self.edges[uid].information = template
-                    else:
-                        self.edges[uid].information = np.zeros_like(template)
-                elif end_mode == VertexType.WAYPOINT:
-                    # TODO: not sure what this should be
-                    self.edges[uid].information = np.eye(6, 6)
-                else:
-                    raise Exception('Edge of end type {} not recognized.'.format(end_mode))
-                if self.edges[uid].information_prescaling is not None:
-                    prescaling_matrix = self.edges[uid].information_prescaling
-                    if prescaling_matrix.ndim == 1:
-                        prescaling_matrix = np.diag(prescaling_matrix)
-                    self.edges[uid].information = prescaling_matrix * self.edges[uid].information
-            else:
-                raise Exception('Edge of start type {} not recognized.'.format(start_mode))
-
-    def expectation_maximization_once(self) -> None:
-        """Run one cycle of expectation maximization.
-
-        It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
-        optimizes the graph.  Using the errors, it tunes the weights so that the variances maximize the likelihood of
-        each error by type.
-        """
-        self.generate_unoptimized_graph()
-        self.optimize_graph()
-        self.update_vertices()
-        self.generate_maximization_params()
-        self.tune_weights()
-
-    def expectation_maximization(self, maxiter=10, tol=1) -> int:
-        """Run many iterations of expectation maximization.
-
-        Kwargs:
-            maxiter (int): The maximum amount of iterations.
-            tol (float): The maximum magnitude of the change in weight vectors that will signal the end of the cycle.
-
-        Returns:
-            Number of iterations ran
-        """
-        previous_weights = self.weights
-        i = 0
-        while i < maxiter:
-            self.expectation_maximization_once()
-            new_weights = self.weights
-            if np.linalg.norm(new_weights - previous_weights) < tol:
-                return i
-            previous_weights = new_weights
-            i += 1
-        return i
-
-    def update_vertices(self) -> None:
-        """Update the initial vertices elements with the optimized graph values.
-        """
-        for uid in self.optimized_graph.vertices():
-            if self.is_sparse_bundle_adjustment:
-                if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
-                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
-                else:
-                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
-            else:
-                self.vertices[uid].estimate = isometry_to_pose(self.optimized_graph.vertices()[uid].estimate())
-
-    def connected_components(self) -> List[Graph]:
-        """Return a list of graphs representing connecting components of the input graph.
-
-        If the graph is connected, there should only be one element in the output.
-
-        Returns:
-            A list of :class: Graph containing the connected components.
-        """
-        groups = []
-        for uid in self.edges:
-            edge = self.edges[uid]
-            uids = {edge.startuid, edge.enduid}
-            membership = []
-            for i, group in enumerate(groups):
-                if group[0] & uids:
-                    membership.append(i)
-
-            new_group = set.union(uids, *[groups[i][0] for i in membership]), \
-                set.union({uid}, *[groups[i][1] for i in membership])
-            membership.reverse()
-            for i in membership:
-                del groups[i]
-            groups.append(new_group)
-
-        # TODO: copy over other information from the graph
-        return [Graph(vertices={k: self.vertices[k] for k in group[0]}, edges={k: self.edges[k] for k in group[1]})
-                for group in groups]
 
     def graph_to_optimizer(self) -> g2o.SparseOptimizer:
         """Convert a :class: graph to a :class: g2o.SparseOptimizer.  Only the edges and vertices fields need to be
@@ -390,7 +197,117 @@ class Graph:
                 optimizer.add_edge(edge)
         return optimizer
 
+    # -- Utility methods --
+
+    def update_edges(self) -> None:
+        """Populates the information attribute of each of the edges.
+
+        Raises:
+            Exception if an edge is encountered whose start mode is not an odometry node
+        """
+        for uid in self.edges:
+            edge = self.edges[uid]
+            start_mode = self.vertices[edge.startuid].mode
+            end_mode = self.vertices[edge.enduid].mode
+            if start_mode == VertexType.ODOMETRY:
+                if end_mode == VertexType.ODOMETRY:
+                    self.edges[uid].information = np.diag(np.exp(-self.weights[:6]))
+                elif end_mode == VertexType.TAG:
+                    if self.is_sparse_bundle_adjustment:
+                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:8]))
+                    else:
+                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:12]))
+                elif end_mode == VertexType.DUMMY:
+                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
+                    #  to work though)
+                    basis = self.basis_matrices[uid][3:6, 3:6]
+                    cov = np.diag(np.exp(-self.weights[15:18]))
+                    information = basis.dot(cov).dot(basis.T)
+                    template = np.zeros([6, 6])
+
+                    if self.is_sparse_bundle_adjustment:
+                        template[:3, :3] = information
+                    else:
+                        template[3:6, 3:6] = information
+
+                    if self.damping_status:
+                        self.edges[uid].information = template
+                    else:
+                        self.edges[uid].information = np.zeros_like(template)
+                elif end_mode == VertexType.WAYPOINT:
+                    # TODO: not sure what this should be
+                    self.edges[uid].information = np.eye(6, 6)
+                else:
+                    raise Exception('Edge of end type {} not recognized.'.format(end_mode))
+                if self.edges[uid].information_prescaling is not None:
+                    prescaling_matrix = self.edges[uid].information_prescaling
+                    if prescaling_matrix.ndim == 1:
+                        prescaling_matrix = np.diag(prescaling_matrix)
+                    self.edges[uid].information = prescaling_matrix * self.edges[uid].information
+            else:
+                raise Exception('Edge of start type {} not recognized.'.format(start_mode))
+
+    def update_vertices(self) -> None:
+        """Update the initial vertices elements with the optimized graph values.
+        """
+        for uid in self.optimized_graph.vertices():
+            if self.is_sparse_bundle_adjustment:
+                if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
+                else:
+                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+            else:
+                self.vertices[uid].estimate = isometry_to_pose(self.optimized_graph.vertices()[uid].estimate())
+
+    def generate_basis_matrices(self) -> None:
+        """Generate basis matrices used to show how a change in global yaw changes the values of a local measurement.
+
+        This is used for dummy edges. For other edge types, the basis is simply the identity matrix.
+        """
+        basis_matrices = {}
+
+        for uid in self.edges:
+            if (self.vertices[self.edges[uid].startuid].mode == VertexType.DUMMY) \
+                    != (self.vertices[self.edges[uid].enduid].mode == VertexType.DUMMY):
+                basis_matrices[uid] = np.eye(6)
+                if not self.is_sparse_bundle_adjustment:
+                    basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
+                        R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
+            else:
+                basis_matrices[uid] = np.eye(6)
+        self.basis_matrices = basis_matrices
+
+    def connected_components(self) -> List[Graph]:
+        """Return a list of graphs representing connecting components of the input graph.
+
+        If the graph is connected, there should only be one element in the output.
+
+        Returns:
+            A list of :class: Graph containing the connected components.
+        """
+        groups = []
+        for uid in self.edges:
+            edge = self.edges[uid]
+            uids = {edge.startuid, edge.enduid}
+            membership = []
+            for i, group in enumerate(groups):
+                if group[0] & uids:
+                    membership.append(i)
+
+            new_group = set.union(uids, *[groups[i][0] for i in membership]), \
+                set.union({uid}, *[groups[i][1] for i in membership])
+            membership.reverse()
+            for i in membership:
+                del groups[i]
+            groups.append(new_group)
+
+        # TODO: copy over other information from the graph
+        return [Graph(vertices={k: self.vertices[k] for k in group[0]}, edges={k: self.edges[k] for k in group[1]})
+                for group in groups]
+
     def integrate_path(self, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])) -> np.ndarray:
+        """TODO: documentation
+        """
         poses = [initial]
         for edgeuid in edgeuids:
             old_pose = measurement_to_matrix(poses[-1])
@@ -400,6 +317,8 @@ class Graph:
             rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
             poses.append(np.concatenate([translation, rotation]))
         return np.array(poses)
+
+    # -- Getters --
 
     def get_tags_all_position_estimate(self) -> np.ndarray:
         """TODO: documentation
@@ -428,7 +347,7 @@ class Graph:
             start_vertex_uid: First vertex in range of vertices from which to create a subgraph
             end_vertex_uid: Last vertex in range of vertices from which to create a subgraph
         """
-        edges = self.ordered_odometry_edges()
+        edges = self.get_ordered_odometry_edges()
         start_found = False
         ret_graph = Graph({}, {})
         for i, edgeuid in enumerate(edges[0]):
@@ -464,7 +383,7 @@ class Graph:
                 tag_verts.append(vertex)
         return tag_verts
 
-    def ordered_odometry_edges(self) -> List[List[int]]:
+    def get_ordered_odometry_edges(self) -> List[List[int]]:
         """Generate a list of a list of edges ordered by start of path to end.
 
         The lists are different connected paths. As long as the graph is connected, the output list should only contain
@@ -518,3 +437,94 @@ class Graph:
             elif not (start_found or end_found):
                 segments.append([uid])
         return segments
+
+    # -- Expectation maximization-related methods  --
+
+    def expectation_maximization_once(self) -> None:
+        """Run one cycle of expectation maximization.
+
+        It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
+        optimizes the graph.  Using the errors, it tunes the weights so that the variances maximize the likelihood of
+        each error by type.
+        """
+        self.generate_unoptimized_graph()
+        self.optimize_graph()
+        self.update_vertices()
+        self.generate_maximization_params()
+        self.tune_weights()
+
+    def expectation_maximization(self, maxiter=10, tol=1) -> int:
+        """Run many iterations of expectation maximization.
+
+        Kwargs:
+            maxiter (int): The maximum amount of iterations.
+            tol (float): The maximum magnitude of the change in weight vectors that will signal the end of the cycle.
+
+        Returns:
+            Number of iterations ran
+        """
+        previous_weights = self.weights
+        i = 0
+        while i < maxiter:
+            self.expectation_maximization_once()
+            new_weights = self.weights
+            if np.linalg.norm(new_weights - previous_weights) < tol:
+                return i
+            previous_weights = new_weights
+            i += 1
+        return i
+
+    def generate_maximization_params(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Generate the arrays to be processed by the maximization model.
+
+        Sets the error field to an array of errors, as well as a 2-d array populated by 1-hot 18 element observation
+        vectors indicating the type of measurement. The meaning of the position of the one in the observation vector
+        corresponds to the layout of the weights vector.
+
+        Returns:
+            Errors and observations
+        """
+        errors = np.array([])
+        observations = np.reshape([], [0, 18])
+        optimized_edges = {edge.id(): edge for edge in list(
+            self.optimized_graph.edges())}
+
+        for uid in self.edges:
+            edge = self.edges[uid]
+            start_mode = self.vertices[edge.startuid].mode
+            end_mode = self.vertices[edge.enduid].mode
+
+            if end_mode != VertexType.WAYPOINT:
+                errors = np.hstack(
+                    [errors, self.basis_matrices[uid].T.dot(
+                        optimized_edges[uid].error())])
+
+            if start_mode == VertexType.ODOMETRY:
+                if end_mode == VertexType.ODOMETRY:
+                    observations = np.vstack([observations, np.eye(6, 18)])
+                elif end_mode == VertexType.TAG:
+                    observations = np.vstack([observations, np.eye(6, 18, 6)])
+                elif end_mode == VertexType.DUMMY:
+                    observations = np.vstack([observations, np.eye(6, 18, 12)])
+                elif end_mode == VertexType.WAYPOINT:
+                    continue
+                else:
+                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
+                                                                                                            end_mode))
+            else:
+                raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
+                                                                                                        end_mode))
+
+        self.errors = errors
+        self.observations = observations
+        return errors, observations
+
+    def tune_weights(self):
+        """Tune the weights to maximize the likelihood of the errors found between the unoptimized and optimized graphs.
+        """
+        results = maxweights(self.observations, self.errors, self.weights)
+        self.maximization_success = results.success
+        self.weights = results.x
+        self.maximization_results = results
+        self.update_edges()
+        return results
