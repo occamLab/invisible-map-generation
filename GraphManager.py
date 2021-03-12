@@ -208,7 +208,7 @@ class GraphManager:
 
             results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
-                       "Abs(delta chi-sqr): {}\n\n"\
+                       "Abs(delta chi-sqr): {}\n\n" \
                 .format(weights_key, pre_fixed_chi_sqr, self._selected_weights, fixed_tag_chi_sqr,
                         abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
 
@@ -448,7 +448,8 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key:
-                        Union[bool, str] = None, plot_title: Union[str, None] = None):
+                        Union[bool, str] = None, plot_title: Union[str, None] = None) -> \
+            Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float]:
         """Map optimization routine.
 
         TODO: more detailed documentation
@@ -463,8 +464,8 @@ class GraphManager:
         # Commented out: unused
         # all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
 
-        starting_map = graph_utils.optimizer_to_map(
-            graph.vertices, graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
+        starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
+                                                    is_sparse_bundle_adjustment=True)
         original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags'])
         if tune_weights:
             graph.expectation_maximization_once()
@@ -478,14 +479,15 @@ class GraphManager:
         graph.update_vertices()
 
         prior_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph)
-        resulting_map = graph_utils.optimizer_to_map(graph.vertices, graph.optimized_graph,
-                                                     is_sparse_bundle_adjustment=True)
-        prior_locations = graph_utils.locations_from_transforms(prior_map['locations'])
-        locations = graph_utils.locations_from_transforms(resulting_map['locations'])
+        resulting_map: Dict[str, Union[List, np.ndarray]] = \
+            graph_utils.optimizer_to_map(graph.vertices, graph.optimized_graph, is_sparse_bundle_adjustment=True)
+        prior_locations: np.ndarray = graph_utils.locations_from_transforms(prior_map['locations'])
+        locations: np.ndarray = graph_utils.locations_from_transforms(resulting_map['locations'])
+
         # Refer to this to get the positions of the optimized graph
-        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
-        tagpoint_positions = resulting_map['tagpoints']
-        waypoint_verts = resulting_map['waypoints']
+        tag_verts: np.ndarray = graph_utils.locations_from_transforms(resulting_map['tags'])
+        tagpoint_positions: np.ndarray = resulting_map['tagpoints']
+        waypoint_verts: Tuple[List, np.ndarray] = tuple(resulting_map['waypoints'])
 
         if visualize:
             GraphManager.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
@@ -495,8 +497,9 @@ class GraphManager:
     # -- Static Methods --
 
     @staticmethod
-    def visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts, original_tag_verts=None,
-                  plot_title: Union[str, None] = None) -> None:
+    def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions:
+                  np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray]
+                  = None, plot_title: Union[str, None] = None) -> None:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
@@ -574,9 +577,9 @@ class GraphManager:
                               np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in
                 np.unique(all_tags[:, -1])}
 
-    # noinspection PyPep8Naming
     @staticmethod
-    def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
+    def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray, waypoint_locations: Tuple[
+                                List[Dict], np.ndarray]):
         tag_vertex_map = map(lambda curr_tag: {
             'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
             'rotation': {'x': curr_tag[3],
