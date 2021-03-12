@@ -49,6 +49,9 @@ class GraphManager:
          method and the cache location of any maps associated with that database reference.
         _processed_upload_to (str): Simultaneously specifies Firebase bucket path to upload processed graphs to and the
          cache location of processed graphs.
+        _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
+        `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
+        `compare_weights` method is invoked.
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
@@ -82,6 +85,7 @@ class GraphManager:
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
         'storageBucket': 'invisible-map.appspot.com'
     }
+
     _unprocessed_listen_to = "unprocessed_maps"
     _processed_upload_to = "TestProcessed"
 
@@ -122,6 +126,24 @@ class GraphManager:
         self._db_ref.listen(self._df_listen_callback)
 
     def compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
+        """Invocation results in the weights comparison routine.
+
+        The weights comparison routine is as follows for each `weights_key` in the
+        `_comparison_graph1_subgraph_weights` class attribute:
+        1. Acquire a subgraph from `map_info.map_dct` using the `get_subgraph` method of the `Graph` class; the
+           subgraph is created from the first half of the ordered odometry edge UIDs. Let this first subgraph be called
+           `graph1_subgraph`.
+        2. Optimize `graph1_subgraph` with the weights specified by `weights_key` and record its total chi2 value.
+        3. Create a second subgraph from the same parent graph using the second half of ordered odometry edge UIDs;
+           let this second subgraph be called `graph2_subgraph`. The estimated positions from tag
+           vertices in `graph1_subgraph` are copied over to the corresponding vertices in `graph2_subgraph`,
+           and the graph is then optimized with those tax positions fixed and the weights vector selected by the
+           `_selected_weights` instance attribute. Record the total chi2 value.
+
+        Args:
+            map_info (GraphManager.MapInfo): Map to use for weights comparison
+            visualize (bool): Used as the visualize argument for the `_process_map` method invocation.
+        """
         results = "\n### Results  ###\n"
         # Iterate though set of weights to apply to the graph that has fixed tag vertices
         for weights_key in GraphManager._comparison_graph1_subgraph_weights:
