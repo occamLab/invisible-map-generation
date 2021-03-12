@@ -127,3 +127,12 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
     rotation1 = R.from_euler(gravity_axis, 0.05) * rotation
     change = rotation1.as_quat()[:3] - rotation.as_quat()[:3]
     return np.linalg.svd(change[:, np.newaxis])[0]
+
+
+def locations_from_transforms(locations):
+    """TODO: documentation
+
+    """
+    for i in range(locations.shape[0]):
+        locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
+    return locations

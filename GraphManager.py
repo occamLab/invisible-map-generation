@@ -28,7 +28,7 @@ import numpy as np
 from firebase_admin import credentials
 from firebase_admin import db
 from firebase_admin import storage
-from g2o import SE3Quat, Quaternion
+from g2o import Quaternion
 from varname import nameof
 
 import convert_json_sba
@@ -452,7 +452,7 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key:
-                        bool = None):
+                        bool = None, plot_title: Union[str, None] = None):
         """Map optimization routine.
 
         TODO: more detailed documentation
@@ -469,7 +469,7 @@ class GraphManager:
 
         starting_map = graph_utils.optimizer_to_map(
             graph.vertices, graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
-        original_tag_verts = GraphManager.locations_from_transforms(starting_map['tags'])
+        original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags'])
         if tune_weights:
             graph.expectation_maximization_once()
             print("tuned weights", graph.weights)
@@ -484,62 +484,75 @@ class GraphManager:
         prior_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph)
         resulting_map = graph_utils.optimizer_to_map(graph.vertices, graph.optimized_graph,
                                                      is_sparse_bundle_adjustment=True)
-        prior_locations = GraphManager.locations_from_transforms(prior_map['locations'])
-        locations = GraphManager.locations_from_transforms(resulting_map['locations'])
-
+        prior_locations = graph_utils.locations_from_transforms(prior_map['locations'])
+        locations = graph_utils.locations_from_transforms(resulting_map['locations'])
         # Refer to this to get the positions of the optimized graph
-        tag_verts = GraphManager.locations_from_transforms(resulting_map['tags'])
-
+        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
         tagpoint_positions = resulting_map['tagpoints']
         waypoint_verts = resulting_map['waypoints']
+
         if visualize:
-            f = plt.figure()
-            ax = f.add_subplot(111, projection='3d')
-            plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-            plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
-                     label='Prior Odom Vertices')
-            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
-                     label='Tag Vertices Original')
-            plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
-            for tag_vert in tag_verts:
-                R = Quaternion(tag_vert[3:-1]).rotation_matrix()
-                axis_to_color = ['r', 'g', 'b']
-                for axis_id in range(3):
-                    ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
-                              R[2, axis_id], length=1, color=axis_to_color[axis_id])
-            plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
-                     label='Tag Corners')
-            for vert in tag_verts:
-                ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
-            plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
-                     label='Waypoint Vertices')
-            for vert_idx in range(len(waypoint_verts[0])):
-                vert = waypoint_verts[1][vert_idx]
-                waypoint_name = waypoint_verts[0][vert_idx]['name']
-                ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
-
-            # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
-            # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
-            #          label='All Tag Edges Original')
-
-            # Commented-out: unused
-            # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
-            # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
-
-            tag_vertex_shift = original_tag_verts - tag_verts
-            print("tag_vertex_shift", tag_vertex_shift)
-            plt.legend()
-            GraphManager.axis_equal(ax)
-            plt.show()
+            GraphManager.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
+                                   original_tag_verts, plot_title)
         return tag_verts, locations, waypoint_verts, opt_chi_sqr
 
     # -- Static Methods --
 
     @staticmethod
-    def locations_from_transforms(locations):
-        for i in range(locations.shape[0]):
-            locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
-        return locations
+    def visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts, original_tag_verts=None,
+                  plot_title: Union[str, None] = None) -> None:
+        """Visualization used during the optimization routine.
+        """
+        f = plt.figure()
+        ax = f.add_subplot(111, projection='3d')
+
+        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
+        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
+                 label='Prior Odom Vertices')
+
+        if original_tag_verts is not None:
+            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
+                     label='Tag Vertices Original')
+
+        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
+        for tag_vert in tag_verts:
+            R = Quaternion(tag_vert[3:-1]).rotation_matrix()
+            axis_to_color = ['r', 'g', 'b']
+            for axis_id in range(3):
+                ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
+                          R[2, axis_id], length=1, color=axis_to_color[axis_id])
+
+        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
+                 label='Tag Corners')
+
+        for vert in tag_verts:
+            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
+
+        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
+                 label='Waypoint Vertices')
+
+        for vert_idx in range(len(waypoint_verts[0])):
+            vert = waypoint_verts[1][vert_idx]
+            waypoint_name = waypoint_verts[0][vert_idx]['name']
+            ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
+
+        # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
+        # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
+        #          label='All Tag Edges Original')
+
+        # Commented-out: unused
+        # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+        # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+
+        tag_vertex_shift = original_tag_verts - tag_verts
+        print("tag_vertex_shift", tag_vertex_shift)
+        plt.legend()
+        GraphManager.axis_equal(ax)
+
+        if isinstance(plot_title, str):
+            plt.title(plot_title)
+
+        plt.show()
 
     @staticmethod
     def axis_equal(ax):
