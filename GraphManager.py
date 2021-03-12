@@ -2,6 +2,9 @@
 """
 Contains the GraphManager class and a main routine that makes use of it.
 
+Print the usage instructions:
+>> python3 GraphManager.py -h
+
 Example usage that listens to the unprocessed maps database reference:
 >> python3 GraphManager.py -f
 
@@ -10,7 +13,8 @@ Example usage that optimizes and plots all graphs matching the pattern specified
 
 Notes:
 - This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
-- Known bug: The cached optimized maps cannot be re-loaded from cache
+- The maps that are *processed* and cached are of a different format than the unprocessed graphs and cannot be-loaded
+  for further processing.
 
 Author: Duncan Mazza
 """
