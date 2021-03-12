@@ -1,5 +1,0 @@
-ttempting to process map /home/duncan/occam/invisible-map-generation/.cache/unprocessed_maps/myTestFolder/122443012900625-Living Room.json
-Could not process cached map at /home/duncan/occam/invisible-map-generation/.cache/unprocessed_maps/myTestFolder/122443012900625-Living Room.json due to error: string indices must be integers
-Attempting to process map /home/duncan/occam/invisible-map-generation/.cache/unprocessed_maps/myTestFolder/143465727450583-Living Room.json
-Could not process cached map at /home/duncan/occam/invisible-map-generation/.cache/unprocessed_maps/myTestFolder/143465727450583-Living Room.json due to error: string indices must be integers
-
