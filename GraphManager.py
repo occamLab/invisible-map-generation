@@ -156,7 +156,11 @@ class GraphManager:
             graph1_subgraph = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
 
             print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(weights_key))
-            pre_fixed_chi_sqr, _ = self._process_map(map_info, graph1_subgraph, visualize, False, weights_key)
+
+            tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr = \
+                self._optimize_graph(graph1_subgraph, False, visualize, weights_key)
+            processed_map_json_1 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
+                                                                        waypoint_locations)
 
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
 
@@ -193,7 +197,11 @@ class GraphManager:
                       .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
                               "these were" if deleted_vertex_count > 1 else "this was"))
 
-            fixed_tag_chi_sqr, _ = self._process_map(map_info, graph2_subgraph, visualize, False)
+            tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr = \
+                self._optimize_graph(graph2_subgraph, False, visualize)
+            processed_map_json_2 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
+                                                                        waypoint_locations)
+
             results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Abs(delta chi-sqr): {}\n\n"\
@@ -248,10 +256,17 @@ class GraphManager:
                 if upload:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self.compare_weights(map_info, visualize)
-
             else:
                 graph = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
-                _, processed_map_json = self._process_map(map_info, graph, visualize, upload)
+                tag_locations, odom_locations, waypoint_locations, opt_chi2 = \
+                    self._optimize_graph(graph, False, visualize)
+                processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
+                                                                          waypoint_locations)
+                print("Processed map: {}".format(map_info.map_name))
+                if upload:
+                    self._upload(map_info, processed_map_json)
+                    print("Uploaded processed map: {}".format(map_info.map_name))
+
                 self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
 
     # -- Private Methods --
@@ -281,29 +296,6 @@ class GraphManager:
         else:
             print("Map '{}' was missing".format(map_info.map_name))
             return False
-
-    def _process_map(self, map_info: GraphManager.MapInfo, graph: Graph, visualize=False, upload=False,
-                     weights_key=None) -> Tuple[float, str]:
-        """Optimize the provided map, and optionally visualize and upload the processed graph.
-
-        Args:
-            map_info (GraphManager.MapInfo): Information for corresponding graph
-            graph (graph.Graph): Graph to process
-            visualize (bool): Passed as the value for the `visualize` argument in the `_optimize_graph` method
-            upload (bool): Boolean for whether or not to upload the processed map (invokes the `_upload`) method
-
-        Returns:
-            Chi2 value for optimized graph (as returned by the `_optimize_graph` method) and the json string of the
-            optimized graph (as returned by the `make_processed_map_JSON` static method)
-        """
-        tag_locations, odom_locations, waypoint_locations, opt_chi2 = \
-            self._optimize_graph(graph, False, visualize, weights_key)
-        processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations)
-
-        print("Processed map: {}".format(map_info.map_name))
-        if upload:
-            self._upload(map_info, processed_map_json)
-        return opt_chi2, processed_map_json
 
     def _upload(self, map_info: GraphManager.MapInfo, json_string: str) -> None:
         """Uploads the map json string into the Firebase bucket under the path
@@ -452,7 +444,7 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key:
-                        bool = None, plot_title: Union[str, None] = None):
+                        Union[bool, str] = None, plot_title: Union[str, None] = None):
         """Map optimization routine.
 
         TODO: more detailed documentation
