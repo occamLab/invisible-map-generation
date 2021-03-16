@@ -40,6 +40,7 @@ class Graph:
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
         self.edges: Dict[int, Edge] = edges
         self.verts_to_edges: Dict[int, List[int]] = {}
+        self.basis_matrices = {}
         self.generate_verts_to_edges_mapping()
 
         self.vertices: Dict[int, Vertex] = vertices
@@ -62,7 +63,6 @@ class Graph:
         self.huber_delta: bool = huber_delta
         self.update_edges()
 
-        self.basis_matrices = {}
 
     # -- Optimization-related methods --
 
