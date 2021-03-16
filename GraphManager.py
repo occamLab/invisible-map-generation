@@ -161,10 +161,13 @@ class GraphManager:
 
             print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(weights_key))
 
-            tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr = \
+            tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
                 self._optimize_graph(graph1_subgraph, False, visualize, weights_key)
             processed_map_json_1 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations)
+                                                                        waypoint_locations, g1sg_odom_adj_chi2)
+
+            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
+                            "-comparison-subgraph-1-with_weights-set{}".format(weights_key))
 
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
 
@@ -184,7 +187,7 @@ class GraphManager:
             if missing_vertex_count > 0:
                 print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
                       "{} ignored)".format(missing_vertex_count, "vertices" if missing_vertex_count > 1 else
-                                           "vertex", "these were" if missing_vertex_count > 1 else "this was"))
+                "vertex", "these were" if missing_vertex_count > 1 else "this was"))
 
             # Check whether there are any tag vertices present in graph2_subgraph that are not present in the
             # graph1_subgraph; for each occurrence of this, delete the vertex from graph2_subgraph. After check is
@@ -201,10 +204,12 @@ class GraphManager:
                       .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
                               "these were" if deleted_vertex_count > 1 else "this was"))
 
-            tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr = \
+            tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr, g2sg_odom_adj_chi2 = \
                 self._optimize_graph(graph2_subgraph, False, visualize)
             processed_map_json_2 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations)
+                                                                        waypoint_locations, g2sg_odom_adj_chi2)
+            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
+                            "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
 
             results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
@@ -265,7 +270,7 @@ class GraphManager:
                 self.compare_weights(map_info, visualize)
             else:
                 graph = convert_json_sba.as_graph(map_info.map_dct)
-                tag_locations, odom_locations, waypoint_locations, opt_chi2 = \
+                tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
                     self._optimize_graph(graph, False, visualize)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
                                                                           waypoint_locations)
@@ -363,7 +368,7 @@ class GraphManager:
             return directory_json[key]
 
     def _cache_map(self, parent_folder: str, map_info: GraphManager.MapInfo, json_string: str, file_suffix: Union[
-                   str, None] = None) -> bool:
+        str, None] = None) -> bool:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
@@ -395,20 +400,21 @@ class GraphManager:
 
         if not self._resolve_cache_dir():
             raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
-                .format(self._cache_path))
+                                     .format(self._cache_path))
 
         file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
-        if len(json_string) < 6:
-                json_string += file_suffix_str + ".json"
+        map_json_to_use = str(map_info.map_json)
+        if len(map_json_to_use) < 6:
+            map_json_to_use += file_suffix_str + ".json"
         else:
-            if json_string[-5:] != ".json":
-                json_string += file_suffix_str + ".json"
+            if map_json_to_use[-5:] != ".json":
+                map_json_to_use += file_suffix_str + ".json"
             else:
-                json_string = json_string[:-5] + file_suffix_str + ".json"
+                map_json_to_use = map_json_to_use[:-5] + file_suffix_str + ".json"
 
-        cached_file_path = os.path.join(self._cache_path, parent_folder, map_info.map_json)
+        cached_file_path = os.path.join(self._cache_path, parent_folder, map_json_to_use)
         try:
-            cache_to = os.path.join(parent_folder, map_info.map_json)
+            cache_to = os.path.join(parent_folder, map_json_to_use)
             cache_to_split = cache_to.split(os.path.sep)
             cache_to_split_idx = 0
             while cache_to_split_idx < len(cache_to_split) - 1:
@@ -421,11 +427,11 @@ class GraphManager:
                 map_json_file.write(json_string)
                 map_json_file.close()
 
-            self._append_to_cache_directory(os.path.basename(map_info.map_json), map_info.map_name)
+            self._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
             print("Successfully cached {}".format(cached_file_path))
             return True
         except Exception as ex:
-            print("Could not cache map {} due to error: {}".format(map_info.map_json, ex))
+            print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
             return False
 
     def _resolve_cache_dir(self) -> bool:
@@ -470,14 +476,14 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key:
-                        Union[bool, str] = None, plot_title: Union[str, None] = None) -> \
-            Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float]:
+    Union[bool, str] = None, plot_title: Union[str, None] = None) -> \
+            Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray]:
         """Map optimization routine.
 
         TODO: more detailed documentation
         """
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-                                                   self._selected_weights]
+        self._selected_weights]
 
         # Load these weights into the graph
         graph.update_edges()
@@ -505,6 +511,7 @@ class GraphManager:
             graph_utils.optimizer_to_map(graph.vertices, graph.optimized_graph, is_sparse_bundle_adjustment=True)
         prior_locations: np.ndarray = graph_utils.locations_from_transforms(prior_map['locations'])
         locations: np.ndarray = graph_utils.locations_from_transforms(resulting_map['locations'])
+        odom_chi2_adj_vec: np.ndarray = resulting_map['locationsAdjChi2']
 
         # Refer to this to get the positions of the optimized graph
         tag_verts: np.ndarray = graph_utils.locations_from_transforms(resulting_map['tags'])
@@ -514,13 +521,13 @@ class GraphManager:
         if visualize:
             GraphManager.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                    original_tag_verts, plot_title)
-        return tag_verts, locations, waypoint_verts, opt_chi_sqr
+        return tag_verts, locations, waypoint_verts, opt_chi_sqr, odom_chi2_adj_vec
 
     # -- Static Methods --
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions:
-                  np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray]
+    np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray]
                   = None, plot_title: Union[str, None] = None) -> None:
         """Visualization used during the optimization routine.
         """
@@ -583,11 +590,11 @@ class GraphManager:
         max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
                               axis_range_from_limits(ax.get_zlim())]).max()
         Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
-            (ax.get_xlim()[1] + ax.get_xlim()[0])
+             (ax.get_xlim()[1] + ax.get_xlim()[0])
         Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
-            (ax.get_ylim()[1] + ax.get_ylim()[0])
+             (ax.get_ylim()[1] + ax.get_ylim()[0])
         Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * \
-            (ax.get_zlim()[1] + ax.get_zlim()[0])
+             (ax.get_zlim()[1] + ax.get_zlim()[0])
 
         # Comment or uncomment following both lines to test the fake bounding box:
         for xb, yb, zb in zip(Xb, Yb, Zb):
@@ -601,31 +608,56 @@ class GraphManager:
 
     @staticmethod
     def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray, waypoint_locations: Tuple[
-                                List[Dict], np.ndarray]):
-        tag_vertex_map = map(lambda curr_tag: {
-            'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
-            'rotation': {'x': curr_tag[3],
-                         'y': curr_tag[4],
-                         'z': curr_tag[5],
-                         'w': curr_tag[6]},
-            'id': int(curr_tag[7])}, tag_locations)
-        odom_vertex_map = map(lambda curr_odom: {
-            'translation': {'x': curr_odom[0], 'y': curr_odom[1],
-                            'z': curr_odom[2]},
-            'rotation': {'x': curr_odom[3],
-                         'y': curr_odom[4],
-                         'z': curr_odom[5],
-                         'w': curr_odom[6]},
-            'poseId': int(curr_odom[8])}, odom_locations)
-        waypoint_vertex_map = map(lambda idx: {
-            'translation': {'x': waypoint_locations[1][idx][0],
-                            'y': waypoint_locations[1][idx][1],
-                            'z': waypoint_locations[1][idx][2]},
-            'rotation': {'x': waypoint_locations[1][idx][3],
-                         'y': waypoint_locations[1][idx][4],
-                         'z': waypoint_locations[1][idx][5],
-                         'w': waypoint_locations[1][idx][6]},
-            'id': waypoint_locations[0][idx]['name']}, range(len(waypoint_locations[0])))
+        List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None):
+        tag_vertex_map = map(
+            lambda curr_tag: {
+                'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
+                'rotation': {'x': curr_tag[3],
+                             'y': curr_tag[4],
+                             'z': curr_tag[5],
+                             'w': curr_tag[6]},
+                'id': int(curr_tag[7])
+            }, tag_locations
+        )
+
+        if adj_chi2_arr is None:
+            odom_vertex_map = map(
+                lambda curr_odom: {
+                    'translation': {'x': curr_odom[0], 'y': curr_odom[1],
+                                    'z': curr_odom[2]},
+                    'rotation': {'x': curr_odom[3],
+                                 'y': curr_odom[4],
+                                 'z': curr_odom[5],
+                                 'w': curr_odom[6]},
+                    'poseId': int(curr_odom[8]),
+                }, odom_locations
+            )
+        else:
+            odom_locations_with_chi2 = np.concatenate([odom_locations, adj_chi2_arr], axis=1)
+            odom_vertex_map = map(
+                lambda curr_odom: {
+                    'translation': {'x': curr_odom[0], 'y': curr_odom[1],
+                                    'z': curr_odom[2]},
+                    'rotation': {'x': curr_odom[3],
+                                 'y': curr_odom[4],
+                                 'z': curr_odom[5],
+                                 'w': curr_odom[6]},
+                    'poseId': int(curr_odom[8]),
+                    'adjChi2': curr_odom[9]
+                }, odom_locations_with_chi2
+            )
+        waypoint_vertex_map = map(
+            lambda idx: {
+                'translation': {'x': waypoint_locations[1][idx][0],
+                                'y': waypoint_locations[1][idx][1],
+                                'z': waypoint_locations[1][idx][2]},
+                'rotation': {'x': waypoint_locations[1][idx][3],
+                             'y': waypoint_locations[1][idx][4],
+                             'z': waypoint_locations[1][idx][5],
+                             'w': waypoint_locations[1][idx][6]},
+                'id': waypoint_locations[0][idx]['name']
+            }, range(len(waypoint_locations[0]))
+        )
         return json.dumps({'tag_vertices': list(tag_vertex_map),
                            'odometry_vertices': list(odom_vertex_map),
                            'waypoints_vertices': list(waypoint_vertex_map)})

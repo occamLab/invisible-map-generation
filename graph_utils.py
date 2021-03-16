@@ -18,9 +18,10 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     Returns:
         A dictionary with fields 'locations', 'tags', and 'waypoints'. The 'locations' key covers a (n, 8) array
          containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at n points. The 'tags' and
-          'waypoints' keys cover the locations of the tags and waypoints in the same format.
+        'waypoints' keys cover the locations of the tags and waypoints in the same format.
     """
     locations = np.reshape([], [0, 9])
+    locationsAdjChi2 = np.reshape([], [0, 1])
     tagpoints = np.reshape([], [0, 3])
     tags = np.reshape([], [0, 8])
     waypoints = np.reshape([], [0, 8])
@@ -41,6 +42,12 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
             if mode == VertexType.ODOMETRY:
                 pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
                 locations = np.vstack([locations, pose])
+
+                # TODO: This is just a placeholder number - need to actually compute/access this value
+                adjChi2Error = 1.0
+
+                locationsAdjChi2 = np.vstack([locationsAdjChi2, adjChi2Error])
+
             elif mode == VertexType.TAG:
                 pose = np.concatenate([location, rotation, [i]])
                 if is_sparse_bundle_adjustment:
@@ -58,7 +65,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     locations = np.array(locations)
     locations = locations[locations[:, -1].argsort()]
     return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
-            'waypoints': [waypoint_metadata, np.array(waypoints)]}
+            'waypoints': [waypoint_metadata, np.array(waypoints)], 'locationsAdjChi2': locationsAdjChi2}
 
 
 def find_connected_tag_vert(optimizer, location_vert):
