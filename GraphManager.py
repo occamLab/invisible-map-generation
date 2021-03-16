@@ -245,6 +245,9 @@ class GraphManager:
             return
 
         for map_json_abs_path in matching_maps:
+            if os.path.isdir(map_json_abs_path):
+                continue  # Ignore directories
+
             print("\n\n---- Attempting to process map {} ----".format(map_json_abs_path))
             with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
                 json_string = json_string_file.read()
@@ -261,7 +264,7 @@ class GraphManager:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self.compare_weights(map_info, visualize)
             else:
-                graph = convert_json_sba.as_graph(map_dct, fix_tag_vertices=False)
+                graph = convert_json_sba.as_graph(map_info.map_dct)
                 tag_locations, odom_locations, waypoint_locations, opt_chi2 = \
                     self._optimize_graph(graph, False, visualize)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
@@ -359,30 +362,49 @@ class GraphManager:
             directory_file.close()
             return directory_json[key]
 
-    def _cache_map(self, parent_folder: str, map_info: GraphManager.MapInfo, json_string: str) -> bool:
+    def _cache_map(self, parent_folder: str, map_info: GraphManager.MapInfo, json_string: str, file_suffix: Union[
+                   str, None] = None) -> bool:
         """Saves a map to a json file in cache directory.
 
-        Catches any exceptions raised and displays an appropriate diagnostic message if one is caught. All of the
-        arguments are checked to ensure that they are, in fact strings; if any are not, then a diagnostic message is
-        printed and False is returned.
+        Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
+        appropriate diagnostic message if one is caught. All of the arguments are checked to ensure that they are, in
+        fact strings; if any are not, then a diagnostic message is printed and False is returned.
 
         Arguments:
             parent_folder (str): Specifies the sub-directory of the cache directory that the map is cached in
-            map_info (GraphManager.MapInfo): Contains the map name and map json path
+            map_info (GraphManager.MapInfo): Contains the map name and map json path in the `map_name` and `map_json`
+             fields respectively. If the last 5 characters of this string do not form the substring ".json",
+             then ".json" will be appended automatically.
             json_string (str): The json string that defines the map (this is what is written as the contents of the
-             cached map file)
+             cached map file).
+            file_suffix (str): String to append to the file name given by `map_info.map_json`.
 
         Returns:
             True if map was successfully cached, and False otherwise
+
+        Raises:
+            ValueError: Raised if there is any argument (except `file_suffix`) that is of an incorrect type
+            NotADirectoryError: Raised if `_resolve_cache_dir` method returns false.
         """
+        if not isinstance(map_info, GraphManager.MapInfo):
+            raise ValueError("Cannot cache map because '{}' argument is not a {} instance"
+                             .format(nameof(map_info), nameof(GraphManager.MapInfo)))
         for arg in [parent_folder, map_info.map_name, map_info.map_json, json_string]:
             if not isinstance(arg, str):
-                print("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
-                return False
+                raise ValueError("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
+
         if not self._resolve_cache_dir():
-            print("Cannot cache map because cache folder existence could not be resolved at path {}".format(
-                self._cache_path))
-            return False
+            raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
+                .format(self._cache_path))
+
+        file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
+        if len(json_string) < 6:
+                json_string += file_suffix_str + ".json"
+        else:
+            if json_string[-5:] != ".json":
+                json_string += file_suffix_str + ".json"
+            else:
+                json_string = json_string[:-5] + file_suffix_str + ".json"
 
         cached_file_path = os.path.join(self._cache_path, parent_folder, map_info.map_json)
         try:
