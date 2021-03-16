@@ -38,6 +38,7 @@ class Graph:
         self.vertices = vertices
         self.weights = weights
         self.gravity_axis = gravity_axis
+        self.basis_matrices = {}
         self.generate_basis_matrices()
 
         self.g2o_status = -1
@@ -53,8 +54,6 @@ class Graph:
         self.use_huber = use_huber
         self.huber_delta = huber_delta
         self.update_edges()
-
-        self.basis_matrices = {}
 
     def generate_basis_matrices(self):
         """Generate basis matrices used to show how a change in global yaw changes the values of a local measurement.
