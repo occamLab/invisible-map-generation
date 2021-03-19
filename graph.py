@@ -92,31 +92,43 @@ class Graph:
             graph: A g2o.SparseOptimizer object
 
         Returns:
-            Sum of the chi2 values along the edges
+            Sum of the chi2 values associated with each edge
+        """
+        total_chi2 = 0.0
+        for edge in graph.edges():
+            total_chi2 += Graph.get_chi2_of_edge(edge)
+        print("total chi2", total_chi2)
+        return total_chi2
+
+    @staticmethod
+    def get_chi2_of_edge(edge: Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]) -> float:
+        """Computes the chi2 value associated with the provided edge
+
+        Arguments:
+            edge (Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]): A g2o edge
+
+        Returns:
+            Chi2 value associated with the provided edge
 
         Raises:
             Exception if an edge is encountered that is not handled (handled edges are g2o.EdgeProjectPSI2UV,
             g2o.EdgeSE3Expmap, and g2o.EdgeSE3)
         """
-        total_chi2 = 0.0
-        for edge in graph.edges():
-            if type(edge) == g2o.EdgeProjectPSI2UV:
-                cam = edge.parameter(0)
-                error = edge.measurement() - cam.cam_map(
-                    edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
-                error_chi2 = error.dot(edge.information()).dot(error)
-            elif type(edge) == g2o.EdgeSE3Expmap:
-                error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
-                error_chi2 = error.log().T.dot(edge.information()).dot(error.log())
-            elif type(edge) == g2o.EdgeSE3:
-                delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
-                error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
-                error_chi2 = error.dot(edge.information()).dot(error)
-            else:
-                raise Exception("Unhandled edge type for chi2 calculation")
-            total_chi2 += error_chi2
-        print("total chi2", total_chi2)
-        return total_chi2
+        error_chi2: float
+        if isinstance(edge, g2o.EdgeProjectPSI2UV):
+            cam = edge.parameter(0)
+            error = edge.measurement() - cam.cam_map(
+                edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
+            return error.dot(edge.information()).dot(error)
+        elif isinstance(edge, g2o.EdgeSE3Expmap):
+            error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
+            return error.log().T.dot(edge.information()).dot(error.log())
+        elif isinstance(edge, g2o.EdgeSE3):
+            delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
+            error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
+            return error.dot(edge.information()).dot(error)
+        else:
+            raise Exception("Unhandled edge type for chi2 calculation")
 
     def optimize_graph(self) -> float:
         """Optimize the graph using g2o.
@@ -141,6 +153,8 @@ class Graph:
     def graph_to_optimizer(self) -> g2o.SparseOptimizer:
         """Convert a :class: graph to a :class: g2o.SparseOptimizer.  Only the edges and vertices fields need to be
         filled out.
+
+        Vertices' ids in the resulting g2o.SparseOptimizer match their UIDs in the self.vertices attribute.
 
         Returns:
             A :class: g2o.SparseOptimizer that can be optimized via its optimize class method.
