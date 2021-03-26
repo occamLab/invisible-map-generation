@@ -258,6 +258,24 @@ class Graph:
         return optimizer
 
     def delete_tag_vertex(self, vertex_uid: int):
+        """Deletes a tag vertex from relevant attributes.
+
+        Deletes the tag vertex from the following instance attributes:
+        - `verts_to_edges`
+        - `vertices`
+
+        All incident edges to the vertex are deleted from the following instance attributes:
+        - `edges`
+        - `our_edges_to_g2o_edges`
+
+        No edges or vertices are modified in either of the attributes that are g2o graphs.
+
+        Arguments:
+            vertex_uid (int): UID of vertex to delete which must be of a VertexType.TAG type.
+
+        Raises:
+            Exception if the specified vertex to delete is not of a VertexType.TAG type.
+        """
         if self.vertices[vertex_uid] != VertexType.TAG:
             raise Exception("Specified vertex for deletion is not a tag vertex")
 
@@ -265,6 +283,7 @@ class Graph:
         connected_edges = self.verts_to_edges[vertex_uid]
         for edge_uid in connected_edges:
             self.edges.__delitem__(edge_uid)
+            self.our_edges_to_g2o_edges.__delitem__(edge_uid)
 
         # Delete vertex
         self.verts_to_edges.__delitem__(vertex_uid)
