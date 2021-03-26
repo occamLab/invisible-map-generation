@@ -38,6 +38,7 @@ from varname import nameof
 import convert_json_sba
 import graph_utils
 from graph import Graph
+from json import tool
 
 
 class GraphManager:
@@ -326,7 +327,7 @@ class GraphManager:
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
             json_string = json.loads(json_data)
-            self._cache_map(GraphManager._unprocessed_listen_to, map_info, json.dumps(json_string))
+            self._cache_map(GraphManager._unprocessed_listen_to, map_info, json.dumps(json_string, indent=2))
             return True
         else:
             print("Map '{}' was missing".format(map_info.map_name))
@@ -368,7 +369,7 @@ class GraphManager:
             directory_json = json.loads(directory_file_read.read())
             directory_file_read.close()
         directory_json[key] = value
-        new_directory_json = json.dumps(directory_json)
+        new_directory_json = json.dumps(directory_json, indent=2)
         with open(directory_json_path, "w") as directory_file_write:
             directory_file_write.write(new_directory_json)
             directory_file_write.close()
@@ -724,7 +725,7 @@ class GraphManager:
         )
         return json.dumps({'tag_vertices': list(tag_vertex_map),
                            'odometry_vertices': list(odom_vertex_map),
-                           'waypoints_vertices': list(waypoint_vertex_map)})
+                           'waypoints_vertices': list(waypoint_vertex_map)}, indent=2)
 
 
 def make_parser():
