@@ -358,7 +358,7 @@ class Graph:
                 raise Exception('Edge of start type {} not recognized.'.format(start_mode))
 
     def update_vertices(self) -> None:
-        """Update the initial vertices elements with the optimized graph values.
+        """Update the vertices' estimate attributes with the optimized graph values' estimates.
         """
         for uid in self.optimized_graph.vertices():
             if self.is_sparse_bundle_adjustment:
@@ -488,6 +488,8 @@ class Graph:
         return ret_graph
 
     def get_tag_verts(self):
+        """Return a list of of the tag vertices
+        """
         tag_verts = []
         for vertex in self.vertices:
             if self.vertices[vertex].mode == VertexType.TAG:
@@ -555,7 +557,7 @@ class Graph:
         """Run one cycle of expectation maximization.
 
         It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
-        optimizes the graph.  Using the errors, it tunes the weights so that the variances maximize the likelihood of
+        optimizes the graph. Using the errors, it tunes the weights so that the variances maximize the likelihood of
         each error by type.
         """
         self.generate_unoptimized_graph()
