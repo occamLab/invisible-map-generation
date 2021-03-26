@@ -187,7 +187,7 @@ class GraphManager:
             if missing_vertex_count > 0:
                 print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
                       "{} ignored)".format(missing_vertex_count, "vertices" if missing_vertex_count > 1 else
-                "vertex", "these were" if missing_vertex_count > 1 else "this was"))
+                                           "vertex", "these were" if missing_vertex_count > 1 else "this was"))
 
             # Check whether there are any tag vertices present in graph2_subgraph that are not present in the
             # graph1_subgraph; for each occurrence of this, delete the vertex from graph2_subgraph. After check is
@@ -368,7 +368,7 @@ class GraphManager:
             return directory_json[key]
 
     def _cache_map(self, parent_folder: str, map_info: GraphManager.MapInfo, json_string: str, file_suffix: Union[
-        str, None] = None) -> bool:
+                   str, None] = None) -> bool:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
@@ -475,59 +475,96 @@ class GraphManager:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key:
-    Union[bool, str] = None, plot_title: Union[str, None] = None) -> \
+    def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
+                        Union[None, str] = None, plot_title: Union[str, None] = None) -> \
             Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray]:
-        """Map optimization routine.
+        """Optimizes the input graph
 
-        TODO: more detailed documentation
+        Arguments:
+            graph (Graph): A graph instance to optimize. The following methods of this instance are (possibly) called:
+             update_edges, generate_unoptimized_graph, get_tags_all_position_estimate, expectation_maximization_once,
+             generate_unoptimized_graph, and optimize_graph. Additionally, the `weights` attribute of this instance is
+             set.
+            tune_weights (bool): A boolean for whether `expectation_maximization_once` is called on the graph instance.
+            visualize (bool): A boolean for whether the `visualize` static method of this class is called.
+            weights_key (str or None): Specifies the weight vector to set the `weights` attribute of the graph
+             instance to from one of the weight vectors in `GraphManager._weights_dict`. If weights_key is None,
+             then the weight vector corresponding to `self._selected_weights` is selected; otherwise, the weights_key
+             selects the weight vector from the dictionary.
+            plot_title (str or None): Plot title argument to pass to the visualization routine.
+
+        Returns:
+            A tuple containing:
+            - The numpy array of tag vertices from the optimized graph
+            - The numpy array of odometry vertices from the optimized graph
+            - The numpy array of waypoint vertices from the optimized graph
+            - The total chi2 value of the optimized graph as returned by the `optimize_graph` method of the `graph`
+              instance.
+            - A vector numpy array where each element corresponds to the chi2 value for each odometry node; each chi2
+              value is calculated as the sum of chi2 values of the (up to) two incident edges to the odometry node
+              that connects it to (up to) two other odometry nodes.
         """
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-        self._selected_weights]
+                                                   self._selected_weights]
 
         # Load these weights into the graph
         graph.update_edges()
         graph.generate_unoptimized_graph()
 
         # Commented out: unused
-        # all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+        # all_tags_original = graph.get_tags_all_position_estimate()
 
-        starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
-                                                    is_sparse_bundle_adjustment=True)
+        starting_map = graph_utils.optimizer_to_map(
+            graph.vertices, graph.unoptimized_graph,
+            is_sparse_bundle_adjustment=True
+        )
         original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags'])
+
         if tune_weights:
             graph.expectation_maximization_once()
             print("tuned weights", graph.weights)
-
         # Create the g2o object and optimize
         graph.generate_unoptimized_graph()
-        opt_chi_sqr = graph.optimize_graph()
+        opt_chi2 = graph.optimize_graph()
 
         # Change vertex estimates based off the optimized graph
         graph.update_vertices()
 
-        prior_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph)
-        resulting_map: Dict[str, Union[List, np.ndarray]] = \
-            graph_utils.optimizer_to_map(graph.vertices, graph.optimized_graph, is_sparse_bundle_adjustment=True)
-        prior_locations: np.ndarray = graph_utils.locations_from_transforms(prior_map['locations'])
-        locations: np.ndarray = graph_utils.locations_from_transforms(resulting_map['locations'])
+        prior_map = graph_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
+        resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
+                                                          is_sparse_bundle_adjustment=True)
         odom_chi2_adj_vec: np.ndarray = resulting_map['locationsAdjChi2']
 
-        # Refer to this to get the positions of the optimized graph
-        tag_verts: np.ndarray = graph_utils.locations_from_transforms(resulting_map['tags'])
-        tagpoint_positions: np.ndarray = resulting_map['tagpoints']
-        waypoint_verts: Tuple[List, np.ndarray] = tuple(resulting_map['waypoints'])
+        prior_locations = graph_utils.locations_from_transforms(prior_map['locations'])
+        locations = graph_utils.locations_from_transforms(resulting_map['locations'])
+        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
+        tagpoint_positions = resulting_map['tagpoints']
+        waypoint_verts = resulting_map['waypoints']
 
         if visualize:
-            GraphManager.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                                   original_tag_verts, plot_title)
-        return tag_verts, locations, waypoint_verts, opt_chi_sqr, odom_chi2_adj_vec
+            self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
+                           original_tag_verts, plot_title)
+
+        return tag_verts, locations, waypoint_verts, opt_chi2, odom_chi2_adj_vec
 
     # -- Static Methods --
 
     @staticmethod
-    def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions:
-    np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray]
+    def plot_adj_chi2(map_from_opt):
+        uids_chi2_comb = []
+        for idx, uid in enumerate(map_from_opt['uids']):
+            uids_chi2_comb.append((uid, map_from_opt['locationsAdjChi2'][idx]))
+
+        uids_chi2_comb.sort(key=lambda x: x[0])
+        y_axis = np.zeros(np.shape(map_from_opt['locationsAdjChi2']))
+        for idx in range(len(uids_chi2_comb)):
+            y_axis[idx] = uids_chi2_comb[idx][1]
+
+        plt.plot(sorted(map_from_opt['uids']), y_axis)
+
+    @staticmethod
+    def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
+                  np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray] \
                   = None, plot_title: Union[str, None] = None) -> None:
         """Visualization used during the optimization routine.
         """
@@ -569,7 +606,7 @@ class GraphManager:
         #          label='All Tag Edges Original')
 
         # Commented-out: unused
-        # all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+        # all_tags = graph_utils.get_tags_all_position_estimate(graph)
         # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
 
         tag_vertex_shift = original_tag_verts - tag_verts
@@ -590,11 +627,11 @@ class GraphManager:
         max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
                               axis_range_from_limits(ax.get_zlim())]).max()
         Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
-             (ax.get_xlim()[1] + ax.get_xlim()[0])
+            (ax.get_xlim()[1] + ax.get_xlim()[0])
         Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
-             (ax.get_ylim()[1] + ax.get_ylim()[0])
+            (ax.get_ylim()[1] + ax.get_ylim()[0])
         Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * \
-             (ax.get_zlim()[1] + ax.get_zlim()[0])
+            (ax.get_zlim()[1] + ax.get_zlim()[0])
 
         # Comment or uncomment following both lines to test the fake bounding box:
         for xb, yb, zb in zip(Xb, Yb, Zb):
@@ -608,7 +645,7 @@ class GraphManager:
 
     @staticmethod
     def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray, waypoint_locations: Tuple[
-        List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None):
+                                List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None) -> str:
         tag_vertex_map = map(
             lambda curr_tag: {
                 'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
