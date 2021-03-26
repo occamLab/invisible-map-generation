@@ -39,14 +39,19 @@ class Graph:
 
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
         self.edges: Dict[int, Edge] = edges
-        self.verts_to_edges: Dict[int, List[int]] = {}
-        self.basis_matrices = {}
-        self.generate_verts_to_edges_mapping()
-
         self.vertices: Dict[int, Vertex] = vertices
         self.original_vertices = vertices
+
+        self.verts_to_edges: Dict[int, List[int]] = {}
+        self.generate_verts_to_edges_mapping()
+
+        # This is populated in graph_to_optimizer and is currently no updated anywhere else
+        self.our_edges_to_g2o_edges: Dict[int, Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]] = {}
+
         self.weights: np.ndarray = weights
         self.gravity_axis: str = gravity_axis
+
+        self.basis_matrices = {}
         self.generate_basis_matrices()
 
         self.g2o_status = -1
@@ -63,7 +68,6 @@ class Graph:
         self.huber_delta: bool = huber_delta
         self.update_edges()
 
-
     # -- Optimization-related methods --
 
     def generate_unoptimized_graph(self) -> None:
@@ -74,7 +78,8 @@ class Graph:
         self.unoptimized_graph = self.graph_to_optimizer()
 
     def generate_verts_to_edges_mapping(self) -> None:
-        """Populates the `verts_to_edges` attribute such that it maps vertex UIDs to edge UIDs.
+        """Populates the `verts_to_edges` attribute such that it maps vertex UIDs to incident edge UIDs (regardless
+        of whether the edge is incoming or outgoing).
         """
         for edge_uid in self.edges:
             edge = self.edges[edge_uid]
@@ -130,6 +135,30 @@ class Graph:
         else:
             raise Exception("Unhandled edge type for chi2 calculation")
 
+    def map_odom_to_adj_chi2(self, vertex_uid: int) -> float:
+        """TODO: documentation
+        """
+        if self.vertices[vertex_uid].mode != VertexType.ODOMETRY:
+            raise Exception("Specified vertex type is not an odometry vertex")
+
+        relevant_edges = []
+        for e in self.verts_to_edges[vertex_uid]:
+            edge = self.edges[e]
+            if edge.startuid != vertex_uid and self.vertices[edge.startuid].mode == VertexType.ODOMETRY:
+                    relevant_edges.append(e)
+            else:
+                if self.vertices[edge.enduid].mode == VertexType.ODOMETRY:
+                    relevant_edges.append(e)
+
+        if len(relevant_edges) > 2:
+            raise Exception("Vertex appears to be connected to more than two other odometry vertices")
+
+        adj_chi2 = 0.0
+        for our_edge in relevant_edges:
+            g2o_edge = self.our_edges_to_g2o_edges[our_edge]
+            adj_chi2 += self.get_chi2_of_edge(g2o_edge)
+        return adj_chi2
+
     def optimize_graph(self) -> float:
         """Optimize the graph using g2o.
 
@@ -184,6 +213,7 @@ class Graph:
                         edge.set_measurement(pose_to_se3quat(self.edges[i].measurement))
                         edge.set_information(self.edges[i].information)
                     optimizer.add_edge(edge)
+                    self.our_edges_to_g2o_edges[i] = edge
                 else:
                     # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
                     # (b) it is always the same in ARKit (at least currently)
@@ -203,6 +233,7 @@ class Graph:
                         if self.use_huber:
                             edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
                         optimizer.add_edge(edge)
+                        self.our_edges_to_g2o_edges[i] = edge
                     cam_idx += 1
         else:
             for i in self.vertices:
@@ -223,6 +254,7 @@ class Graph:
                 edge.set_id(i)
 
                 optimizer.add_edge(edge)
+                self.our_edges_to_g2o_edges[i] = edge
         return optimizer
 
     def delete_tag_vertex(self, vertex_uid: int):
@@ -245,6 +277,7 @@ class Graph:
 
         Raises:
             Exception if an edge is encountered whose start mode is not an odometry node
+            Exception if an edge has an unhandled end node type
         """
         for uid in self.edges:
             edge = self.edges[uid]
@@ -382,24 +415,24 @@ class Graph:
         return tags
 
     def get_subgraph(self, start_vertex_uid, end_vertex_uid) -> Graph:
-        """Returns a graph that is a subgraph created from the specified range of vertices
+        """Returns a Graph instance that is a subgraph created from the specified range of vertices
 
         Args:
             start_vertex_uid: First vertex in range of vertices from which to create a subgraph
             end_vertex_uid: Last vertex in range of vertices from which to create a subgraph
         """
-        edges = self.get_ordered_odometry_edges()
         start_found = False
-        ret_graph = Graph({}, {})
-        for i, edgeuid in enumerate(edges[0]):
+        edges: Dict[int, Edge] = {}
+        vertices: Dict[int, Vertex] = {}
+        for i, edgeuid in enumerate(self.get_ordered_odometry_edges()[0]):
             edge = self.edges[edgeuid]
             if edge.startuid == start_vertex_uid:
                 start_found = True
 
             if start_found:
-                ret_graph.vertices[edge.enduid] = self.vertices[edge.enduid]
-                ret_graph.vertices[edge.startuid] = self.vertices[edge.startuid]
-                ret_graph.edges[edgeuid] = edge
+                vertices[edge.enduid] = self.vertices[edge.enduid]
+                vertices[edge.startuid] = self.vertices[edge.startuid]
+                edges[edgeuid] = edge
 
             if edge.enduid == end_vertex_uid:
                 break
@@ -407,14 +440,15 @@ class Graph:
         # Find tags and edges connecting to the found vertices
         for edgeuid in self.edges:
             edge = self.edges[edgeuid]
-            if self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in ret_graph.vertices:
-                ret_graph.edges[edgeuid] = edge
-                ret_graph.vertices[edge.startuid] = self.vertices[edge.startuid]
+            if self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in vertices:
+                edges[edgeuid] = edge
+                vertices[edge.startuid] = self.vertices[edge.startuid]
 
-            if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in ret_graph.vertices:
-                ret_graph.edges[edgeuid] = edge
-                ret_graph.vertices[edge.enduid] = self.vertices[edge.enduid]
+            if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in vertices:
+                edges[edgeuid] = edge
+                vertices[edge.enduid] = self.vertices[edge.enduid]
 
+        ret_graph = Graph(vertices, edges)
         return ret_graph
 
     def get_tag_verts(self):
