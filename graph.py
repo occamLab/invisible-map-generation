@@ -151,9 +151,9 @@ class Graph:
             there is only one such incident edge, then only that edge's chi2 value is returned.
 
         Raises:
-             ValueError if `vertex_uid` does not correspond to an odometry node.
-             Exception if there appear to be more than two incident edges that connect the specified node to other
-              odometry nodes.
+            ValueError if `vertex_uid` does not correspond to an odometry node.
+            Exception if there appear to be more than two incident edges that connect the specified node to other
+             odometry nodes.
         """
         if self.vertices[vertex_uid].mode != VertexType.ODOMETRY:
             raise ValueError("Specified vertex type is not an odometry vertex")
