@@ -476,7 +476,8 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-                        Union[None, str] = None, plot_title: Union[str, None] = None) -> \
+                        Union[None, str] = None, graph_plot_title: Union[str, None] = None, chi2_plot_title: \
+                        Union[str, None] = None) -> \
             Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray]:
         """Optimizes the input graph
 
@@ -491,7 +492,7 @@ class GraphManager:
              instance to from one of the weight vectors in `GraphManager._weights_dict`. If weights_key is None,
              then the weight vector corresponding to `self._selected_weights` is selected; otherwise, the weights_key
              selects the weight vector from the dictionary.
-            plot_title (str or None): Plot title argument to pass to the visualization routine.
+            graph_plot_title (str or None): Plot title argument to pass to the visualization routine.
 
         Returns:
             A tuple containing:
@@ -543,14 +544,15 @@ class GraphManager:
 
         if visualize:
             self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                           original_tag_verts, plot_title)
+                           original_tag_verts, graph_plot_title)
+            GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, waypoint_verts, opt_chi2, odom_chi2_adj_vec
 
     # -- Static Methods --
 
     @staticmethod
-    def plot_adj_chi2(map_from_opt):
+    def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
         uids_chi2_comb = []
         for idx, uid in enumerate(map_from_opt['uids']):
             uids_chi2_comb.append((uid, map_from_opt['locationsAdjChi2'][idx]))
@@ -561,6 +563,8 @@ class GraphManager:
             y_axis[idx] = uids_chi2_comb[idx][1]
 
         plt.plot(sorted(map_from_opt['uids']), y_axis)
+        if plot_title is not None:
+            plt.title()
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
