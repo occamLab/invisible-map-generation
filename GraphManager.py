@@ -142,6 +142,7 @@ class GraphManager:
            number of instances where this is not true is tallied, and warning messages are printed accordingly.
         3. g2sg is then optimized with the self.selected_weights attribute selecting its weights (as opposed to
            g1sg which is optimized using the weights selected by iter_weights)
+        The results of the comparison are then printed.
 
         Args:
             map_info (GraphManager.MapInfo): Map to use for weights comparison
@@ -160,8 +161,15 @@ class GraphManager:
 
             print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(iter_weights))
 
+            g1sg_plot_title = None
+            g1sg_chi2_plot_title = None
+            if visualize:
+                g1sg_plot_title = "Optimization results for 1st sub-graph\n from map: {}".format(map_info.map_name)
+                g1sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 1st sub-graph from  map: {}".format(
+                    map_info.map_name)
+
             tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
-                self._optimize_graph(g1sg, False, visualize, iter_weights)
+                self._optimize_graph(g1sg, False, visualize, iter_weights, g1sg_plot_title, g1sg_chi2_plot_title)
             processed_map_json_1 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
                                                                         waypoint_locations, g1sg_odom_adj_chi2)
 
@@ -203,8 +211,16 @@ class GraphManager:
                       .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
                               "these were" if deleted_vertex_count > 1 else "this was"))
 
+            g2sg_plot_title = None
+            g2sg_chi2_plot_title = None
+            if visualize:
+                g2sg_plot_title = "Optimization results for 2nd sub-graph\n from map: {}".format(map_info.map_name)
+                g2sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 2nd sub-graph from  map: {}".format(
+                    map_info.map_name)
+
             tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr, g2sg_odom_adj_chi2 = \
-                self._optimize_graph(g2sg, False, visualize)
+                self._optimize_graph(g2sg, False, visualize, weights_key=None, graph_plot_title=g2sg_plot_title,
+                                     chi2_plot_title=g2sg_chi2_plot_title)
             processed_map_json_2 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
                                                                         waypoint_locations, g2sg_odom_adj_chi2)
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
@@ -269,8 +285,16 @@ class GraphManager:
                 self.compare_weights(map_info, visualize)
             else:
                 graph = convert_json_sba.as_graph(map_info.map_dct)
+
+                graph_plot_title = None
+                chi2_plot_title = None
+                if visualize:
+                    graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
+                    chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
+
                 tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
-                    self._optimize_graph(graph, False, visualize)
+                    self._optimize_graph(graph, False, visualize, weights_key=None, graph_plot_title=graph_plot_title,
+                                         chi2_plot_title=chi2_plot_title)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
                                                                           waypoint_locations)
                 print("Processed map: {}".format(map_info.map_name))
@@ -563,7 +587,7 @@ class GraphManager:
 
         plt.plot(sorted(map_from_opt['uids']), y_axis)
         if plot_title is not None:
-            plt.title()
+            plt.title(plot_title)
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
