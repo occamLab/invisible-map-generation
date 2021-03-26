@@ -7,7 +7,7 @@ from g2o import SE3Quat, EdgeProjectPSI2UV
 import g2o
 
 
-def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
+def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False):
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
     Args:
@@ -43,10 +43,67 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
                 pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
                 locations = np.vstack([locations, pose])
 
-                # TODO: This is just a placeholder number - need to actually compute/access this value
-                adjChi2Error = 1.0
+            elif mode == VertexType.TAG:
+                pose = np.concatenate([location, rotation, [i]])
+                if is_sparse_bundle_adjustment:
+                    # adjusts tag based on the position of the tag center
+                    pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse() * SE3Quat(vertices[i].estimate)).to_vector()
+                if 'tag_id' in vertices[i].meta_data:
+                    pose[-1] = vertices[i].meta_data['tag_id']
+                tags = np.vstack([tags, pose])
+            elif mode == VertexType.WAYPOINT:
+                pose = np.concatenate([location, rotation, [i]])
+                waypoints = np.vstack([waypoints, pose])
+                waypoint_metadata.append(vertices[i].meta_data)
 
+    # convert to array for sorting
+    locations = np.array(locations)
+    locations = locations[locations[:, -1].argsort()]
+    return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
+            'waypoints': [waypoint_metadata, np.array(waypoints)]}
+
+
+def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False):
+    """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
+
+    Args:
+
+        optimizer: a :class: g2o.SparseOptimizer containing a map.
+        is_sparse_bundle_adjustment: True if the optimizer is based on sparse bundle adjustment and False otherwise.
+
+    Returns:
+        A dictionary with fields 'locations', 'tags', and 'waypoints'. The 'locations' key covers a (n, 8) array
+         containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at n points. The 'tags' and
+        'waypoints' keys cover the locations of the tags and waypoints in the same format.
+    """
+    locations = np.reshape([], [0, 9])
+    locationsAdjChi2 = np.reshape([], [0, 1])
+    tagpoints = np.reshape([], [0, 3])
+    tags = np.reshape([], [0, 8])
+    waypoints = np.reshape([], [0, 8])
+    waypoint_metadata = []
+    exaggerate_tag_corners = True
+    vertices = graph.vertices
+    uids = []
+
+    for i in optimizer.vertices():
+        mode = vertices[i].mode
+        if mode == VertexType.TAGPOINT:
+            location = optimizer.vertex(i).estimate()
+            if exaggerate_tag_corners:
+                location = location * np.array([10, 10, 1])
+            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+            tagpoints = np.vstack((tagpoints, tag_vert.estimate().inverse() * location))
+        else:
+            location = optimizer.vertex(i).estimate().translation()
+            rotation = optimizer.vertex(i).estimate().rotation().coeffs()
+
+            if mode == VertexType.ODOMETRY:
+                pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
+                locations = np.vstack([locations, pose])
+                adjChi2Error = graph.map_odom_to_adj_chi2(i)
                 locationsAdjChi2 = np.vstack([locationsAdjChi2, adjChi2Error])
+                uids.append(i)
 
             elif mode == VertexType.TAG:
                 pose = np.concatenate([location, rotation, [i]])
@@ -65,7 +122,7 @@ def optimizer_to_map(vertices, optimizer, is_sparse_bundle_adjustment=False):
     locations = np.array(locations)
     locations = locations[locations[:, -1].argsort()]
     return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
-            'waypoints': [waypoint_metadata, np.array(waypoints)], 'locationsAdjChi2': locationsAdjChi2}
+            'waypoints': [waypoint_metadata, np.array(waypoints)], 'locationsAdjChi2': locationsAdjChi2, 'uids': uids}
 
 
 def find_connected_tag_vert(optimizer, location_vert):
