@@ -90,11 +90,12 @@ class Graph:
                     self.verts_to_edges[vertex_uid] = [edge_uid,]
 
     @staticmethod
-    def check_optimized_edges(graph: g2o.SparseOptimizer) -> float:
+    def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
         """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.
 
         Args:
             graph: A g2o.SparseOptimizer object
+            verbose (bool): Boolean for whether or not to print the total chi2 value
 
         Returns:
             Sum of the chi2 values associated with each edge
@@ -102,7 +103,10 @@ class Graph:
         total_chi2 = 0.0
         for edge in graph.edges():
             total_chi2 += Graph.get_chi2_of_edge(edge)
-        print("total chi2", total_chi2)
+
+        if verbose:
+            print("Total chi2:", total_chi2)
+
         return total_chi2
 
     @staticmethod
