@@ -117,7 +117,7 @@ class Graph:
 
         Raises:
             Exception if an edge is encountered that is not handled (handled edges are g2o.EdgeProjectPSI2UV,
-            g2o.EdgeSE3Expmap, and g2o.EdgeSE3)
+             g2o.EdgeSE3Expmap, and g2o.EdgeSE3)
         """
         error_chi2: float
         if isinstance(edge, g2o.EdgeProjectPSI2UV):
@@ -136,10 +136,23 @@ class Graph:
             raise Exception("Unhandled edge type for chi2 calculation")
 
     def map_odom_to_adj_chi2(self, vertex_uid: int) -> float:
-        """TODO: documentation
+        """Computes odometry-adjacent chi2 value
+
+        Arguments:
+            vertex_uid (int): Vertex integer corresponding to an odometry node
+
+        Returns:
+            Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_ege`
+            static method) that are incident to both the specified odometry node and two other odometry nodes. If
+            there is only one such incident edge, then only that edge's chi2 value is returned.
+
+        Raises:
+             ValueError if `vertex_uid` does not correspond to an odometry node.
+             Exception if there appear to be more than two incident edges that connect the specified node to other
+              odometry nodes.
         """
         if self.vertices[vertex_uid].mode != VertexType.ODOMETRY:
-            raise Exception("Specified vertex type is not an odometry vertex")
+            raise ValueError("Specified vertex type is not an odometry vertex")
 
         relevant_edges = []
         for e in self.verts_to_edges[vertex_uid]:
