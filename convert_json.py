@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-from graph_utils import matrix2measurement
+from as_graph import matrix2measurement
 import graph
 
 

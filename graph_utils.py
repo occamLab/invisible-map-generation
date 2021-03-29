@@ -5,6 +5,17 @@ from graph_vertex_edge_classes import VertexType
 from scipy.spatial.transform import Rotation as R
 from g2o import SE3Quat, EdgeProjectPSI2UV, Quaternion
 import g2o
+import itertools
+from collections import defaultdict
+
+
+# The camera axis used to get tag measurements are flipped  relative to the phone frame used for odom measurements
+camera_to_odom_transform = np.array([
+    [1,  0,  0,  0],
+    [0, -1,  0,  0],
+    [0,  0, -1,  0],
+    [0,  0,  0,  1]
+])
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False):
@@ -201,63 +212,3 @@ def locations_from_transforms(locations):
         locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
     return locations
 
-
-def pose2diffs(poses):
-    """Convert an array of poses in the odom frame to an array of
-    transformations from the last pose.
-
-    Args:
-      poses (np.ndarray): Pose or array of poses.
-    Returns:
-      An array of transformations
-    """
-    diffs = []
-    for previous_pose, current_pose in zip(poses[:-1], poses[1:]):
-        diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
-    diffs = np.array(diffs)
-    return diffs
-
-
-def matrix2measurement(pose, invert=False):
-    """Convert a pose or array of poses in matrix form to [x, y, z,
-    qx, qy, qz, qw].
-
-    The output will have one fewer dimension than the input.
-
-    Args:
-      pose (np.ndarray): Pose or array of poses in matrix form.
-        The poses are converted along the last two axes.
-    Returns:
-      Converted pose or array of poses.
-    """
-    translation = pose[..., :3, 3]
-    rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
-    ret_val = np.concatenate([translation, rotation], axis=-1)
-    if invert:
-        ret_val = np.vstack(list(map(lambda measurement: SE3Quat(measurement).inverse().to_vector(), ret_val)))
-    return ret_val
-
-
-def se3_quat_average(transforms):
-    """
-    TODO: documentation
-    """
-    translation_average = sum([t.translation() / len(transforms) for t in transforms])
-    epsilons = np.ones(len(transforms), )
-    converged = False
-    while not converged:
-        quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) \
-                       * epsilons[idx] for idx, t in enumerate(transforms))
-        quat_average = quat_sum / np.linalg.norm(quat_sum)
-        same_epsilon = [np.linalg.norm(epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
-                                                                 t.orientation().z(), t.orientation().w()]) - \
-                                       quat_average) for idx, t in enumerate(transforms)]
-        swap_epsilon = [np.linalg.norm(-epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
-                                                                  t.orientation().z(), t.orientation().w()]) - \
-                                       quat_average) for idx, t in enumerate(transforms)]
-
-        change_mask = np.greater(same_epsilon, swap_epsilon)
-        epsilons[change_mask] = -epsilons[change_mask]
-        converged = not np.any(change_mask)
-    average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
-    return SE3Quat(average_as_quat, translation_average)

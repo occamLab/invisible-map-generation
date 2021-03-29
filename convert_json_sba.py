@@ -1,8 +1,8 @@
 import itertools
 from collections import defaultdict
 import numpy as np
-from g2o import SE3Quat, CameraParameters, Quaternion
-from graph_utils import matrix2measurement, se3_quat_average
+from g2o import SE3Quat, CameraParameters
+from as_graph import matrix2measurement, se3_quat_average
 import graph
 
 
@@ -222,10 +222,10 @@ def as_graph(dct, fix_tag_vertices=False):
         edge_counter += 1
 
         previous_vertex = current_odom_vertex_uid
-
     if initialize_with_averages:
         for vertex_id, transforms in tag_transform_estimates.items():
             vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
+
 
     # TODO: Huber delta should probably scale with pixels rather than error
     resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True, use_huber=False,
