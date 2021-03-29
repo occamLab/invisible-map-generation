@@ -6,22 +6,6 @@ from scipy.spatial.transform import Rotation as R
 import graph
 
 
-def pose2diffs(poses):
-    """Convert an array of poses in the odom frame to an array of
-    transformations from the last pose.
-
-    Args:
-      poses (np.ndarray): Pose or array of poses.
-    Returns:
-      An array of transformations
-    """
-    diffs = []
-    for previous_pose, current_pose in zip(poses[:-1], poses[1:]):
-        diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
-    diffs = np.array(diffs)
-    return diffs
-
-
 def matrix2measurement(pose, invert=False):
     """ Convert a pose or array of poses in matrix form to [x, y, z,
     qx, qy, qz, qw].

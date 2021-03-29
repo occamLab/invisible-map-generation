@@ -200,3 +200,19 @@ def locations_from_transforms(locations):
     for i in range(locations.shape[0]):
         locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
     return locations
+
+
+def pose2diffs(poses):
+    """Convert an array of poses in the odom frame to an array of
+    transformations from the last pose.
+
+    Args:
+      poses (np.ndarray): Pose or array of poses.
+    Returns:
+      An array of transformations
+    """
+    diffs = []
+    for previous_pose, current_pose in zip(poses[:-1], poses[1:]):
+        diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
+    diffs = np.array(diffs)
+    return diffs
