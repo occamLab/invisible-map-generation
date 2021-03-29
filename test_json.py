@@ -35,7 +35,7 @@ tag_verts = resulting_map['tags']
 # tag_verts = 
 # tags = resulting_map['tags']
 
-edges = test_graph.ordered_odometry_edges()[0]
+edges = test_graph.get_ordered_odometry_edges()[0]
 path = test_graph.integrate_path(edges, [
     2.38298111e+01,  6.18518412e-01, - 2.23812237e+01,
     -1.15648886e-02, 1.37184479e-01,  7.07669616e-01, -6.93001000e-01

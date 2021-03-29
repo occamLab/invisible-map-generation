@@ -2,6 +2,6 @@ numpy~=1.20.0
 scipy~=1.6.0
 matplotlib~=3.3.4
 firebase-admin
-setuptools==54.1.0
+setuptools==54.1.1
 rospkg~=1.2.9
 varname~=0.6.2
