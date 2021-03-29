@@ -2,28 +2,8 @@ import itertools
 from collections import defaultdict
 import numpy as np
 from g2o import SE3Quat, CameraParameters, Quaternion
-from scipy.spatial.transform import Rotation as R
+from graph_utils import matrix2measurement
 import graph
-
-
-def matrix2measurement(pose, invert=False):
-    """ Convert a pose or array of poses in matrix form to [x, y, z,
-    qx, qy, qz, qw].
-
-    The output will have one fewer dimension than the input.
-
-    Args:
-      pose (np.ndarray): Pose or array of poses in matrix form.
-        The poses are converted along the last two axes.
-    Returns:
-      Converted pose or array of poses.
-    """
-    translation = pose[..., :3, 3]
-    rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
-    ret_val = np.concatenate([translation, rotation], axis=-1)
-    if invert:
-        ret_val = np.vstack(list(map(lambda measurement: SE3Quat(measurement).inverse().to_vector(), ret_val)))
-    return ret_val
 
 
 def se3_quat_average(transforms):

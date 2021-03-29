@@ -1,26 +1,7 @@
 import itertools
-
 import numpy as np
-from scipy.spatial.transform import Rotation as R
-
+from graph_utils import matrix2measurement
 import graph
-
-
-def matrix2measurement(pose):
-    """ Convert a pose or array of poses in matrix form to [x, y, z,
-    qx, qy, qz, qw].
-
-    The output will have one fewer dimension than the input.
-
-    Args:
-      pose (np.ndarray): Pose or array of poses in matrix form.
-        The poses are converted along the last two axes.
-    Returns:
-      Converted pose or array of poses.
-    """
-    translation = pose[..., :3, 3]
-    rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
-    return np.concatenate([translation, rotation], axis=-1)
 
 
 def as_graph(dct):

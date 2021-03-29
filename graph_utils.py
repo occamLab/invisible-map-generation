@@ -216,3 +216,23 @@ def pose2diffs(poses):
         diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
     diffs = np.array(diffs)
     return diffs
+
+
+def matrix2measurement(pose, invert=False):
+    """Convert a pose or array of poses in matrix form to [x, y, z,
+    qx, qy, qz, qw].
+
+    The output will have one fewer dimension than the input.
+
+    Args:
+      pose (np.ndarray): Pose or array of poses in matrix form.
+        The poses are converted along the last two axes.
+    Returns:
+      Converted pose or array of poses.
+    """
+    translation = pose[..., :3, 3]
+    rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
+    ret_val = np.concatenate([translation, rotation], axis=-1)
+    if invert:
+        ret_val = np.vstack(list(map(lambda measurement: SE3Quat(measurement).inverse().to_vector(), ret_val)))
+    return ret_val
