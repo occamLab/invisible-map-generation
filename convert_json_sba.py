@@ -1,9 +1,10 @@
-import numpy as np
-from scipy.spatial.transform import Rotation as R
-from g2o import SE3Quat, CameraParameters, Quaternion
-import graph
 import itertools
 from collections import defaultdict
+import numpy as np
+from g2o import SE3Quat, CameraParameters, Quaternion
+from scipy.spatial.transform import Rotation as R
+import graph
+
 
 def pose2diffs(poses):
     """Convert an array of poses in the odom frame to an array of
@@ -40,20 +41,28 @@ def matrix2measurement(pose, invert=False):
         ret_val = np.vstack(list(map(lambda measurement: SE3Quat(measurement).inverse().to_vector(), ret_val)))
     return ret_val
 
+
 def se3_quat_average(transforms):
-    translation_average = sum([t.translation()/len(transforms) for t in transforms])
-    epsilons = np.ones(len(transforms),)
+    translation_average = sum([t.translation() / len(transforms) for t in transforms])
+    epsilons = np.ones(len(transforms), )
     converged = False
     while not converged:
-        quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) * epsilons[idx] for idx, t in enumerate(transforms))
-        quat_average = quat_sum/np.linalg.norm(quat_sum)
-        same_epsilon = [np.linalg.norm(epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) - quat_average) for idx, t in enumerate(transforms)]
-        swap_epsilon = [np.linalg.norm(-epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) - quat_average) for idx, t in enumerate(transforms)]
+        quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) \
+                       * epsilons[idx] for idx, t in enumerate(transforms))
+        quat_average = quat_sum / np.linalg.norm(quat_sum)
+        same_epsilon = [np.linalg.norm(epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
+                                                                 t.orientation().z(), t.orientation().w()]) - \
+                                       quat_average) for idx, t in enumerate(transforms)]
+        swap_epsilon = [np.linalg.norm(-epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
+                                                                  t.orientation().z(), t.orientation().w()]) - \
+                                       quat_average) for idx, t in enumerate(transforms)]
+
         change_mask = np.greater(same_epsilon, swap_epsilon)
         epsilons[change_mask] = -epsilons[change_mask]
         converged = not np.any(change_mask)
     average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
     return SE3Quat(average_as_quat, translation_average)
+
 
 def as_graph(dct, fix_tag_vertices=False):
     """Convert a dictionary decoded from JSON into a graph.
@@ -68,7 +77,7 @@ def as_graph(dct, fix_tag_vertices=False):
         pose_data = np.zeros((0, 18))
     pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=True)
-    tag_size = 0.173             # TODO: need to send this with the tag detection
+    tag_size = 0.173  # TODO: need to send this with the tag detection
     true_3d_points = np.array(
         [[-tag_size / 2, -tag_size / 2, 1], [tag_size / 2, -tag_size / 2, 1], [tag_size / 2, tag_size / 2, 1],
          [-tag_size / 2, tag_size / 2, 1]])
@@ -84,26 +93,33 @@ def as_graph(dct, fix_tag_vertices=False):
     # flatten the data into individual numpy arrays that we can operate on
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
         tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
-        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
+        camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in \
+                                               dct['tag_data']])
+        tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in \
+                                 dct['tag_data']])
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in \
+                                                   dct['tag_data']])))
+        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in \
+                                                    dct['tag_data']])))
     else:
-        tag_pose_flat = np.zeros((0,16))
+        tag_pose_flat = np.zeros((0, 16))
         camera_intrinsics_for_tag = np.zeros((0, 4))
         tag_corners = np.zeros((0, 8))
-        tag_ids = np.zeros((0,1), dtype=np.int)
-        pose_ids = np.zeros((0,1), dtype=np.int)
+        tag_ids = np.zeros((0, 1), dtype=np.int)
+        pose_ids = np.zeros((0, 1), dtype=np.int)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
-    # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of orientation
+    # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of
+    # orientation
     unique_tag_ids = np.unique(tag_ids)
     tag_vertex_id_by_tag_id = dict(
-        zip(unique_tag_ids, range(0,unique_tag_ids.size*5, 5)))
+        zip(unique_tag_ids, range(0, unique_tag_ids.size * 5, 5)))
     tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
-    tag_corner_ids_by_tag_vertex_id = dict(zip(tag_id_by_tag_vertex_id.keys(), map(lambda tag_vertex_id: list(range(tag_vertex_id+1,tag_vertex_id+5)), tag_id_by_tag_vertex_id.keys())))
+    tag_corner_ids_by_tag_vertex_id = dict(
+        zip(tag_id_by_tag_vertex_id.keys(), map(lambda tag_vertex_id: list(range(tag_vertex_id + 1, tag_vertex_id + 5)),
+                                                tag_id_by_tag_vertex_id.keys())))
 
     # Enable lookup of tags by the frame they appear in
     tag_vertex_id_and_index_by_frame_id = {}
@@ -121,12 +137,13 @@ def as_graph(dct, fix_tag_vertices=False):
     if waypoint_list_uniform:
         waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
     else:
-        waypoint_data_uniform = np.zeros((0,18))
+        waypoint_data_uniform = np.zeros((0, 18))
     waypoint_edge_measurements_matrix = waypoint_data_uniform[:, :16].reshape(-1, 4, 4)
     waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
 
     waypoint_vertex_id_by_name = dict(
-        zip(unique_waypoint_names, range(unique_tag_ids.size*5, unique_tag_ids.size*5 + unique_waypoint_names.size)))
+        zip(unique_waypoint_names,
+            range(unique_tag_ids.size * 5, unique_tag_ids.size * 5 + unique_waypoint_names.size)))
     waypoint_name_by_vertex_id = dict(zip(waypoint_vertex_id_by_name.values(), waypoint_vertex_id_by_name.keys()))
     # Enable lookup of waypoints by the frame they appear in
     waypoint_vertex_id_and_index_by_frame_id = {}
@@ -141,7 +158,7 @@ def as_graph(dct, fix_tag_vertices=False):
     # Construct the dictionaries of vertices and edges
     vertices = {}
     edges = {}
-    vertex_counter = unique_tag_ids.size*5 + unique_waypoint_names.size
+    vertex_counter = unique_tag_ids.size * 5 + unique_waypoint_names.size
     edge_counter = 0
 
     previous_vertex = None
@@ -166,7 +183,8 @@ def as_graph(dct, fix_tag_vertices=False):
         vertex_counter += 1
         # Connect odom to tag vertex
         for tag_vertex_id, tag_index in tag_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
-            current_tag_transform_estimate = SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1])))*SE3Quat(tag_edge_measurements[tag_index]).inverse()*SE3Quat(vertices[current_odom_vertex_uid].estimate)
+            current_tag_transform_estimate = SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * SE3Quat(
+                tag_edge_measurements[tag_index]).inverse() * SE3Quat(vertices[current_odom_vertex_uid].estimate)
             # keep track of estimates in case we want to average them to initialize the graph
             tag_transform_estimates[tag_vertex_id].append(current_tag_transform_estimate)
             if tag_vertex_id not in counted_tag_vertex_ids:
@@ -183,13 +201,16 @@ def as_graph(dct, fix_tag_vertices=False):
                         fixed=True
                     )
                 counted_tag_vertex_ids.add(tag_vertex_id)
-            # adjust the x-coordinates of the detections to account for differences in coordinate systems induced by the camera_to_odom_transform
+            # adjust the x-coordinates of the detections to account for differences in coordinate systems induced by
+            # the camera_to_odom_transform
             tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - tag_corners[tag_index][::2]
             # TODO: create proper subclasses
             for k, point in enumerate(true_3d_points):
                 point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * (point - np.array([0, 0, 1]))
-                cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0], camera_intrinsics_for_tag[tag_index][2:], 0)
-                #print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] - cam.cam_map(point_in_camera_frame))))
+                cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0],
+                                       camera_intrinsics_for_tag[tag_index][2:], 0)
+                # print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] -
+                #                                cam.cam_map(point_in_camera_frame))))
             edges[edge_counter] = graph.Edge(
                 startuid=current_odom_vertex_uid,
                 enduid=tag_vertex_id,
@@ -208,7 +229,8 @@ def as_graph(dct, fix_tag_vertices=False):
             if waypoint_vertex_id not in counted_waypoint_vertex_ids:
                 vertices[waypoint_vertex_id] = graph.Vertex(
                     mode=graph.VertexType.WAYPOINT,
-                    estimate=(SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse()*SE3Quat(waypoint_edge_measurements[waypoint_index])).to_vector(),
+                    estimate=(SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse() * SE3Quat(
+                        waypoint_edge_measurements[waypoint_index])).to_vector(),
                     fixed=False
                 )
                 vertices[waypoint_vertex_id].meta_data['name'] = waypoint_name_by_vertex_id[waypoint_vertex_id]
@@ -221,7 +243,8 @@ def as_graph(dct, fix_tag_vertices=False):
                 information=np.eye(6),
                 information_prescaling=None,
                 camera_intrinsics=None,
-                measurement = (SE3Quat(vertices[waypoint_vertex_id].estimate) * SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
+                measurement=(SE3Quat(vertices[waypoint_vertex_id].estimate) * SE3Quat(
+                    vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
             )
 
             edge_counter += 1
@@ -235,13 +258,14 @@ def as_graph(dct, fix_tag_vertices=False):
                 information=np.eye(6),
                 information_prescaling=None,
                 camera_intrinsics=None,
-                measurement=(SE3Quat(vertices[current_odom_vertex_uid].estimate)*SE3Quat(vertices[previous_vertex].estimate).inverse()).to_vector()
+                measurement=(SE3Quat(vertices[current_odom_vertex_uid].estimate) * SE3Quat(
+                    vertices[previous_vertex].estimate).inverse()).to_vector()
             )
             edge_counter += 1
         dummy_node_uid = vertex_counter
         vertices[dummy_node_uid] = graph.Vertex(
             mode=graph.VertexType.DUMMY,
-            estimate=np.hstack((np.zeros(3,),odom_vertex_estimates[i][3:])),
+            estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
             fixed=True
         )
         vertex_counter += 1
@@ -263,5 +287,6 @@ def as_graph(dct, fix_tag_vertices=False):
             vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
 
     # TODO: Huber delta should probably scale with pixels rather than error
-    resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True, use_huber=False, huber_delta=None, damping_status=True)
+    resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True, use_huber=False,
+                                  huber_delta=None, damping_status=True)
     return resulting_graph

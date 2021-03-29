@@ -1,6 +1,7 @@
+import itertools
+
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-import itertools
 
 import graph
 
@@ -60,33 +61,43 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
+
     # flatten the data into individual numpy arrays that we can operate on
     if 'tag_data' in dct:
         tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
-        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])))
-        tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
-        tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in \
+                                                   dct['tag_data']])))
+        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in \
+                                                    dct['tag_data']])))
+        tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
+                                     dct['tag_data']])
+        tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in \
+                                            dct['tag_data']])
+        tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
+                                               in dct['tag_data']])
     else:
-        tag_pose_flat = np.zeros((0,16))
-        tag_ids = np.zeros((0,1), type=np.int)
-        pose_ids = np.zeros((0,1), type=np.int)
-        tag_joint_covar = np.zeros((0,49), type=np.double)
-        tag_position_variances = np.zeros((0,3), type=np.double)
-        tag_orientation_variances = np.zeros((0,4), type=np.double)
+        tag_pose_flat = np.zeros((0, 16))
+        tag_ids = np.zeros((0, 1), type=np.int)
+        pose_ids = np.zeros((0, 1), type=np.int)
+        tag_joint_covar = np.zeros((0, 49), type=np.double)
+        tag_position_variances = np.zeros((0, 3), type=np.double)
+        tag_orientation_variances = np.zeros((0, 4), type=np.double)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
-    # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of orientation
+    # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of
+    # orientation
     tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
     # TODO: for some reason we have missing measurements (all zeros).  Throw those out
-    tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1,:-1]) if np.linalg.det(covar[:-1,:-1]) !=0 else np.zeros((6,6)) for covar in tag_joint_covar_matrices])
-    #print("overwriting with diagonal covariances")
-    #tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
-    #print('resetting prescaling to identity')
-    #tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
+    tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) if np.linalg.det(covar[:-1, :-1]) != 0 else \
+                                        np.zeros((6, 6)) for covar in tag_joint_covar_matrices])
+
+    # print("overwriting with diagonal covariances")
+    # tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
+    # print('resetting prescaling to identity')
+    # tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
+
     unique_tag_ids = np.unique(tag_ids)
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(unique_tag_ids.size)))
@@ -108,7 +119,7 @@ def as_graph(dct):
     if waypoint_list_uniform:
         waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
     else:
-        waypoint_data_uniform = np.zeros((0,18))
+        waypoint_data_uniform = np.zeros((0, 18))
     waypoint_edge_measurements_matrix = waypoint_data_uniform[:, :16].reshape(-1, 4, 4)
     waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
 
@@ -215,7 +226,7 @@ def as_graph(dct):
         dummy_node_uid = vertex_counter
         vertices[dummy_node_uid] = graph.Vertex(
             mode=graph.VertexType.DUMMY,
-            estimate=np.hstack((np.zeros(3,),odom_vertex_estimates[i][3:])),
+            estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
             fixed=True
         )
         vertex_counter += 1
