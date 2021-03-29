@@ -586,9 +586,12 @@ class GraphManager:
         for idx in range(len(uids_chi2_comb)):
             y_axis[idx] = uids_chi2_comb[idx][1]
 
-        plt.plot(sorted(map_from_opt['uids']), y_axis)
+        plt.plot(sorted(map_from_opt['uids']), y_axis + 1)
+        plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
             plt.title(plot_title)
+        plt.yscale("log")
+        plt.ylabel("lg(1 + chi2)")
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
