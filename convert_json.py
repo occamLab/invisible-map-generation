@@ -36,21 +36,26 @@ def as_graph(dct):
                                                     dct['tag_data']])))
         tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
                                      dct['tag_data']])
-        tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in \
-                                            dct['tag_data']])
-        tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
-                                               in dct['tag_data']])
+
+        # Commented-out (unused):
+        # tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in \
+        #                                     dct['tag_data']])
+        # tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
+        #                                        in dct['tag_data']])
     else:
         tag_pose_flat = np.zeros((0, 16))
         tag_ids = np.zeros((0, 1), type=np.int)
         pose_ids = np.zeros((0, 1), type=np.int)
         tag_joint_covar = np.zeros((0, 49), type=np.double)
-        tag_position_variances = np.zeros((0, 3), type=np.double)
-        tag_orientation_variances = np.zeros((0, 4), type=np.double)
+
+        # Commented-out (unused):
+        # tag_position_variances = np.zeros((0, 3), type=np.double)
+        # tag_orientation_variances = np.zeros((0, 4), type=np.double)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
+
     # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of
     # orientation
     tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
