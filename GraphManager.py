@@ -574,16 +574,23 @@ class GraphManager:
 
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
-        uids_chi2_comb = []
-        for idx, uid in enumerate(map_from_opt['uids']):
-            uids_chi2_comb.append((uid, map_from_opt['locationsAdjChi2'][idx]))
+        locations_list = []
+        locations_shape = np.shape(map_from_opt["locations"])
 
-        uids_chi2_comb.sort(key=lambda x: x[0])
-        y_axis = np.zeros(np.shape(map_from_opt['locationsAdjChi2']))
-        for idx in range(len(uids_chi2_comb)):
-            y_axis[idx] = uids_chi2_comb[idx][1]
+        for i in range(locations_shape[0]):
+            locations_list.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i]))
 
-        plt.plot(sorted(map_from_opt['uids']), y_axis + 1)
+        locations_list.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
+
+        y_axis = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
+        for idx in range(locations_shape[0]):
+            y_axis[idx] = locations_list[idx][1]
+
+        x_axis = np.zeros([locations_shape[0], 1])  # Contains UIDs
+        for idx in range(locations_shape[0]):
+            x_axis[idx] = locations_list[idx][0][7]
+
+        plt.plot(x_axis, y_axis + 1)
         plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
             plt.title(plot_title)
