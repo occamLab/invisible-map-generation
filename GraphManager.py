@@ -56,7 +56,7 @@ class GraphManager:
          cache location of processed graphs.
         _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
         `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
-        `compare_weights` method is invoked.
+        `_compare_weights` method is invoked.
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
@@ -130,7 +130,74 @@ class GraphManager:
         """
         self._db_ref.listen(self._df_listen_callback)
 
-    def compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
+    def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False) -> None:
+        """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
+
+        The `_resolve_cache_dir` method is first called, then the `glob` package is used to find matching files.
+        Matching maps' json strings are loaded, parsed, and provided to the `_process_map` method. If an exception is
+        raised in the process of loading a map or processing it, it is caught and its details are printed to the
+        command line.
+
+        Additionally, save the optimized json in `<cache directory>/GraphManager._processed_upload_to`.
+
+        Args:
+            pattern (str): Pattern to find matching cached graphs (which are stored as `.json` files. The cache
+             directory (specified by the `_cache_path` attribute) is searched recursively
+            visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
+            upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
+            compare (bool): If true, run the routine for comparing graph optimization (invokes the `_compare_weights`
+             method)
+        """
+        self._resolve_cache_dir()
+        matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
+
+        if len(matching_maps) == 0:
+            print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
+            return
+
+        for map_json_abs_path in matching_maps:
+            if os.path.isdir(map_json_abs_path):
+                continue  # Ignore directories
+
+            print("\n---- Attempting to process map {} ----".format(map_json_abs_path))
+            with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
+                json_string = json_string_file.read()
+                json_string_file.close()
+            map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
+                os.path.sep)) + 1:])
+            map_dct = json.loads(json_string)
+            map_name = self._read_cache_directory(os.path.basename(map_json))
+
+            map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
+
+            if compare:
+                if upload:
+                    print("Warning: Ignoring True upload argument because comparing graphs")
+                self._compare_weights(map_info, visualize)
+            else:
+                graph = convert_json_sba.as_graph(map_info.map_dct)
+
+                graph_plot_title = None
+                chi2_plot_title = None
+                if visualize:
+                    graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
+                    chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
+
+                tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
+                    self._optimize_graph(graph, False, visualize, weights_key=None, graph_plot_title=graph_plot_title,
+                                         chi2_plot_title=chi2_plot_title)
+                processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
+                                                                          waypoint_locations)
+                print("Processed map: {}".format(map_info.map_name))
+                if upload:
+                    self._upload(map_info, processed_map_json)
+                    print("Uploaded processed map: {}".format(map_info.map_name))
+
+                self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
+
+    # -- Private Methods --
+
+    def _compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
         """Invocation results in the weights comparison routine.
 
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
@@ -239,73 +306,6 @@ class GraphManager:
             #  maybe also sync up with Jacquie re: her plotting efforts? Add another field to json of the
             #  map
         print(results)
-
-    def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False) -> None:
-        """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
-
-        The `_resolve_cache_dir` method is first called, then the `glob` package is used to find matching files.
-        Matching maps' json strings are loaded, parsed, and provided to the `_process_map` method. If an exception is
-        raised in the process of loading a map or processing it, it is caught and its details are printed to the
-        command line.
-
-        Additionally, save the optimized json in `<cache directory>/GraphManager._processed_upload_to`.
-
-        Args:
-            pattern (str): Pattern to find matching cached graphs (which are stored as `.json` files. The cache
-             directory (specified by the `_cache_path` attribute) is searched recursively
-            visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
-            upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
-            compare (bool): If true, run the routine for comparing graph optimization (invokes the `compare_weights`
-             method)
-        """
-        self._resolve_cache_dir()
-        matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
-
-        if len(matching_maps) == 0:
-            print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
-            return
-
-        for map_json_abs_path in matching_maps:
-            if os.path.isdir(map_json_abs_path):
-                continue  # Ignore directories
-
-            print("\n---- Attempting to process map {} ----".format(map_json_abs_path))
-            with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
-                json_string = json_string_file.read()
-                json_string_file.close()
-            map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
-                os.path.sep)) + 1:])
-            map_dct = json.loads(json_string)
-            map_name = self._read_cache_directory(os.path.basename(map_json))
-
-            map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
-
-            if compare:
-                if upload:
-                    print("Warning: Ignoring True upload argument because comparing graphs")
-                self.compare_weights(map_info, visualize)
-            else:
-                graph = convert_json_sba.as_graph(map_info.map_dct)
-
-                graph_plot_title = None
-                chi2_plot_title = None
-                if visualize:
-                    graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
-                    chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
-
-                tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
-                    self._optimize_graph(graph, False, visualize, weights_key=None, graph_plot_title=graph_plot_title,
-                                         chi2_plot_title=chi2_plot_title)
-                processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations)
-                print("Processed map: {}".format(map_info.map_name))
-                if upload:
-                    self._upload(map_info, processed_map_json)
-                    print("Uploaded processed map: {}".format(map_info.map_name))
-
-                self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
-
-    # -- Private Methods --
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
