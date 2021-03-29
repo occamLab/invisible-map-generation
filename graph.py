@@ -291,10 +291,10 @@ class Graph:
             vertex_uid (int): UID of vertex to delete which must be of a VertexType.TAG type.
 
         Raises:
-            Exception if the specified vertex to delete is not of a VertexType.TAG type.
+            ValueError if the specified vertex to delete is not of a VertexType.TAG type.
         """
         if self.vertices[vertex_uid] != VertexType.TAG:
-            raise Exception("Specified vertex for deletion is not a tag vertex")
+            raise ValueError("Specified vertex for deletion is not a tag vertex")
 
         # Delete connected edge(s)
         connected_edges = self.verts_to_edges[vertex_uid]
