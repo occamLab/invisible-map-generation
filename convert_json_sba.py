@@ -53,8 +53,7 @@ def as_graph(dct, fix_tag_vertices=False):
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
-    # Note that we are ignoring the standard deviation of qw since we use a compact quaternion parameterization of
-    # orientation
+
     unique_tag_ids = np.unique(tag_ids)
     tag_vertex_id_by_tag_id = dict(
         zip(unique_tag_ids, range(0, unique_tag_ids.size * 5, 5)))
