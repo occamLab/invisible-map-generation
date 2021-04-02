@@ -1,5 +1,6 @@
 import itertools
 from collections import defaultdict
+from enum import Enum
 
 import numpy as np
 from g2o import SE3Quat, Quaternion
@@ -70,7 +71,25 @@ def se3_quat_average(transforms):
     return SE3Quat(average_as_quat, translation_average)
 
 
-def as_graph(dct, fix_tag_vertices: bool = False, use_sba: bool = True):
+class PrescalingOptEnum(Enum):
+    """Enum used in the as_graph method to select which approach is taken
+
+    Class attributes:
+        USE_SBA: Do not use sparse bundle adjustment
+        FULL_COV: When creating the tag edge prescaling matrix, compute it from the covariance matrix calculated
+         to account for the reliability of the tag pose estimate.
+        DIAG_COV: Same as `FULL_COV`, except only the matrix diagonal is used.
+        ONES: Prescaling matrix is set to a matrix of 1s.
+    """
+    USE_SBA = 0
+    FULL_COV = 1
+    DIAG_COV = 2
+    ONES = 3
+
+
+# SBA (prescaling is not used)
+
+def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: Enum = PrescalingOptEnum.FULL_COV):
     """Convert a dictionary decoded from JSON into a graph.
 
     This function was created by combining the as_graph functions from convert_json.py and convert_json_sba.py. Because
@@ -83,12 +102,20 @@ def as_graph(dct, fix_tag_vertices: bool = False, use_sba: bool = True):
         dct (dict): The dictionary to convert to a graph.
         fix_tag_vertices (bool): Passed as the `fixed` keyword argument to the Vertex constructor when constructing
          vertices labeled as Tag vertices.
-        use_sba (bool): Selects which logical branches to use according to the original convert_json.py implementation
-         (if False) and the original convert_json_sba.py implementation (if True).
+        prescaling_opt (Enum): Selects which logical branches to use. If it is equal to `PrescalingOptEnum.USE_SBA`,
+         then sparse bundle adjustment is used; otherwise, the the outcome only differs between the remaining enum
+         values by how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum class documentation for
+         more information.
 
     Returns:
         A graph derived from the input dictionary.
+
+    Raises:
+        An exception if prescaling_opt is a value that is not handled.
     """
+    # Pull out this equality from the enum (this equality is check many times)
+    use_sba = True if prescaling_opt == PrescalingOptEnum.USE_SBA else False
+
     pose_data = np.array(dct['pose_data'])
     if not pose_data.size:
         pose_data = np.zeros((0, 18))
@@ -122,11 +149,10 @@ def as_graph(dct, fix_tag_vertices: bool = False, use_sba: bool = True):
             tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
                                          dct['tag_data']])
             # Commented-out (unused):
-            # tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame
-            #                                     in dct['tag_data']])
-            # tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for \
-            #                                        tagsFromFrame in dct['tag_data']])
-
+            tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame
+                                                in dct['tag_data']])
+            tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for \
+                                                   tagsFromFrame in dct['tag_data']])
     else:
         tag_pose_flat = np.zeros((0, 16))
         tag_ids = np.zeros((0, 1), dtype=np.int64)
@@ -137,25 +163,29 @@ def as_graph(dct, fix_tag_vertices: bool = False, use_sba: bool = True):
             tag_corners = np.zeros((0, 8))
         else:
             tag_joint_covar = np.zeros((0, 49), dtype=np.double)
-            # Commented-out (unused):
-            # tag_position_variances = np.zeros((0, 3), type=np.double)
-            # tag_orientation_variances = np.zeros((0, 4), type=np.double)
+            tag_position_variances = np.zeros((0, 3), dtype=np.double)
+            tag_orientation_variances = np.zeros((0, 4), dtype=np.double)
 
     tag_edge_measurements_matrix = np.matmul(camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
     if not use_sba:
-        # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of
-        # orientation
-        tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
-        # TODO: for some reason we have missing measurements (all zeros).  Throw those out
-        tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) if np.linalg.det(covar[:-1, :-1]) != 0 else \
+        if prescaling_opt == PrescalingOptEnum.FULL_COV:
+            # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization
+            # of orientation
+            tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
+
+            # TODO: for some reason we have missing measurements (all zeros).  Throw those out
+            tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) if np.linalg.det(covar[:-1, :-1]) != 0 else \
                                             np.zeros((6, 6)) for covar in tag_joint_covar_matrices])
-        # Commented-out (unused):
-        # print("overwriting with diagonal covariances")
-        # tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
-        # print('resetting prescaling to identity')
-        # tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
+        elif prescaling_opt == PrescalingOptEnum.DIAG_COV:
+            # print("overwriting with diagonal covariances")
+            tag_edge_prescaling = 1. / np.hstack((tag_position_variances, tag_orientation_variances[:, :-1]))
+        elif prescaling_opt == PrescalingOptEnum.ONES:
+            # print('resetting prescaling to identity')
+            tag_edge_prescaling = np.ones(6)
+        else:
+            raise Exception("PrescalingOptEnum value {} is not yet handled".format(prescaling_opt))
 
     unique_tag_ids = np.unique(tag_ids)
 
@@ -209,8 +239,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, use_sba: bool = True):
         waypoint_vertex_id = waypoint_vertex_id_by_name[waypoint_name]
         waypoint_vertex_id_and_index_by_frame_id[waypoint_frame] = waypoint_vertex_id_and_index_by_frame_id.get(
             waypoint_name, [])
-        waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append(
-            (waypoint_vertex_id, waypoint_index))
+        waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append((waypoint_vertex_id, waypoint_index))
 
     # Construct the dictionaries of vertices and edges
     vertices = {}
