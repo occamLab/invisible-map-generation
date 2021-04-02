@@ -185,7 +185,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: Enum = Prescal
             # print('resetting prescaling to identity')
             tag_edge_prescaling = np.ones(6)
         else:
-            raise Exception("PrescalingOptEnum value {} is not yet handled".format(prescaling_opt))
+            raise Exception("{} is not yet handled".format(str(prescaling_opt)))
 
     unique_tag_ids = np.unique(tag_ids)
 
