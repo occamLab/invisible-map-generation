@@ -139,20 +139,18 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: Enum = Prescal
                                                    dct['tag_data']])
             tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in \
                                      dct['tag_data']])
+        else:
+            tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
+                                         dct['tag_data']])
+            tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame
+                                                in dct['tag_data']])
+            tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for \
+                                                   tagsFromFrame in dct['tag_data']])
 
         tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in \
                                                    dct['tag_data']])))
         pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in \
                                                     dct['tag_data']])))
-
-        if not use_sba:
-            tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
-                                         dct['tag_data']])
-            # Commented-out (unused):
-            tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame
-                                                in dct['tag_data']])
-            tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for \
-                                                   tagsFromFrame in dct['tag_data']])
     else:
         tag_pose_flat = np.zeros((0, 16))
         tag_ids = np.zeros((0, 1), dtype=np.int64)
