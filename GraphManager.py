@@ -38,7 +38,6 @@ from varname import nameof
 import convert_json_sba
 import graph_utils
 from graph import Graph
-from json import tool
 
 
 class GraphManager:
@@ -221,11 +220,18 @@ class GraphManager:
         # After iterating through the different weights, the results of the comparison are printed.
         for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
             graph1 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=False)
+            graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
+
             ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
             start_uid = graph1.edges[ordered_odom_edges[0]].startuid
+            middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
+            middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
             end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
-            floored_middle = (start_uid + end_uid) // 2
-            g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
+
+            g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
+            g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
+
+            del graph1, graph2  # No longer needed
 
             print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(iter_weights))
 
@@ -250,8 +256,6 @@ class GraphManager:
             # Get optimized tag vertices from g1sg and transfer their estimated positions to g2sg; check whether there
             # are any vertices present in g1sg that are not present in g2sg (print warning of how many vertices fit this
             # criteria if nonzero)
-            graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
-            g2sg = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
             missing_vertex_count = 0
             for graph1_sg_vert in g1sg.get_tag_verts():
                 if not g2sg.vertices.__contains__(graph1_sg_vert):
@@ -561,14 +565,14 @@ class GraphManager:
         locations = graph_utils.locations_from_transforms(resulting_map['locations'])
         tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
         tagpoint_positions = resulting_map['tagpoints']
-        waypoint_verts = resulting_map['waypoints']
+        waypoint_verts = tuple(resulting_map['waypoints'])
 
         if visualize:
             self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                            original_tag_verts, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
-        return tag_verts, locations, waypoint_verts, opt_chi2, odom_chi2_adj_vec
+        return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec
 
     # -- Static Methods --
 
