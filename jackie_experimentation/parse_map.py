@@ -5,7 +5,7 @@ class Map_Data:
     ''' 
     Contains map data
     '''
-    def __init__(self, filepath: str):
+    def __init__(self, filepath):
         self.filepath = filepath
         self.load_map()
     
@@ -22,16 +22,20 @@ class Map_Data:
         '''
         Parses odometry data and returns numpy translation arrays and poseId array
         '''
-        self.trans_x, self.trans_y, self.trans_z, self.poseId = [], [], [], []
+        self.trans_x, self.trans_y, self.trans_z, self.poseId, self.adjChi2 = [], [], [], [], []
         for pt in self.odometry_data:
             self.trans_x.append(pt["translation"]["x"])
             self.trans_y.append(pt["translation"]["y"])
             self.trans_z.append(pt["translation"]["z"])
             self.poseId.append(pt["poseId"])
-        return np.array(self.trans_x), np.array(self.trans_y), \
-                np.array(self.trans_z), np.array(self.poseId)
+            if "adjChi2" in pt:
+                self.adjChi2.append(pt["adjChi2"])
+
+        return  np.array(self.trans_x), np.array(self.trans_y), \
+                    np.array(self.trans_z), np.array(self.poseId), \
+                    np.array(self.adjChi2)
 
 if __name__ == "__main__":
-    map = Map_Data('marion_lower_level_map_with_poseID.json')
-    x, y, z, poseID = map.parse_odometry()
-    print (x, y, x, poseID)
+    map = Map_Data('duncan_test_data.json')
+    x, y, z, poseID, adjChi2 = map.parse_odometry()
+    print (adjChi2)

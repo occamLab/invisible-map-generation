@@ -66,6 +66,7 @@ class Plot_2D:
         plt.show()
 
 
+
 class Plot_2D_Animation:
     def __init__(self, x, z, poseID):
         self.x = x
@@ -103,16 +104,64 @@ class Plot_2D_Animation:
         # ani.save('test.gif')
         plt.show()
 
+class Plot_Chi2_Animation:
+    def __init__(self, poseID, adjChi2):
+        self.poseID = poseID
+        self.adjChi2 = adjChi2
+        self.animate()
+
+    def ani_init(self):
+        '''resets poseID_text each frame'''
+        self.adjChi2_text.set_text('')
+        return self.line, self.adjChi2_text
+
+    def update(self, num, poseID, adjChi2):
+        ''' Update plotting data '''
+        self.line.set_data(self.poseID[:num], self.adjChi2[:num])
+        self.adjChi2_text.set_text("chi2:"+str(self.adjChi2[num]))
+        return self.line, self.adjChi2_text
+
+    def animate(self):
+        # set up graphing
+        fig, self.ax = plt.subplots()
+        self.ax.set(xlabel='poseID', ylabel='adjChi2',
+                    title='adjChi2 Plot')
+        self.adjChi2_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes)
+        self.line, = self.ax.loglog(poseID, adjChi2+1)
+        # self.line.axes.axis('equal')
+
+        poseID_interval = 100
+        # blit: only re-draw the few points that are changing at each frame
+        ani = animation.FuncAnimation(fig, lambda x1, x2, x3: self.update(x1, x2, x3), frames=len(x), 
+                                fargs=[self.poseID, self.adjChi2_text],
+                                interval=poseID_interval, blit=True, init_func = self.ani_init)
+
+        # ani.save('adjChi2plot.mp4', extra_args=['-vcodec', 'libx264'])
+        # writervideo = animation.FFMpegWriter(fps=60) 
+        # ani.save('adjChi2plot.mp4', writer=writervideo)
+        ani.save('adjChi2plot.mp4')
+
+        plt.show()
+
+
 
 if __name__ == "__main__":
-    map = parse_map.Map_Data('marion_lower_level_map_with_poseID.json')
-    x, y, z, poseID = map.parse_odometry()
-    print (x, y, x, poseID)
+    map = parse_map.Map_Data('duncan_test_data.json')
+    x, y, z, poseID, adjChi2 = map.parse_odometry()
+    # print (x, y, x, adjChi2, poseID)
+
+
+    # fig, ax = plt.subplots()
+    # ax.loglog(poseID, adjChi2+1)
+    # ax.set(xlabel='poseID', ylabel='adjChi2',
+    #     title='adjChi2 Plot')
+    # plt.show()
 
     # create plots 
     # Plot_3D(x, y, z)
     # Plot_2D(x, z)
-    Plot_2D_Animation(x, z, poseID)
+    # Plot_2D_Animation(x, z, poseID)
+    Plot_Chi2_Animation(poseID, adjChi2)
 
 
 

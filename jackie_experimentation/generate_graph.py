@@ -1,5 +1,6 @@
 import parse_map
 import pprint as pp
+import json
 
 class Node:
     def __init__(self, x, y, z):
@@ -23,14 +24,21 @@ class Graph:
             self.g[neighbour] = [node]
         else:
             self.g[neighbour].append(node)
-            
+
+    def address2readable(self):
+        self.new_g = {}
+        for key in self.g:
+            self.new_g[key.data] = []
+            for neighbour in self.g[key]:
+                self.new_g[key.data].append(neighbour)
+
     def show_edges(self):
         for node in self.g:
             for neighbour in self.g[node]:
                 print("(",node.data,", ",neighbour.data,")")
 
     def show_graph(self):
-        pp.pprint(self.g)
+        pp.pprint(self.new_g)
 
 def generate_mapping_graph(x, y, z):
     map_g = Graph()
@@ -41,13 +49,13 @@ def generate_mapping_graph(x, y, z):
         next_node = Node(x[i], y[i], z[i])
         map_g.addEdge(curr_node, next_node)
         curr_node = next_node
-
     # map_g.show_edges()
+    map_g.address2readable()
     map_g.show_graph()
 
 if __name__ == "__main__":
 
-    map = parse_map.Map_Data('marion_lower_level_map_with_poseID.json')
+    map = parse_map.Map_Data('data_jackie_AC_3rd_floor_processed.json')
     x, y, z, poseID = map.parse_odometry()
     
     generate_mapping_graph(x, y, z)
