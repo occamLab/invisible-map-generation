@@ -162,11 +162,11 @@ class GraphManager:
             with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
                 json_string = json_string_file.read()
                 json_string_file.close()
+
             map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
                 os.path.sep)) + 1:])
             map_dct = json.loads(json_string)
             map_name = self._read_cache_directory(os.path.basename(map_json))
-
             map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
 
             if compare:
@@ -182,11 +182,15 @@ class GraphManager:
                     graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
                     chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
-                tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
-                    self._optimize_graph(graph, False, visualize, weights_key=None, graph_plot_title=graph_plot_title,
+                tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2 = \
+                    self._optimize_graph(graph,
+                                         tune_weights=False,
+                                         visualize=visualize,
+                                         weights_key=None,
+                                         graph_plot_title=graph_plot_title,
                                          chi2_plot_title=chi2_plot_title)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations)
+                                                                          waypoint_locations, adj_chi2)
                 print("Processed map: {}".format(map_info.map_name))
                 if upload:
                     self._upload(map_info, processed_map_json)
