@@ -56,12 +56,12 @@ def optimize_map(x, tune_weights=False, visualize=False):
     # Load these weights into the graph
     test_graph.update_edges()
     test_graph.generate_unoptimized_graph()
-    all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+    all_tags_original = test_graph.get_tags_all_position_estimate()
     starting_map = graph_utils.optimizer_to_map(
         test_graph.vertices, test_graph.unoptimized_graph, is_sparse_bundle_adjustment=True)
     original_tag_verts = locations_from_transforms(starting_map['tags'])
     if tune_weights:
-        test_graph.expetation_maximization_once()
+        test_graph.expectation_maximization_once()
         print("tuned weights", test_graph.weights)
     # Create the g2o object and optimize
     test_graph.generate_unoptimized_graph()
@@ -83,7 +83,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
     tagpoint_positions = resulting_map['tagpoints']
     waypoint_verts = resulting_map['waypoints']
     if visualize:
-        all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+        all_tags = test_graph.get_tags_all_position_estimate()
 
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
@@ -131,7 +131,8 @@ def make_processed_map_JSON(tag_locations, odom_locations, waypoint_locations):
                                              'rotation': {'x': curr_odom[3],
                                                           'y': curr_odom[4],
                                                           'z': curr_odom[5],
-                                                          'w': curr_odom[6]}}, odom_locations)
+                                                          'w': curr_odom[6]},
+                                             'poseId': int(curr_odom[8])}, odom_locations)
     waypoint_vertex_map = map(lambda idx: {'translation': {'x': waypoint_locations[1][idx][0], 'y': waypoint_locations[1][idx][1], 'z': waypoint_locations[1][idx][2]},
                                                      'rotation': {'x': waypoint_locations[1][idx][3],
                                                                   'y': waypoint_locations[1][idx][4],
