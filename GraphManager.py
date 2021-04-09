@@ -578,6 +578,9 @@ class GraphManager:
 
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
+        f = plt.figure()
+        ax: plt.Axes = f.add_subplot(111)
+
         locations_list = []
         locations_shape = np.shape(map_from_opt["locations"])
 
@@ -594,12 +597,13 @@ class GraphManager:
         for idx in range(locations_shape[0]):
             x_axis[idx] = locations_list[idx][0][7]
 
-        plt.plot(x_axis, y_axis + 1)
-        plt.xlabel("Odometry vertex UID")
+        ax.plot(x_axis, y_axis + 1)
+        ax.set_xlabel("Odometry vertex UID")
         if plot_title is not None:
             plt.title(plot_title)
-        plt.yscale("log")
-        plt.ylabel("lg(1 + chi2)")
+        ax.set_yscale("log")
+        ax.set_ylabel("lg(1 + chi2)")
+        plt.show()
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
@@ -610,15 +614,15 @@ class GraphManager:
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
 
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
+        ax.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
+        ax.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
                  label='Prior Odom Vertices')
 
         if original_tag_verts is not None:
-            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
+            ax.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
                      label='Tag Vertices Original')
 
-        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
+        ax.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
         for tag_vert in tag_verts:
             R = Quaternion(tag_vert[3:-1]).rotation_matrix()
             axis_to_color = ['r', 'g', 'b']
@@ -626,13 +630,13 @@ class GraphManager:
                 ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
                           R[2, axis_id], length=1, color=axis_to_color[axis_id])
 
-        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
+        ax.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
                  label='Tag Corners')
 
         for vert in tag_verts:
             ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
 
-        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
+        ax.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
                  label='Waypoint Vertices')
 
         for vert_idx in range(len(waypoint_verts[0])):
@@ -640,8 +644,8 @@ class GraphManager:
             waypoint_name = waypoint_verts[0][vert_idx]['name']
             ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
 
-        # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
-        # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
+        # ax.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
+        # ax.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
         #          label='All Tag Edges Original')
 
         # Commented-out: unused
@@ -655,7 +659,6 @@ class GraphManager:
 
         if isinstance(plot_title, str):
             plt.title(plot_title)
-
         plt.show()
 
     @staticmethod
