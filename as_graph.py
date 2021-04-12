@@ -92,7 +92,7 @@ class PrescalingOptEnum(Enum):
 
 # SBA (prescaling is not used)
 
-def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.FULL_COV):
+def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA):
     """Convert a dictionary decoded from JSON into a graph.
 
     This function was created by combining the as_graph functions from convert_json.py and convert_json_sba.py. Because
@@ -126,11 +126,13 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
 
     if use_sba:
         tag_size = 0.173  # TODO: need to send this with the tag detection
+        pos_tag_sz_div_2 = tag_size / 2
+        neg_tag_sz_div_2 = - pos_tag_sz_div_2
         true_3d_points = np.array(
-            [[-tag_size / 2, -tag_size / 2, 1],
-             [tag_size / 2, -tag_size / 2, 1],
-             [tag_size / 2, tag_size / 2, 1],
-             [-tag_size / 2, tag_size / 2, 1]])
+            [[neg_tag_sz_div_2, neg_tag_sz_div_2, 1],
+             [pos_tag_sz_div_2, neg_tag_sz_div_2, 1],
+             [pos_tag_sz_div_2, pos_tag_sz_div_2, 1],
+             [neg_tag_sz_div_2, pos_tag_sz_div_2, 1]])
         true_3d_tag_center = np.array([0, 0, 1])
 
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
