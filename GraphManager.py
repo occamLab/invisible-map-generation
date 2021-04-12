@@ -35,7 +35,8 @@ from firebase_admin import storage
 from g2o import Quaternion
 from varname import nameof
 
-import convert_json_sba
+# import convert_json_sba
+import as_graph
 import graph_utils
 from graph import Graph
 
@@ -65,6 +66,8 @@ class GraphManager:
         _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
          always be located at `<path to this file>.cache/`
     """
+
+    # Importance is set to e^{-weight}
     _weights_dict = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
@@ -81,6 +84,11 @@ class GraphManager:
             -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
             0, 0, 0, -1e2, 3, 3
         ]),
+        # "new_option": np.array([
+        #     -6., -6., -6., -6., -6., -6.,  # Translation + rotation
+        #     1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
+        #     0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
+        # ])
     }
 
     _comparison_graph1_subgraph_weights = ["sensible_default_weights", "trust_odom", "trust_tags"]
@@ -106,7 +114,7 @@ class GraphManager:
 
         def __init__(self, map_name: str, map_json: str, map_dct: Dict = None):
             self.map_name: str = str(map_name)
-            self.map_dct: Union[dict, str] = dict(map_dct)
+            self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
 
     def __init__(self, weights_specifier: str, firebase_creds: firebase_admin.credentials.Certificate):
@@ -174,7 +182,7 @@ class GraphManager:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self._compare_weights(map_info, visualize)
             else:
-                graph = convert_json_sba.as_graph(map_info.map_dct)
+                graph = as_graph.as_graph(map_info.map_dct)
 
                 graph_plot_title = None
                 chi2_plot_title = None
@@ -206,7 +214,7 @@ class GraphManager:
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
         following:
         1. Acquire two sub-graphs: one from the first half of the ordered odometry nodes (called g1sg) and one from the
-           other half (called g2sg); note that g2sg is created from the convert_json_sba.as_graph method with the
+           other half (called g2sg); note that g2sg is created from the as_graph.as_graph method with the
            fix_tag_vertices as True, whereas g1sg is created with fix_tag_vertices as False.
         2. Optimize the g1sg with the iter_weights, then transfer the estimated locations of its tag vertices to the
            g2sg. The assumption is that a majority - if not all - tag vertices are present in both sub-graphs; the
@@ -223,8 +231,8 @@ class GraphManager:
 
         # After iterating through the different weights, the results of the comparison are printed.
         for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
-            graph1 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=False)
-            graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
+            graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False)
+            graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True)
 
             ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
             start_uid = graph1.edges[ordered_odom_edges[0]].startuid
@@ -604,6 +612,8 @@ class GraphManager:
             plt.title(plot_title)
         plt.yscale("log")
         plt.ylabel("lg(1 + chi2)")
+        plt.show()
+
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \

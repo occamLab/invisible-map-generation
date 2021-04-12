@@ -8,6 +8,7 @@ from scipy.spatial.transform import Rotation as R
 
 import graph
 from graph_utils import camera_to_odom_transform
+from typing import Union
 
 
 def pose2diffs(poses):
@@ -56,6 +57,7 @@ def se3_quat_average(transforms):
     translation_average = sum([t.translation() / len(transforms) for t in transforms])
     epsilons = np.ones(len(transforms), )
     converged = False
+    quat_average = None
     while not converged:
         quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) \
                        * epsilons[idx] for idx, t in enumerate(transforms))
@@ -90,8 +92,6 @@ class PrescalingOptEnum(Enum):
     ONES = 3
 
 
-# SBA (prescaling is not used)
-
 def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA):
     """Convert a dictionary decoded from JSON into a graph.
 
@@ -115,6 +115,20 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     Raises:
         An exception if prescaling_opt is a value that is not handled.
     """
+    # The following variables instantiated to None are optionally used depending on the value of prescaling_opt
+    tag_joint_covar = None
+    tag_position_variances = None
+    tag_orientation_variances = None
+    true_3d_tag_center: Union[None, np.ndarray] = None
+    tag_transform_estimates = None
+    true_3d_points = None
+    tag_corner_ids_by_tag_vertex_id = None
+    camera_intrinsics_for_tag: Union[np.ndarray, None] = None
+    tag_corners = None
+    tag_edge_prescaling = None
+    previous_pose_matrix = None
+    initialize_with_averages = None
+
     # Pull out this equality from the enum (this equality is check many times)
     use_sba = True if prescaling_opt == PrescalingOptEnum.USE_SBA else False
 
@@ -243,30 +257,23 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             waypoint_name, [])
         waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append((waypoint_vertex_id, waypoint_index))
 
-    # Construct the dictionaries of vertices and edges
     vertices = {}
     edges = {}
-
-    if use_sba:
-        vertex_counter = unique_tag_ids.size * 5 + unique_waypoint_names.size
-    else:
-        vertex_counter = unique_tag_ids.size + unique_waypoint_names.size
-
     edge_counter = 0
     previous_vertex = None
-
-    if not use_sba:
-        previous_pose_matrix = None
-
     counted_tag_vertex_ids = set()
     counted_waypoint_vertex_ids = set()
     first_odom_processed = False
     num_tag_edges = 0
 
     if use_sba:
+        vertex_counter = unique_tag_ids.size * 5 + unique_waypoint_names.size
         # TODO: debug; this appears to be counterproductive
         initialize_with_averages = False
         tag_transform_estimates = defaultdict(lambda: [])
+    else:
+        vertex_counter = unique_tag_ids.size + unique_waypoint_names.size
+        previous_pose_matrix = None
 
     for i, odom_frame in enumerate(pose_data[:, 17]):
         current_odom_vertex_uid = vertex_counter
@@ -280,8 +287,8 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
 
         first_odom_processed = True
-
         vertex_counter += 1
+
         # Connect odom to tag vertex
         for tag_vertex_id, tag_index in tag_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
             if use_sba:
@@ -348,103 +355,105 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             num_tag_edges += 1
             edge_counter += 1
 
-            # Connect odom to waypoint vertex
-            for waypoint_vertex_id, waypoint_index in waypoint_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
-                if waypoint_vertex_id not in counted_waypoint_vertex_ids:
-
-                    if use_sba:
-                        estimate_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse() * SE3Quat(
-                            waypoint_edge_measurements[waypoint_index])).to_vector()
-                    else:
-                        estimate_arg = matrix2measurement(pose_matrices[i].dot(waypoint_edge_measurements_matrix[
-                                                                                   waypoint_index]))
-
-                    vertices[waypoint_vertex_id] = graph.Vertex(
-                        mode=graph.VertexType.WAYPOINT,
-                        estimate=estimate_arg,
-                        fixed=False
-                    )
-                    vertices[waypoint_vertex_id].meta_data['name'] = waypoint_name_by_vertex_id[waypoint_vertex_id]
-                    counted_waypoint_vertex_ids.add(waypoint_vertex_id)
+        # Connect odom to waypoint vertex
+        for waypoint_vertex_id, waypoint_index in waypoint_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
+            if waypoint_vertex_id not in counted_waypoint_vertex_ids:
 
                 if use_sba:
-                    measurement_arg = (SE3Quat(vertices[waypoint_vertex_id].estimate) * SE3Quat(
-                        vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
+                    estimate_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse() * SE3Quat(
+                        waypoint_edge_measurements[waypoint_index])).to_vector()
                 else:
-                    measurement_arg = waypoint_edge_measurements[waypoint_index]
+                    estimate_arg = matrix2measurement(pose_matrices[i].dot(waypoint_edge_measurements_matrix[
+                                                                               waypoint_index]))
 
-                edges[edge_counter] = graph.Edge(
-                    startuid=current_odom_vertex_uid,
-                    enduid=waypoint_vertex_id,
-                    corner_ids=None,
-                    information=np.eye(6),
-                    information_prescaling=None,
-                    camera_intrinsics=None,
-                    measurement=measurement_arg
+                vertices[waypoint_vertex_id] = graph.Vertex(
+                    mode=graph.VertexType.WAYPOINT,
+                    estimate=estimate_arg,
+                    fixed=False
                 )
+                vertices[waypoint_vertex_id].meta_data['name'] = waypoint_name_by_vertex_id[waypoint_vertex_id]
+                counted_waypoint_vertex_ids.add(waypoint_vertex_id)
 
-                edge_counter += 1
+            if use_sba:
+                measurement_arg = (SE3Quat(vertices[waypoint_vertex_id].estimate) * SE3Quat(
+                    vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
+            else:
+                measurement_arg = waypoint_edge_measurements[waypoint_index]
 
-            if previous_vertex:
-                # TODO: might want to consider prescaling based on the magnitude of the change
-                if use_sba:
-                    edges[edge_counter] = graph.Edge(
-                        startuid=previous_vertex,
-                        enduid=current_odom_vertex_uid,
-                        corner_ids=None,
-                        information=np.eye(6),
-                        information_prescaling=None,
-                        camera_intrinsics=None,
-                        measurement=(SE3Quat(vertices[current_odom_vertex_uid].estimate) * SE3Quat(
-                            vertices[previous_vertex].estimate).inverse()).to_vector()
-                    )
-                else:
-                    edges[edge_counter] = graph.Edge(
-                        startuid=previous_vertex,
-                        enduid=current_odom_vertex_uid,
-                        information=np.eye(6),
-                        information_prescaling=None,
-                        measurement=matrix2measurement(np.linalg.inv(
-                            previous_pose_matrix).dot(pose_matrices[i])),
-                        corner_ids=None,
-                        camera_intrinsics=None
-                    )
-                edge_counter += 1
-
-            # make dummy node
-            dummy_node_uid = vertex_counter
-            vertices[dummy_node_uid] = graph.Vertex(
-                mode=graph.VertexType.DUMMY,
-                estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
-                fixed=True
+            edges[edge_counter] = graph.Edge(
+                startuid=current_odom_vertex_uid,
+                enduid=waypoint_vertex_id,
+                corner_ids=None,
+                information=np.eye(6),
+                information_prescaling=None,
+                camera_intrinsics=None,
+                measurement=measurement_arg
             )
-            vertex_counter += 1
 
-            # connect odometry to dummy node
+            edge_counter += 1
+
+        if previous_vertex:
+            # TODO: might want to consider prescaling based on the magnitude of the change
             if use_sba:
                 edges[edge_counter] = graph.Edge(
-                    startuid=current_odom_vertex_uid,
-                    enduid=dummy_node_uid,
+                    startuid=previous_vertex,
+                    enduid=current_odom_vertex_uid,
                     corner_ids=None,
                     information=np.eye(6),
                     information_prescaling=None,
                     camera_intrinsics=None,
-                    measurement=np.array([0, 0, 0, 0, 0, 0, 1])
+                    measurement=(SE3Quat(vertices[current_odom_vertex_uid].estimate) * SE3Quat(
+                        vertices[previous_vertex].estimate).inverse()).to_vector()
                 )
             else:
                 edges[edge_counter] = graph.Edge(
-                    startuid=current_odom_vertex_uid,
-                    enduid=dummy_node_uid,
+                    startuid=previous_vertex,
+                    enduid=current_odom_vertex_uid,
                     information=np.eye(6),
                     information_prescaling=None,
-                    measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
+                    measurement=matrix2measurement(np.linalg.inv(
+                        previous_pose_matrix).dot(pose_matrices[i])),
                     corner_ids=None,
                     camera_intrinsics=None
                 )
             edge_counter += 1
-            previous_vertex = current_odom_vertex_uid
-            if not use_sba:
-                previous_pose_matrix = pose_matrices[i]
+
+        # Make dummy node
+        dummy_node_uid = vertex_counter
+        vertices[dummy_node_uid] = graph.Vertex(
+            mode=graph.VertexType.DUMMY,
+            estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
+            fixed=True
+        )
+        vertex_counter += 1
+
+        # Connect odometry to dummy node
+        if use_sba:
+            edges[edge_counter] = graph.Edge(
+                startuid=current_odom_vertex_uid,
+                enduid=dummy_node_uid,
+                corner_ids=None,
+                information=np.eye(6),
+                information_prescaling=None,
+                camera_intrinsics=None,
+                measurement=np.array([0, 0, 0, 0, 0, 0, 1])
+            )
+        else:
+            edges[edge_counter] = graph.Edge(
+                startuid=current_odom_vertex_uid,
+                enduid=dummy_node_uid,
+                information=np.eye(6),
+                information_prescaling=None,
+                measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
+                corner_ids=None,
+                camera_intrinsics=None
+            )
+
+        edge_counter += 1
+        previous_vertex = current_odom_vertex_uid
+
+        if not use_sba:
+            previous_pose_matrix = pose_matrices[i]
 
     if use_sba:
         if initialize_with_averages:
@@ -453,8 +462,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
 
         # TODO: Huber delta should probably scale with pixels rather than error
         resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True,
-                                      use_huber=False,
-                                      huber_delta=None, damping_status=True)
+                                      use_huber=False, huber_delta=None, damping_status=True)
     else:
         resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', damping_status=True)
     return resulting_graph
