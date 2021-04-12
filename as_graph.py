@@ -92,23 +92,22 @@ class PrescalingOptEnum(Enum):
 
 # SBA (prescaling is not used)
 
-def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: Enum = PrescalingOptEnum.FULL_COV):
+def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.FULL_COV):
     """Convert a dictionary decoded from JSON into a graph.
 
     This function was created by combining the as_graph functions from convert_json.py and convert_json_sba.py. Because
     the two implementations shared a lot of code but also deviated in a few important ways, the entire functionality of
-    each was preserved in this function by using the use_sba boolean argument to toggle on/off logical branches
-    according to the implementation in convert_json.py (if False) and the implementation in convert_json_sba.py (if
-    True).
+    each was preserved in this function by using the prescaling_opt argument to toggle on/off logical branches
+    according to the implementation in convert_json.py and the implementation in convert_json_sba.py.
 
     Args:
         dct (dict): The dictionary to convert to a graph.
         fix_tag_vertices (bool): Passed as the `fixed` keyword argument to the Vertex constructor when constructing
          vertices labeled as Tag vertices.
-        prescaling_opt (Enum): Selects which logical branches to use. If it is equal to `PrescalingOptEnum.USE_SBA`,
-         then sparse bundle adjustment is used; otherwise, the the outcome only differs between the remaining enum
-         values by how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum class documentation for
-         more information.
+        prescaling_opt (PrescalingOptEnum): Selects which logical branches to use. If it is equal to
+        `PrescalingOptEnum.USE_SBA`,  then sparse bundle adjustment is used; otherwise, the the outcome only differs
+         between the remaining enum values by how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum
+         class documentation for more information.
 
     Returns:
         A graph derived from the input dictionary.
