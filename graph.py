@@ -168,7 +168,7 @@ class Graph:
                     relevant_edges.append(e)
 
         if len(relevant_edges) > 2:
-            raise Exception("Vertex appears to be connected to more than two other odometry vertices")
+            raise Exception("Odometry vertex appears to be incident to > two odometry vertices")
 
         adj_chi2 = 0.0
         for our_edge in relevant_edges:
