@@ -442,21 +442,19 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
                     camera_intrinsics=None
                 )
             edge_counter += 1
-
             previous_vertex = current_odom_vertex_uid
-
             if not use_sba:
                 previous_pose_matrix = pose_matrices[i]
 
-        if use_sba:
-            if initialize_with_averages:
-                for vertex_id, transforms in tag_transform_estimates.items():
-                    vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
+    if use_sba:
+        if initialize_with_averages:
+            for vertex_id, transforms in tag_transform_estimates.items():
+                vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
 
-            # TODO: Huber delta should probably scale with pixels rather than error
-            resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True,
-                                          use_huber=False,
-                                          huber_delta=None, damping_status=True)
-        else:
-            resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', damping_status=True)
-        return resulting_graph
+        # TODO: Huber delta should probably scale with pixels rather than error
+        resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True,
+                                      use_huber=False,
+                                      huber_delta=None, damping_status=True)
+    else:
+        resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', damping_status=True)
+    return resulting_graph
