@@ -40,7 +40,6 @@ def matrix2measurement(pose, invert=False):
       Converted pose or array of poses.
     """
     translation = pose[..., :3, 3]
-    print(np.shape(pose))
     if pose.shape[0] != 0:
         rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
     else:
