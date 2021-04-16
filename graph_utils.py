@@ -101,11 +101,13 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundl
                                is_sparse_bundle_adjustment=is_sparse_bundle_adjustment)
     locations_shape = np.shape(ret_map["locations"])
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
+    visible_tags_count = np.zeros([locations_shape[0], 1])
     for i, odom_node_vec in enumerate(ret_map["locations"]):
         uid = round(odom_node_vec[7])  # UID integer is stored as a floating point number, so cast it to an integer
-        locations_adj_chi2[i] = graph.map_odom_to_adj_chi2(uid)
+        locations_adj_chi2[i], visible_tags_count[i] = graph.map_odom_to_adj_chi2(uid)
 
     ret_map["locationsAdjChi2"] = locations_adj_chi2
+    ret_map["visibleTagsCount"] = visible_tags_count
     return ret_map
 
 
