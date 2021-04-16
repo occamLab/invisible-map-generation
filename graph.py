@@ -129,7 +129,7 @@ class Graph:
         """
         error_chi2: float
         if isinstance(edge, g2o.EdgeProjectPSI2UV):
-            cam = edge.parameter(0)  # TODO: figure out why this crashes when used on a subgraph
+            cam = edge.parameter(0)
             error = edge.measurement() - cam.cam_map(
                 edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
             return error.dot(edge.information()).dot(error)
@@ -258,6 +258,8 @@ class Graph:
                         if self.use_huber:
                             edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
                         optimizer.add_edge(edge)
+                        # TODO: figure out why edge.parameter(0) is still None at this point only when the comparison
+                        #  routine is being used.
                         self.our_edges_to_g2o_edges[i] = edge
                     print("cam_idx: ", cam_idx)
                     cam_idx += 1
