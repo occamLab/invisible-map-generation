@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import *
+from typing import List, Union, Dict, Set, Tuple
 
 import g2o
 import numpy as np
@@ -13,6 +13,7 @@ from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_bas
     measurement_to_matrix
 from graph_vertex_edge_classes import *
 from maximization_model import maxweights
+import copy
 
 
 class Graph:
@@ -38,20 +39,20 @@ class Graph:
         """
 
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
-        self.edges: Dict[int, Edge] = edges
-        self.vertices: Dict[int, Vertex] = vertices
-        self.original_vertices = vertices
+        self.edges: Dict[int, Edge] = dict(edges)
+        self.vertices: Dict[int, Vertex] = dict(vertices)
+        self.original_vertices = dict(vertices)
 
-        self.verts_to_edges: Dict[int, List[int]] = {}
+        self.verts_to_edges: Dict[int, Set[int]] = {}
         self.generate_verts_to_edges_mapping()
 
         # This is populated in graph_to_optimizer and is currently no updated anywhere else
         self.our_edges_to_g2o_edges: Dict[int, Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]] = {}
 
-        self.weights: np.ndarray = weights
-        self.gravity_axis: str = gravity_axis
+        self.weights: np.ndarray = np.array(weights)
+        self.gravity_axis: str = str(gravity_axis)
 
-        self.basis_matrices = {}
+        self.basis_matrices: Dict[int, np.ndarray] = {}
         self.generate_basis_matrices()
 
         self.g2o_status = -1
@@ -85,9 +86,9 @@ class Graph:
             edge = self.edges[edge_uid]
             for vertex_uid in [edge.startuid, edge.enduid]:
                 if self.verts_to_edges.__contains__(vertex_uid):
-                    self.verts_to_edges[vertex_uid].append(edge_uid)
+                    self.verts_to_edges[vertex_uid].add(edge_uid)
                 else:
-                    self.verts_to_edges[vertex_uid] = [edge_uid,]
+                    self.verts_to_edges[vertex_uid] = {edge_uid, }
 
     @staticmethod
     def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
@@ -139,16 +140,18 @@ class Graph:
         else:
             raise Exception("Unhandled edge type for chi2 calculation")
 
-    def map_odom_to_adj_chi2(self, vertex_uid: int) -> float:
+    def map_odom_to_adj_chi2(self, vertex_uid: int) -> Tuple[float, int]:
         """Computes odometry-adjacent chi2 value
 
         Arguments:
             vertex_uid (int): Vertex integer corresponding to an odometry node
 
         Returns:
-            Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_ege`
-            static method) that are incident to both the specified odometry node and two other odometry nodes. If
-            there is only one such incident edge, then only that edge's chi2 value is returned.
+            Tuple containing two elements:
+            - Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_ege`
+              static method) that are incident to both the specified odometry node and two other odometry nodes. If
+              there is only one such incident edge, then only that edge's chi2 value is returned.
+            - Integer indicating how many tag vertices are visible from the specified odometry node
 
         Raises:
             ValueError if `vertex_uid` does not correspond to an odometry node.
@@ -158,23 +161,25 @@ class Graph:
         if self.vertices[vertex_uid].mode != VertexType.ODOMETRY:
             raise ValueError("Specified vertex type is not an odometry vertex")
 
-        relevant_edges = []
+        odom_edge_uids = []
+        num_tags_visible = 0
         for e in self.verts_to_edges[vertex_uid]:
             edge = self.edges[e]
-            if edge.startuid != vertex_uid and self.vertices[edge.startuid].mode == VertexType.ODOMETRY:
-                    relevant_edges.append(e)
-            else:
-                if self.vertices[edge.enduid].mode == VertexType.ODOMETRY:
-                    relevant_edges.append(e)
+            start_vertex = self.vertices[edge.startuid]
+            end_vertex = self.vertices[edge.enduid]
+            if start_vertex.mode == VertexType.ODOMETRY and end_vertex.mode == VertexType.ODOMETRY:
+                odom_edge_uids.append(e)
+            elif start_vertex.mode == VertexType.TAG or end_vertex.mode == VertexType.TAG:
+                num_tags_visible += 1
 
-        if len(relevant_edges) > 2:
+        if len(odom_edge_uids) > 2:
             raise Exception("Odometry vertex appears to be incident to > two odometry vertices")
 
         adj_chi2 = 0.0
-        for our_edge in relevant_edges:
+        for our_edge in odom_edge_uids:
             g2o_edge = self.our_edges_to_g2o_edges[our_edge]
             adj_chi2 += self.get_chi2_of_edge(g2o_edge)
-        return adj_chi2
+        return adj_chi2, num_tags_visible
 
     def optimize_graph(self) -> float:
         """Optimize the graph using g2o.
@@ -284,6 +289,7 @@ class Graph:
         All incident edges to the vertex are deleted from the following instance attributes:
         - `edges`
         - `our_edges_to_g2o_edges`
+        - The sets stored as the values in the `verts_to_edges` dictionary
 
         No edges or vertices are modified in either of the attributes that are g2o graphs.
 
@@ -293,14 +299,19 @@ class Graph:
         Raises:
             ValueError if the specified vertex to delete is not of a VertexType.TAG type.
         """
-        if self.vertices[vertex_uid] != VertexType.TAG:
+        if self.vertices[vertex_uid].mode != VertexType.TAG:
             raise ValueError("Specified vertex for deletion is not a tag vertex")
 
         # Delete connected edge(s)
         connected_edges = self.verts_to_edges[vertex_uid]
         for edge_uid in connected_edges:
+            if self.our_edges_to_g2o_edges.__contains__(edge_uid):
+                self.our_edges_to_g2o_edges.__delitem__(edge_uid)
+            if self.edges[edge_uid].startuid != vertex_uid:
+                self.verts_to_edges[self.edges[edge_uid].startuid].remove(edge_uid)
+            else:
+                self.verts_to_edges[self.edges[edge_uid].enduid].remove(edge_uid)
             self.edges.__delitem__(edge_uid)
-            self.our_edges_to_g2o_edges.__delitem__(edge_uid)
 
         # Delete vertex
         self.verts_to_edges.__delitem__(vertex_uid)
@@ -451,11 +462,15 @@ class Graph:
         return tags
 
     def get_subgraph(self, start_vertex_uid, end_vertex_uid) -> Graph:
-        """Returns a Graph instance that is a subgraph created from the specified range of vertices
+        """Returns a Graph instance that is a subgraph created from the specified range of odometry vertices
 
         Args:
             start_vertex_uid: First vertex in range of vertices from which to create a subgraph
             end_vertex_uid: Last vertex in range of vertices from which to create a subgraph
+
+        Returns:
+            A Graph object that was constructed from all odometry vertices within the prescribed range and any
+            incident tag vertices.
         """
         start_found = False
         edges: Dict[int, Edge] = {}
@@ -464,12 +479,10 @@ class Graph:
             edge = self.edges[edgeuid]
             if edge.startuid == start_vertex_uid:
                 start_found = True
-
             if start_found:
-                vertices[edge.enduid] = self.vertices[edge.enduid]
-                vertices[edge.startuid] = self.vertices[edge.startuid]
-                edges[edgeuid] = edge
-
+                vertices[edge.enduid] = copy.deepcopy(self.vertices[edge.enduid])
+                vertices[edge.startuid] = copy.deepcopy(self.vertices[edge.startuid])
+                edges[edgeuid] = copy.deepcopy(edge)
             if edge.enduid == end_vertex_uid:
                 break
 
@@ -477,12 +490,12 @@ class Graph:
         for edgeuid in self.edges:
             edge = self.edges[edgeuid]
             if self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in vertices:
-                edges[edgeuid] = edge
-                vertices[edge.startuid] = self.vertices[edge.startuid]
+                edges[edgeuid] = copy.deepcopy(edge)
+                vertices[edge.startuid] = copy.deepcopy(self.vertices[edge.startuid])
 
             if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in vertices:
-                edges[edgeuid] = edge
-                vertices[edge.enduid] = self.vertices[edge.enduid]
+                edges[edgeuid] = copy.deepcopy(edge)
+                vertices[edge.enduid] = copy.deepcopy(self.vertices[edge.enduid])
 
         ret_graph = Graph(vertices, edges)
         return ret_graph

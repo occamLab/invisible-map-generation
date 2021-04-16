@@ -231,9 +231,10 @@ class GraphManager:
 
         # After iterating through the different weights, the results of the comparison are printed.
         for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
-            graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False)
-            graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True)
-
+            graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
+                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+            graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True,
+                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
             ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
             start_uid = graph1.edges[ordered_odom_edges[0]].startuid
             middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
@@ -242,8 +243,7 @@ class GraphManager:
 
             g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
             g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
-
-            del graph1, graph2  # No longer needed
+            del graph1, graph2, start_uid, end_uid, middle_uid_upper, middle_uid_lower  # No longer needed
 
             print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(iter_weights))
 
@@ -255,13 +255,15 @@ class GraphManager:
                 g1sg_plot_title = None
                 g1sg_chi2_plot_title = None
 
-            tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
+            g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
                 self._optimize_graph(g1sg, False, visualize, iter_weights, g1sg_plot_title, g1sg_chi2_plot_title)
-            processed_map_json_1 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations, g1sg_odom_adj_chi2)
+            processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locas, g1sg_odom_locs,
+                                                                        g1sg_waypoint_locs, g1sg_odom_adj_chi2)
+            del g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
 
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
                             "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
+            del processed_map_json_1  # No longer needed
 
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
 
@@ -303,19 +305,22 @@ class GraphManager:
                 g2sg_plot_title = None
                 g2sg_chi2_plot_title = None
 
-            tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr, g2sg_odom_adj_chi2 = \
+            g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_tag_chi_sqr, g2sg_odom_adj_chi2 = \
                 self._optimize_graph(g2sg, False, visualize, weights_key=None, graph_plot_title=g2sg_plot_title,
                                      chi2_plot_title=g2sg_chi2_plot_title)
-            processed_map_json_2 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations, g2sg_odom_adj_chi2)
+            processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
+                                                                        g2sg_waypoint_locs, g2sg_odom_adj_chi2)
+            del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
+
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
                             "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
+            del processed_map_json_2  # No longer needed
 
-            results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
+            results += "No fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
                        "Abs(delta chi-sqr): {}\n\n" \
-                .format(iter_weights, pre_fixed_chi_sqr, self._selected_weights, fixed_tag_chi_sqr,
-                        abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
+                .format(iter_weights, g1sg_fixed_chi_sqr, self._selected_weights, g1sg_fixed_chi_sqr,
+                        abs(g1sg_fixed_chi_sqr - g2sg_tag_chi_sqr))
 
             # TODO: Sanity check with extreme weights
         print(results)
@@ -591,6 +596,7 @@ class GraphManager:
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
         locations_list = []
+        num_tags_list = []
         locations_shape = np.shape(map_from_opt["locations"])
 
         for i in range(locations_shape[0]):
@@ -624,8 +630,8 @@ class GraphManager:
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
 
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
+        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '-', c='b', label='Odom Vertices')
+        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '-', c='g',
                  label='Prior Odom Vertices')
 
         if original_tag_verts is not None:
