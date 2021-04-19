@@ -41,6 +41,43 @@ Pickle has different encoding types between both python versions.
   This can be useful in assessing the jumpiness metric.
 - `metrics.py`: Going to have to remind myself of this one.
 
+## `GraphManager.py` Usage
+
+The script and `GraphManager` class in `GraphManager.py` provides multiple capabilities:
+
+- Acquiring and caching unprocessed maps from the Firebase database.
+- Performing standard graph optimization with plotting capabilities.
+- Performing a graph optimization comparison routine (see help for the `-c` flag or, for more detail, documentation 
+  of the `GraphManager._compare_weights` instance method).
+
+The script is operated through command line arguments. To see the help message, run:
+
+```
+python GraphManager.py -h
+```
+
+### Example usage
+
+1. Acquire and cache unprocessed maps:
+
+```
+python GraphManager.py -f
+```
+
+This invokes an infinite loop that listens to the database request, so it will need to be manually quit with Ctrl+C.
+
+2. Run standard graph optimization routine (with visualization turned on) with any maps matching the `glob` pattern (from the `.cache/` directory) of `unprocessed_maps/**/*Marion*`: 
+
+```
+python GraphManager.py -p "unprocessed_maps/**/*Marion*" -v
+```
+
+3. Run the optimization comparison routine:
+
+```
+python GraphManager.py -p "unprocessed_maps/**/*Marion*" -v -c
+```
+
 ## TODOS
 - Find sane weights for g2o.
   - There seems to be a bug in the g2o optimization that may lie in the updating of edge weights (`update_edges` in `graph.py`) or the conversion of a graph to a g2o object (`graph_to_optimizer` in `graph.py`).
