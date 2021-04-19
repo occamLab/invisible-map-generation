@@ -23,7 +23,7 @@ class Graph:
     def __init__(self, vertices: Dict[int, Vertex],
                  edges: Dict[int, Edge],
                  weights: np.ndarray = np.zeros(18),
-                 gravity_axis = 'z',
+                 gravity_axis = 'y',
                  is_sparse_bundle_adjustment: bool = False,
                  use_huber: bool = False,
                  huber_delta = None,
@@ -127,7 +127,6 @@ class Graph:
             Exception if an edge is encountered that is not handled (handled edges are g2o.EdgeProjectPSI2UV,
              g2o.EdgeSE3Expmap, and g2o.EdgeSE3)
         """
-        error_chi2: float
         if isinstance(edge, g2o.EdgeProjectPSI2UV):
             cam = edge.parameter(0)
             error = edge.measurement() - cam.cam_map(
@@ -254,14 +253,19 @@ class Graph:
                         edge.set_vertex(2, optimizer.vertex(self.edges[i].enduid))
                         edge.set_information(self.edges[i].information)
                         edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
-                        edge.set_parameter_id(0, cam_idx)
+
+                        cpp_bool_ret_val_check = True
+                        cpp_bool_ret_val_check &= edge.set_parameter_id(0, cam_idx)
                         if self.use_huber:
-                            edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
-                        optimizer.add_edge(edge)
+                            cpp_bool_ret_val_check &= edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
+                        cpp_bool_ret_val_check &= optimizer.add_edge(edge)
+
+                        if not cpp_bool_ret_val_check:
+                            raise Exception("A g2o optimizer method returned false")
                         # TODO: figure out why edge.parameter(0) is still None at this point only when the comparison
                         #  routine is being used.
+
                         self.our_edges_to_g2o_edges[i] = edge
-                    print("cam_idx: ", cam_idx)
                     cam_idx += 1
         else:
             for i in self.vertices:
@@ -508,8 +512,7 @@ class Graph:
                           is_sparse_bundle_adjustment=self.is_sparse_bundle_adjustment,
                           use_huber=self.use_huber,
                           huber_delta=self.huber_delta,
-                          damping_status=self.damping_status
-        )
+                          damping_status=self.damping_status)
         return ret_graph
 
     def get_tag_verts(self):
@@ -541,15 +544,12 @@ class Graph:
             start_found_idx = end_found_idx = 0
 
             for i in range(len(segments) - 1, -1, -1):
-                current_start_found = \
-                    edge.startuid == self.edges[segments[i][-1]].enduid
-                current_end_found = \
-                    edge.enduid == self.edges[segments[i][0]].startuid
+                current_start_found = edge.startuid == self.edges[segments[i][-1]].enduid
+                current_end_found = edge.enduid == self.edges[segments[i][0]].startuid
 
                 if current_start_found:
                     start_found = True
                     start_found_idx = i
-
                 elif current_end_found:
                     end_found = True
                     end_found_idx = i
@@ -559,7 +559,6 @@ class Graph:
                     segments[i].extend(segments[end_found_idx])
                     del segments[end_found_idx]
                     break
-
                 elif current_end_found and start_found:
                     segments[start_found_idx].append(uid)
                     segments[i] = segments[start_found_idx] + segments[i]
@@ -568,10 +567,8 @@ class Graph:
 
             if start_found and not end_found:
                 segments[start_found_idx].append(uid)
-
             elif end_found and not start_found:
                 segments[end_found_idx].insert(0, uid)
-
             elif not (start_found or end_found):
                 segments.append([uid])
         return segments
@@ -647,8 +644,7 @@ class Graph:
                 elif end_mode == VertexType.WAYPOINT:
                     continue
                 else:
-                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
-                                                                                                            end_mode))
+                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,                                                                                          end_mode))
             else:
                 raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
                                                                                                         end_mode))

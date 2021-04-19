@@ -464,5 +464,6 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=True,
                                       use_huber=False, huber_delta=None, damping_status=True)
     else:
-        resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', damping_status=True)
+        resulting_graph = graph.Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=False,
+                                      use_huber=False, huber_delta=None, damping_status=True)
     return resulting_graph
