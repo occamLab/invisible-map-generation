@@ -35,10 +35,10 @@ from firebase_admin import storage
 from g2o import Quaternion
 from varname import nameof
 
-import convert_json_sba
+# import convert_json_sba
+import as_graph
 import graph_utils
 from graph import Graph
-from json import tool
 
 
 class GraphManager:
@@ -56,7 +56,7 @@ class GraphManager:
          cache location of processed graphs.
         _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
         `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
-        `compare_weights` method is invoked.
+        `_compare_weights` method is invoked.
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
@@ -66,6 +66,8 @@ class GraphManager:
         _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
          always be located at `<path to this file>.cache/`
     """
+
+    # Importance is set to e^{-weight}
     _weights_dict = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
@@ -82,6 +84,11 @@ class GraphManager:
             -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
             0, 0, 0, -1e2, 3, 3
         ]),
+        # "new_option": np.array([
+        #     -6., -6., -6., -6., -6., -6.,  # Translation + rotation
+        #     1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
+        #     0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
+        # ])
     }
 
     _comparison_graph1_subgraph_weights = ["sensible_default_weights", "trust_odom", "trust_tags"]
@@ -107,7 +114,7 @@ class GraphManager:
 
         def __init__(self, map_name: str, map_json: str, map_dct: Dict = None):
             self.map_name: str = str(map_name)
-            self.map_dct: Union[dict, str] = dict(map_dct)
+            self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
 
     def __init__(self, weights_specifier: str, firebase_creds: firebase_admin.credentials.Certificate):
@@ -130,116 +137,6 @@ class GraphManager:
         """
         self._db_ref.listen(self._df_listen_callback)
 
-    def compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
-        """Invocation results in the weights comparison routine.
-
-        Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
-        following:
-        1. Acquire two sub-graphs: one from the first half of the ordered odometry nodes (called g1sg) and one from the
-           other half (called g2sg); note that g2sg is created from the convert_json_sba.as_graph method with the
-           fix_tag_vertices as True, whereas g1sg is created with fix_tag_vertices as False.
-        2. Optimize the g1sg with the iter_weights, then transfer the estimated locations of its tag vertices to the
-           g2sg. The assumption is that a majority - if not all - tag vertices are present in both sub-graphs; the
-           number of instances where this is not true is tallied, and warning messages are printed accordingly.
-        3. g2sg is then optimized with the self.selected_weights attribute selecting its weights (as opposed to
-           g1sg which is optimized using the weights selected by iter_weights)
-        The results of the comparison are then printed.
-
-        Args:
-            map_info (GraphManager.MapInfo): Map to use for weights comparison
-            visualize (bool): Used as the visualize argument for the `_process_map` method invocation.
-        """
-        results = "\n### Results  ###\n"
-
-        # After iterating through the different weights, the results of the comparison are printed.
-        for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
-            graph1 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=False)
-            ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
-            start_uid = graph1.edges[ordered_odom_edges[0]].startuid
-            end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
-            floored_middle = (start_uid + end_uid) // 2
-            g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=floored_middle)
-
-            print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(iter_weights))
-
-            g1sg_plot_title = None
-            g1sg_chi2_plot_title = None
-            if visualize:
-                g1sg_plot_title = "Optimization results for 1st sub-graph\n from map: {}".format(map_info.map_name)
-                g1sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 1st sub-graph from  map: {}".format(
-                    map_info.map_name)
-
-            tag_locations, odom_locations, waypoint_locations, pre_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
-                self._optimize_graph(g1sg, False, visualize, iter_weights, g1sg_plot_title, g1sg_chi2_plot_title)
-            processed_map_json_1 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations, g1sg_odom_adj_chi2)
-
-            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
-                            "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
-
-            print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
-
-            # Get optimized tag vertices from g1sg and transfer their estimated positions to g2sg;
-            # check whether there are any vertices present in g1sg that are not present in g2sg
-            # (print warning of how many vertices fit this criteria if nonzero)
-            graph2 = convert_json_sba.as_graph(map_info.map_dct, fix_tag_vertices=True)
-            g2sg = graph2.get_subgraph(start_vertex_uid=floored_middle + 1, end_vertex_uid=end_uid)
-            missing_vertex_count = 0
-            for graph1_sg_vert in g1sg.get_tag_verts():
-                if not g2sg.vertices.__contains__(graph1_sg_vert):
-                    missing_vertex_count += 1
-                else:
-                    g2sg.vertices[graph1_sg_vert].estimate = \
-                        g1sg.vertices[graph1_sg_vert].estimate
-
-            if missing_vertex_count > 0:
-                print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
-                      "{} ignored)".format(missing_vertex_count, "vertices" if missing_vertex_count > 1 else
-                                           "vertex", "these were" if missing_vertex_count > 1 else "this was"))
-
-            # Check whether there are any tag vertices present in g2sg that are not present in the
-            # g1sg; for each occurrence of this, delete the vertex from g2sg. After check is
-            # complete, print a warning of how many vertices were deleted if nonzero.
-            deleted_vertex_count = 0
-            for graph2_sg_vert in g2sg.get_tag_verts():
-                if not g1sg.vertices.__contains__(graph2_sg_vert):
-                    g2sg.delete_tag_vertex(graph2_sg_vert)
-                    deleted_vertex_count += 1
-
-            if deleted_vertex_count > 0:
-                print("Warning: {} {} present in second subgraph that are not present in the first subgraph ("
-                      "{} deleted from the second subgraph)"
-                      .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
-                              "these were" if deleted_vertex_count > 1 else "this was"))
-
-            g2sg_plot_title = None
-            g2sg_chi2_plot_title = None
-            if visualize:
-                g2sg_plot_title = "Optimization results for 2nd sub-graph\n from map: {}".format(map_info.map_name)
-                g2sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 2nd sub-graph from  map: {}".format(
-                    map_info.map_name)
-
-            tag_locations, odom_locations, waypoint_locations, fixed_tag_chi_sqr, g2sg_odom_adj_chi2 = \
-                self._optimize_graph(g2sg, False, visualize, weights_key=None, graph_plot_title=g2sg_plot_title,
-                                     chi2_plot_title=g2sg_chi2_plot_title)
-            processed_map_json_2 = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                        waypoint_locations, g2sg_odom_adj_chi2)
-            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
-                            "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
-
-            results += "Pre-fixed-tags with weights set {}: chi-sqr = {}\n" \
-                       "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
-                       "Abs(delta chi-sqr): {}\n\n" \
-                .format(iter_weights, pre_fixed_chi_sqr, self._selected_weights, fixed_tag_chi_sqr,
-                        abs(pre_fixed_chi_sqr - fixed_tag_chi_sqr))
-
-            # TODO: Sanity check with extreme weights
-
-            # TODO: Visualize the chi2 in the graph plot (e.g., color-code nodes based on chi2 of edges);
-            #  maybe also sync up with Jacquie re: her plotting efforts? Add another field to json of the
-            #  map
-        print(results)
-
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False) -> None:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
@@ -255,7 +152,7 @@ class GraphManager:
              directory (specified by the `_cache_path` attribute) is searched recursively
             visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
             upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
-            compare (bool): If true, run the routine for comparing graph optimization (invokes the `compare_weights`
+            compare (bool): If true, run the routine for comparing graph optimization (invokes the `_compare_weights`
              method)
         """
         self._resolve_cache_dir()
@@ -273,19 +170,20 @@ class GraphManager:
             with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
                 json_string = json_string_file.read()
                 json_string_file.close()
+
             map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
                 os.path.sep)) + 1:])
             map_dct = json.loads(json_string)
             map_name = self._read_cache_directory(os.path.basename(map_json))
-
             map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
 
             if compare:
                 if upload:
                     print("Warning: Ignoring True upload argument because comparing graphs")
-                self.compare_weights(map_info, visualize)
+                self._compare_weights(map_info, visualize)
             else:
-                graph = convert_json_sba.as_graph(map_info.map_dct)
+                graph = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
+                                          prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
 
                 graph_plot_title = None
                 chi2_plot_title = None
@@ -293,11 +191,15 @@ class GraphManager:
                     graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
                     chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
-                tag_locations, odom_locations, waypoint_locations, opt_chi2, _ = \
-                    self._optimize_graph(graph, False, visualize, weights_key=None, graph_plot_title=graph_plot_title,
+                tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2 = \
+                    self._optimize_graph(graph,
+                                         tune_weights=False,
+                                         visualize=visualize,
+                                         weights_key=None,
+                                         graph_plot_title=graph_plot_title,
                                          chi2_plot_title=chi2_plot_title)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations)
+                                                                          waypoint_locations, adj_chi2)
                 print("Processed map: {}".format(map_info.map_name))
                 if upload:
                     self._upload(map_info, processed_map_json)
@@ -306,6 +208,124 @@ class GraphManager:
                 self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
 
     # -- Private Methods --
+
+    def _compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
+        """Invocation results in the weights comparison routine.
+
+        Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
+        following:
+        1. Acquire two sub-graphs: one from the first half of the ordered odometry nodes (called g1sg) and one from the
+           other half (called g2sg); note that g2sg is created from the as_graph.as_graph method with the
+           fix_tag_vertices as True, whereas g1sg is created with fix_tag_vertices as False.
+        2. Optimize the g1sg with the iter_weights, then transfer the estimated locations of its tag vertices to the
+           g2sg. The assumption is that a majority - if not all - tag vertices are present in both sub-graphs; the
+           number of instances where this is not true is tallied, and warning messages are printed accordingly.
+        3. g2sg is then optimized with the self.selected_weights attribute selecting its weights (as opposed to
+           g1sg which is optimized using the weights selected by iter_weights)
+        The results of the comparison are then printed.
+
+        Args:
+            map_info (GraphManager.MapInfo): Map to use for weights comparison
+            visualize (bool): Used as the visualize argument for the `_process_map` method invocation.
+        """
+        results = "\n### Results  ###\n"
+
+        # After iterating through the different weights, the results of the comparison are printed.
+        for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
+            graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
+                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+            graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True,
+                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+            ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
+            start_uid = graph1.edges[ordered_odom_edges[0]].startuid
+            middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
+            middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
+            end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
+
+            g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
+            g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
+            del graph1, graph2, start_uid, end_uid, middle_uid_upper, middle_uid_lower  # No longer needed
+
+            print("\n-- Processing sub-graph without tags fixed, using weights set: {} --".format(iter_weights))
+
+            if visualize:
+                g1sg_plot_title = "Optimization results for 1st sub-graph\n from map: {}".format(map_info.map_name)
+                g1sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 1st sub-graph from  map: {}".format(
+                    map_info.map_name)
+            else:
+                g1sg_plot_title = None
+                g1sg_chi2_plot_title = None
+
+            g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
+                self._optimize_graph(g1sg, tune_weights=False, visualize=visualize, weights_key=iter_weights,
+                                     graph_plot_title=g1sg_plot_title, chi2_plot_title=g1sg_chi2_plot_title)
+            processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locas, g1sg_odom_locs,
+                                                                        g1sg_waypoint_locs, g1sg_odom_adj_chi2)
+            del g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
+
+            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
+                            "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
+            del processed_map_json_1  # No longer needed
+
+            print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
+
+            # Get optimized tag vertices from g1sg and transfer their estimated positions to g2sg; check whether there
+            # are any vertices present in g1sg that are not present in g2sg (print warning of how many vertices fit this
+            # criteria if nonzero)
+            missing_vertex_count = 0
+            for graph1_sg_vert in g1sg.get_tag_verts():
+                if not g2sg.vertices.__contains__(graph1_sg_vert):
+                    missing_vertex_count += 1
+                else:
+                    g2sg.vertices[graph1_sg_vert].estimate = g1sg.vertices[graph1_sg_vert].estimate
+
+            if missing_vertex_count > 0:
+                print("Warning: {} {} present in first subgraph that are not present in the second subgraph ("
+                      "{} ignored)".format(missing_vertex_count, "vertices" if missing_vertex_count > 1 else
+                                           "vertex", "these were" if missing_vertex_count > 1 else "this was"))
+
+            # Check whether there are any tag vertices present in g2sg that are not present in the g1sg; for each
+            # occurrence of this, delete the vertex from g2sg. After check is complete, print a warning of how many
+            # vertices were deleted if nonzero.
+            deleted_vertex_count = 0
+            for graph2_sg_vert in g2sg.get_tag_verts():
+                if not g1sg.vertices.__contains__(graph2_sg_vert):
+                    g2sg.delete_tag_vertex(graph2_sg_vert)
+                    deleted_vertex_count += 1
+
+            if deleted_vertex_count > 0:
+                print("Warning: {} {} present in second subgraph that are not present in the first subgraph ("
+                      "{} deleted from the second subgraph)"
+                      .format(deleted_vertex_count, "vertices" if deleted_vertex_count > 1 else "vertex",
+                              "these were" if deleted_vertex_count > 1 else "this was"))
+
+            if visualize:
+                g2sg_plot_title = "Optimization results for 2nd sub-graph\n from map: {}".format(map_info.map_name)
+                g2sg_chi2_plot_title = "Odom. node incident edges chi2 values for\n 2nd sub-graph from  map: {}".format(
+                    map_info.map_name)
+            else:
+                g2sg_plot_title = None
+                g2sg_chi2_plot_title = None
+
+            g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_tag_chi_sqr, g2sg_odom_adj_chi2 = \
+                self._optimize_graph(g2sg, tune_weights=False, visualize=visualize, weights_key=None,
+                                     graph_plot_title=g2sg_plot_title, chi2_plot_title=g2sg_chi2_plot_title)
+            processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
+                                                                        g2sg_waypoint_locs, g2sg_odom_adj_chi2)
+            del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
+
+            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
+                            "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
+            del processed_map_json_2  # No longer needed
+
+            results += "No fixed-tags with weights set {}: chi-sqr = {}\n" \
+                       "Subsequent optimization, fixed-tags with weights set {}: chi-sqr = {}\n" \
+                       "Abs(delta chi-sqr): {}\n\n" \
+                .format(iter_weights, g1sg_fixed_chi_sqr, self._selected_weights, g1sg_fixed_chi_sqr,
+                        abs(g1sg_fixed_chi_sqr - g2sg_tag_chi_sqr))
+
+            # TODO: Sanity check with extreme weights
+        print(results)
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
@@ -549,7 +569,7 @@ class GraphManager:
             graph.expectation_maximization_once()
             print("tuned weights", graph.weights)
         # Create the g2o object and optimize
-        graph.generate_unoptimized_graph()
+        # graph.generate_unoptimized_graph()
         opt_chi2 = graph.optimize_graph()
 
         # Change vertex estimates based off the optimized graph
@@ -564,34 +584,44 @@ class GraphManager:
         locations = graph_utils.locations_from_transforms(resulting_map['locations'])
         tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
         tagpoint_positions = resulting_map['tagpoints']
-        waypoint_verts = resulting_map['waypoints']
+        waypoint_verts = tuple(resulting_map['waypoints'])
 
         if visualize:
             self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                            original_tag_verts, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
-        return tag_verts, locations, waypoint_verts, opt_chi2, odom_chi2_adj_vec
+        return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec
 
     # -- Static Methods --
 
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
-        uids_chi2_comb = []
-        for idx, uid in enumerate(map_from_opt['uids']):
-            uids_chi2_comb.append((uid, map_from_opt['locationsAdjChi2'][idx]))
+        locations_list = []
+        num_tags_list = []
+        locations_shape = np.shape(map_from_opt["locations"])
 
-        uids_chi2_comb.sort(key=lambda x: x[0])
-        y_axis = np.zeros(np.shape(map_from_opt['locationsAdjChi2']))
-        for idx in range(len(uids_chi2_comb)):
-            y_axis[idx] = uids_chi2_comb[idx][1]
+        for i in range(locations_shape[0]):
+            locations_list.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i]))
 
-        plt.plot(sorted(map_from_opt['uids']), y_axis + 1)
+        locations_list.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
+
+        y_axis = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
+        for idx in range(locations_shape[0]):
+            y_axis[idx] = locations_list[idx][1]
+
+        x_axis = np.zeros([locations_shape[0], 1])  # Contains UIDs
+        for idx in range(locations_shape[0]):
+            x_axis[idx] = locations_list[idx][0][7]
+
+        plt.plot(x_axis, y_axis + 1)
         plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
             plt.title(plot_title)
         plt.yscale("log")
         plt.ylabel("lg(1 + chi2)")
+        plt.show()
+
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
@@ -602,8 +632,8 @@ class GraphManager:
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
 
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '.', c='b', label='Odom Vertices')
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '.', c='g',
+        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '-', c='b', label='Odom Vertices')
+        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '-', c='g',
                  label='Prior Odom Vertices')
 
         if original_tag_verts is not None:
