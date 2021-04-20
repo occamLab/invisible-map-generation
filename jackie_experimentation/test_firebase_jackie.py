@@ -12,6 +12,7 @@ def process_map(map_name, map_json, visualize=False):
         x = json.loads(json_data)
         print(x)
 
+
         # make own folder to upload data after modifying x
         # make a new file name and then upload
     else:
