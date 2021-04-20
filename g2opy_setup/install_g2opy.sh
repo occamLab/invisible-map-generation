@@ -5,6 +5,7 @@
 SCRIPT=$(readlink -f "$0")
 # Get the repository directory
 REPODIR=$(dirname "$(dirname "$SCRIPT")")
+echo "Changing directory into ${REPODIR}"
 cd "$REPODIR" || exit
 
 # Ignore cloning the repository if it already exists
@@ -16,7 +17,8 @@ fi
 cd g2opy || exit
 
 # Replace the eigen file
-cp ../working_g2opy_build_assets/fixed_eigen_types.h python/core/eigen_types.h
+echo "Replacing the eigen_types.h file with the corrected one"
+cp ../g2opy_setup/fixed_eigen_types.h python/core/eigen_types.h || exit
 
 # Make a new build directory if one doesn't already exist
 if [ ! -d "./build/" ]
