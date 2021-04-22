@@ -618,7 +618,6 @@ class GraphManager:
         plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
             plt.title(plot_title)
-        plt.ylabel("chi2)")
         plt.show()
 
 
