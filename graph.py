@@ -215,6 +215,7 @@ class Graph:
         optimizer: g2o.SparseOptimizer = g2o.SparseOptimizer()
         optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(
             g2o.BlockSolverSE3(g2o.LinearSolverCholmodSE3())))
+        cpp_bool_ret_val_check = True
 
         if self.is_sparse_bundle_adjustment:
             for i in self.vertices:
@@ -226,7 +227,7 @@ class Graph:
                     vertex.set_estimate(pose_to_se3quat(self.vertices[i].estimate))
                 vertex.set_id(i)
                 vertex.set_fixed(self.vertices[i].fixed)
-                optimizer.add_vertex(vertex)
+                cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
             cam_idx = 0
             for i in self.edges:
                 if self.edges[i].corner_ids is None:
@@ -236,7 +237,7 @@ class Graph:
                         edge.set_vertex(j, optimizer.vertex(k))
                         edge.set_measurement(pose_to_se3quat(self.edges[i].measurement))
                         edge.set_information(self.edges[i].information)
-                    optimizer.add_edge(edge)
+                    cpp_bool_ret_val_check &= optimizer.add_edge(edge)
                     self.our_edges_to_g2o_edges[i] = edge
                 else:
                     # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
@@ -254,16 +255,10 @@ class Graph:
                         edge.set_information(self.edges[i].information)
                         edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
 
-                        cpp_bool_ret_val_check = True
                         cpp_bool_ret_val_check &= edge.set_parameter_id(0, cam_idx)
                         if self.use_huber:
                             cpp_bool_ret_val_check &= edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
                         cpp_bool_ret_val_check &= optimizer.add_edge(edge)
-
-                        if not cpp_bool_ret_val_check:
-                            raise Exception("A g2o optimizer method returned false")
-                        # TODO: figure out why edge.parameter(0) is still None at this point only when the comparison
-                        #  routine is being used.
 
                         self.our_edges_to_g2o_edges[i] = edge
                     cam_idx += 1
@@ -273,7 +268,7 @@ class Graph:
                 vertex.set_id(i)
                 vertex.set_estimate(pose_to_isometry(self.vertices[i].estimate))
                 vertex.set_fixed(self.vertices[i].fixed)
-                optimizer.add_vertex(vertex)
+                cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
 
             for i in self.edges:
                 edge = g2o.EdgeSE3()
@@ -285,8 +280,12 @@ class Graph:
                 edge.set_information(self.edges[i].information)
                 edge.set_id(i)
 
-                optimizer.add_edge(edge)
+                cpp_bool_ret_val_check &= optimizer.add_edge(edge)
                 self.our_edges_to_g2o_edges[i] = edge
+
+        if not cpp_bool_ret_val_check:
+            raise Exception("A g2o optimizer method returned false in the graph_to_optimizer method")
+
         return optimizer
 
     def delete_tag_vertex(self, vertex_uid: int):
@@ -437,7 +436,7 @@ class Graph:
                 for group in groups]
 
     def integrate_path(self, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])) -> np.ndarray:
-        """TODO: documentation
+        """Returns an array of vectors containing translation and rotation information for the prescribed edge UIDs.
         """
         poses = [initial]
         for edgeuid in edgeuids:
@@ -452,7 +451,7 @@ class Graph:
     # -- Getters --
 
     def get_tags_all_position_estimate(self) -> np.ndarray:
-        """TODO: documentation
+        """Returns an array position estimates for every edge that connects an odometry vertex to a tag vertex.
         """
         tags = np.reshape([], [0, 8])  # [x, y, z, qx, qy, qz, 1, id]
         for edgeuid in self.edges:

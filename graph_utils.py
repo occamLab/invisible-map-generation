@@ -186,9 +186,6 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
 
 
 def locations_from_transforms(locations):
-    """TODO: documentation
-
-    """
     for i in range(locations.shape[0]):
         locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
     return locations

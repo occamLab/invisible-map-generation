@@ -36,7 +36,7 @@ def matrix2measurement(pose, invert=False):
     Args:
         pose (np.ndarray): Pose or array of poses in matrix form.
          The poses are converted along the last two axes.
-        invert (bool): TODO
+        invert (bool): If inverted, then the return value will be inverted
     Returns:
       Converted pose or array of poses.
     """
