@@ -1,5 +1,7 @@
 # Summary
 
+*This README documents how to set up `g2opy`. However, it is not fully validated and is therefore a WIP.*
+
 Run `install_g2opy.sh` from any directory. At the end of the script, g2opy's Python setup script is called with the default python interpreter (make sure to source your virtual environment before calling this script to get the desired Python version); it was found to work with Python 3.8.5 on Ubuntu 20.0.4.
 
 # Description
