@@ -41,10 +41,16 @@ def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_
     for i in optimizer.vertices():
         mode = vertices[i].mode
         if mode == VertexType.TAGPOINT:
+            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+
+            if tag_vert is None:
+                # TODO: double-check that the right way to handle this case is to continue
+                continue
+
             location = optimizer.vertex(i).estimate()
             if exaggerate_tag_corners:
                 location = location * np.array([10, 10, 1])
-            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+
             tagpoints = np.vstack((tagpoints, tag_vert.estimate().inverse() * location))
         else:
             location = optimizer.vertex(i).estimate().translation()
