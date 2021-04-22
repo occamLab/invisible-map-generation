@@ -506,6 +506,10 @@ class Graph:
                 edges[edgeuid] = edge
                 vertices[edge.enduid] = self.vertices[edge.enduid]
 
+        for (vert_id, vert) in self.vertices.items():
+            if vert.mode == VertexType.TAGPOINT:
+                vertices[vert_id] = vert
+
         ret_graph = Graph(vertices, edges,
                           weights=self.weights,
                           gravity_axis=self.gravity_axis,
