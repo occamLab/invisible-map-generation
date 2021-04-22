@@ -191,7 +191,7 @@ class GraphManager:
                     graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
                     chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
-                tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2 = \
+                tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
                     self._optimize_graph(graph,
                                          tune_weights=False,
                                          visualize=visualize,
@@ -199,7 +199,8 @@ class GraphManager:
                                          graph_plot_title=graph_plot_title,
                                          chi2_plot_title=chi2_plot_title)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations, adj_chi2)
+                                                                          waypoint_locations, adj_chi2,
+                                                                          visible_tags_count)
                 print("Processed map: {}".format(map_info.map_name))
                 if upload:
                     self._upload(map_info, processed_map_json)
@@ -256,12 +257,14 @@ class GraphManager:
                 g1sg_plot_title = None
                 g1sg_chi2_plot_title = None
 
-            g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_fixed_chi_sqr, g1sg_odom_adj_chi2 = \
+            g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_fixed_chi_sqr, g1sg_odom_adj_chi2, \
+                g1sg_visible_tags_count = \
                 self._optimize_graph(g1sg, tune_weights=False, visualize=visualize, weights_key=iter_weights,
                                      graph_plot_title=g1sg_plot_title, chi2_plot_title=g1sg_chi2_plot_title)
-            processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locas, g1sg_odom_locs,
-                                                                        g1sg_waypoint_locs, g1sg_odom_adj_chi2)
-            del g1sg_tag_locas, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
+            processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locs, g1sg_odom_locs,
+                                                                        g1sg_waypoint_locs, g1sg_odom_adj_chi2,
+                                                                        g1sg_visible_tags_count)
+            del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
 
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
                             "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
@@ -307,11 +310,13 @@ class GraphManager:
                 g2sg_plot_title = None
                 g2sg_chi2_plot_title = None
 
-            g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_tag_chi_sqr, g2sg_odom_adj_chi2 = \
+            g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_tag_chi_sqr, g2sg_odom_adj_chi2, \
+                g2sg_visible_tags_count = \
                 self._optimize_graph(g2sg, tune_weights=False, visualize=visualize, weights_key=None,
                                      graph_plot_title=g2sg_plot_title, chi2_plot_title=g2sg_chi2_plot_title)
             processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
-                                                                        g2sg_waypoint_locs, g2sg_odom_adj_chi2)
+                                                                        g2sg_waypoint_locs, g2sg_odom_adj_chi2,
+                                                                        g2sg_visible_tags_count)
             del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
 
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
@@ -522,7 +527,7 @@ class GraphManager:
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
                         Union[None, str] = None, graph_plot_title: Union[str, None] = None, chi2_plot_title: \
                         Union[str, None] = None) -> \
-            Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray]:
+            Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
         """Optimizes the input graph
 
         Arguments:
@@ -545,9 +550,11 @@ class GraphManager:
             - The numpy array of waypoint vertices from the optimized graph
             - The total chi2 value of the optimized graph as returned by the `optimize_graph` method of the `graph`
               instance.
-            - A vector numpy array where each element corresponds to the chi2 value for each odometry node; each chi2
+            - A numpy array where each element corresponds to the chi2 value for each odometry node; each chi2
               value is calculated as the sum of chi2 values of the (up to) two incident edges to the odometry node
               that connects it to (up to) two other odometry nodes.
+            - A numpy array where each element corresponds to the number of visible tag vertices from the corresponding
+              odometry vertices.
         """
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
                                                    self._selected_weights]
@@ -578,7 +585,9 @@ class GraphManager:
         prior_map = graph_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
         resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
                                                           is_sparse_bundle_adjustment=True)
+
         odom_chi2_adj_vec: np.ndarray = resulting_map['locationsAdjChi2']
+        visible_tags_count_vec: np.ndarray = resulting_map['visibleTagsCount']
 
         prior_locations = graph_utils.locations_from_transforms(prior_map['locations'])
         locations = graph_utils.locations_from_transforms(resulting_map['locations'])
@@ -591,35 +600,44 @@ class GraphManager:
                            original_tag_verts, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
-        return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec
+        return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
     # -- Static Methods --
 
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
-        locations_list = []
-        num_tags_list = []
+        locations_chi2_viz_tags = []
         locations_shape = np.shape(map_from_opt["locations"])
-
         for i in range(locations_shape[0]):
-            locations_list.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i]))
+            locations_chi2_viz_tags.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i],
+                                   map_from_opt["visibleTagsCount"][i]))
+        locations_chi2_viz_tags.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
 
-        locations_list.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
-
-        y_axis = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
+        chi2_values = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
+        viz_tags = np.zeros([locations_shape[0], 3])
+        odom_uids = np.zeros([locations_shape[0], 1])  # Contains UIDs
         for idx in range(locations_shape[0]):
-            y_axis[idx] = locations_list[idx][1]
+            chi2_values[idx] = locations_chi2_viz_tags[idx][1]
+            odom_uids[idx] = int(locations_chi2_viz_tags[idx][0][7])
 
-        x_axis = np.zeros([locations_shape[0], 1])  # Contains UIDs
-        for idx in range(locations_shape[0]):
-            x_axis[idx] = locations_list[idx][0][7]
+            # Each row: UID, chi2_value, and num. viz. tags (only if != 0). As of now, the number of visible tags is
+            # ignored when plotting (plot only shows boolean value: whether at least 1 tag vertex is visible)
+            num_tag_verts = locations_chi2_viz_tags[idx][2]
+            if num_tag_verts != 0:
+                viz_tags[idx, :] = np.array([odom_uids[idx], chi2_values[idx], num_tag_verts]).flatten()
 
-        plt.plot(x_axis, y_axis + 1)
+        odom_uids.flatten()
+        chi2_values.flatten()
+
+        plt.plot(odom_uids, chi2_values)
+        plt.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
+        plt.xlim([min(odom_uids), max(odom_uids)])
+        plt.legend(["chi2 value", ">=1 tag vertex visible"])
+
         plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
-            plt.title(plot_title)
+            plt.title(plot_title, wrap=True)
         plt.show()
-
 
     @staticmethod
     def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
@@ -704,7 +722,11 @@ class GraphManager:
 
     @staticmethod
     def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray, waypoint_locations: Tuple[
-                                List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None) -> str:
+                                List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None,
+                                visible_tags_count: Union[None, np.ndarray] = None) -> str:
+        if (visible_tags_count is None) ^ (visible_tags_count is None):
+            print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
+
         tag_vertex_map = map(
             lambda curr_tag: {
                 'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
@@ -729,7 +751,8 @@ class GraphManager:
                 }, odom_locations
             )
         else:
-            odom_locations_with_chi2 = np.concatenate([odom_locations, adj_chi2_arr], axis=1)
+            odom_locations_with_chi2_and_viz_tags = np.concatenate([odom_locations, adj_chi2_arr, visible_tags_count],
+                                                                   axis=1)
             odom_vertex_map = map(
                 lambda curr_odom: {
                     'translation': {'x': curr_odom[0], 'y': curr_odom[1],
@@ -739,8 +762,9 @@ class GraphManager:
                                  'z': curr_odom[5],
                                  'w': curr_odom[6]},
                     'poseId': int(curr_odom[8]),
-                    'adjChi2': curr_odom[9]
-                }, odom_locations_with_chi2
+                    'adjChi2': curr_odom[9],
+                    'vizTags': curr_odom[10]
+                }, odom_locations_with_chi2_and_viz_tags
             )
         waypoint_vertex_map = map(
             lambda idx: {
