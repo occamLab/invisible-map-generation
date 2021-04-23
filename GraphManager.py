@@ -55,8 +55,8 @@ class GraphManager:
         _processed_upload_to (str): Simultaneously specifies Firebase bucket path to upload processed graphs to and the
          cache location of processed graphs.
         _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
-        `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
-        `_compare_weights` method is invoked.
+         `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
+         `_compare_weights` method is invoked.
 
     Attributes:
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
@@ -117,17 +117,21 @@ class GraphManager:
             self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
 
-    def __init__(self, weights_specifier: str, firebase_creds: firebase_admin.credentials.Certificate):
+    def __init__(self, weights_specifier: str, firebase_creds: firebase_admin.credentials.Certificate,
+                 pso: as_graph.PrescalingOptEnum = as_graph.PrescalingOptEnum.USE_SBA):
         """Initializes GraphManager instance (only populates instance attributes)
 
         Args:
              weights_specifier (str): Used as the key to access the corresponding value in `GraphManager._weights_dict`
              firebase_creds (firebase_admin.credentials.Certificate): Firebase credentials to pass as the first
-             argument to `firebase_admin.initialize_app(cred, ...)`
+              argument to `firebase_admin.initialize_app(cred, ...)`
+             pso (PrescalingOptEnum):
         """
         self._app = firebase_admin.initialize_app(firebase_creds, GraphManager._app_initialize_dict)
         self._bucket = storage.bucket(app=self._app)
         self._db_ref = db.reference("/" + GraphManager._unprocessed_listen_to)
+
+        self._pso = pso
         self._selected_weights = str(weights_specifier)
         self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
 
@@ -183,7 +187,7 @@ class GraphManager:
                 self._compare_weights(map_info, visualize)
             else:
                 graph = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
-                                          prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+                                          prescaling_opt=self._pso)
 
                 graph_plot_title = None
                 chi2_plot_title = None
@@ -234,9 +238,9 @@ class GraphManager:
         # After iterating through the different weights, the results of the comparison are printed.
         for iter_weights in GraphManager._comparison_graph1_subgraph_weights:
             graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
-                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+                                       prescaling_opt=self._pso)
             graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True,
-                                       prescaling_opt=as_graph.PrescalingOptEnum.USE_SBA)
+                                       prescaling_opt=self._pso)
             ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
             start_uid = graph1.edges[ordered_odom_edges[0]].startuid
             middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
@@ -799,6 +803,17 @@ def make_parser():
              "recursively, and '**/' is automatically prepended to the pattern"
     )
     p.add_argument(
+        "--pso",
+        type=int,
+        required=False,
+        help="Specifies the prescaling option used in the as_graph method. Viable options are:\n"
+             " 0: Sparse bundle adjustment\n"
+             " 1: Tag prescaling uses the full covariance matrix\n"
+             " 2: Tag prescaling uses only the covariance matrix diagonal\n"
+             " 3: Tag prescaling is a matrix of ones.",
+        default=0
+    )
+    p.add_argument(
         "-f",
         action="store_true",
         help="Acquire maps from Firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
@@ -839,7 +854,8 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_handler = GraphManager("sensible_default_weights", cred)
+    graph_handler = GraphManager("sensible_default_weights", cred,
+                                 pso=as_graph.PrescalingOptEnum.get_by_value(args.pso))
 
     if args.f:
         graph_handler.firebase_listen()
