@@ -36,7 +36,7 @@ def matrix2measurement(pose, invert=False):
     Args:
         pose (np.ndarray): Pose or array of poses in matrix form.
          The poses are converted along the last two axes.
-        invert (bool): If inverted, then the return value will be inverted
+        invert (bool): If inverted, then the return enum_value will be inverted
     Returns:
       Converted pose or array of poses.
     """
@@ -91,6 +91,10 @@ class PrescalingOptEnum(Enum):
     DIAG_COV = 2
     ONES = 3
 
+    @staticmethod
+    def get_by_value(enum_value: int):
+        return PrescalingOptEnum._value2member_map_[enum_value]
+
 
 def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA):
     """Convert a dictionary decoded from JSON into a graph.
@@ -113,9 +117,9 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         A graph derived from the input dictionary.
 
     Raises:
-        An exception if prescaling_opt is a value that is not handled.
+        An exception if prescaling_opt is a enum_value that is not handled.
     """
-    # The following variables instantiated to None are optionally used depending on the value of prescaling_opt
+    # The following variables instantiated to None are optionally used depending on the enum_value of prescaling_opt
     tag_joint_covar = None
     tag_position_variances = None
     tag_orientation_variances = None
@@ -282,10 +286,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             estimate=odom_vertex_estimates[i],
             fixed=not first_odom_processed
         )
-
-        if use_sba:
-            vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
-
+        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         first_odom_processed = True
         vertex_counter += 1
 
