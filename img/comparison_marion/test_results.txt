@@ -1,0 +1,13 @@
+### Results ###
+
+No fixed tags with weights set sensible_default_weights: chi2 = 0.0001720054037223094
+Subsequent optimization, fixed tags with weights set sensible_default_weights: chi2 = 0.0008846244536827429
+Abs(delta chi2): 0.0007126190499604335
+
+No fixed tags with weights set trust_odom: chi2 = 0.009048988324893271
+Subsequent optimization, fixed tags with weights set sensible_default_weights: chi2 = 0.0007500806332398242
+Abs(delta chi2): 0.008298907691653448
+
+No fixed tags with weights set trust_tags: chi2 = 519694.3076879606
+Subsequent optimization, fixed tags with weights set sensible_default_weights: chi2 = 0.0008588462920474175
+Abs(delta chi2): 519694.3068291143
