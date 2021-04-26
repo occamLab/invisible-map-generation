@@ -200,11 +200,9 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) if np.linalg.det(covar[:-1, :-1]) != 0 else \
                                             np.zeros((6, 6)) for covar in tag_joint_covar_matrices])
         elif prescaling_opt == PrescalingOptEnum.DIAG_COV:
-            # print("overwriting with diagonal covariances")
             tag_edge_prescaling = 1. / np.hstack((tag_position_variances, tag_orientation_variances[:, :-1]))
         elif prescaling_opt == PrescalingOptEnum.ONES:
-            # print('resetting prescaling to identity')
-            tag_edge_prescaling = np.ones((n_pose_ids, 6))
+            tag_edge_prescaling = np.ones((n_pose_ids, 6, 6))
         else:
             raise Exception("{} is not yet handled".format(str(prescaling_opt)))
 
