@@ -58,7 +58,7 @@ class Edge:
             corner_ids: an array of UIDs for each of the tag corner vertices. This only applies to edges to a tag
             information: A 6x6 numpy array encoding measurement information. The rows and columns encode x, y, z, qx,
              qy, and qz information.
-            information_prescaling: A 6 element numpy array encoding he diagonal of a matrix that pre-multiplies the
+            information_prescaling: A 6 element numpy array encoding the diagonal of a matrix that pre-multiplies the
              edge information matrix specified by the weights. If None is past, then the 6 element vector is assumed to
              be all ones
             camera_intrinsics: [fx, fy, cx, cy] (only applies to tag edges)
