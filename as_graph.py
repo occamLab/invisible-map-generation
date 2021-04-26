@@ -188,6 +188,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
 
     tag_edge_measurements_matrix = np.matmul(camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
+    n_pose_ids = pose_ids.shape[0]
 
     if not use_sba:
         if prescaling_opt == PrescalingOptEnum.FULL_COV:
@@ -203,7 +204,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             tag_edge_prescaling = 1. / np.hstack((tag_position_variances, tag_orientation_variances[:, :-1]))
         elif prescaling_opt == PrescalingOptEnum.ONES:
             # print('resetting prescaling to identity')
-            tag_edge_prescaling = np.ones(6)
+            tag_edge_prescaling = np.ones((n_pose_ids, 6))
         else:
             raise Exception("{} is not yet handled".format(str(prescaling_opt)))
 
