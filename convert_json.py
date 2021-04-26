@@ -37,23 +37,20 @@ def as_graph(dct):
         tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
                                      dct['tag_data']])
 
-        # Commented-out (unused):
-        # tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in \
-        #                                     dct['tag_data']])
-        # tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
-        #                                        in dct['tag_data']])
+        tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame in \
+                                            dct['tag_data']])
+        tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
+                                               in dct['tag_data']])
     else:
         tag_pose_flat = np.zeros((0, 16))
         tag_ids = np.zeros((0, 1), type=np.int)
         pose_ids = np.zeros((0, 1), type=np.int)
         tag_joint_covar = np.zeros((0, 49), type=np.double)
 
-        # Commented-out (unused):
-        # tag_position_variances = np.zeros((0, 3), type=np.double)
-        # tag_orientation_variances = np.zeros((0, 4), type=np.double)
+        tag_position_variances = np.zeros((0, 3), type=np.double)
+        tag_orientation_variances = np.zeros((0, 4), type=np.double)
 
-    tag_edge_measurements_matrix = np.matmul(
-        camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
+    tag_edge_measurements_matrix = np.matmul(camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
     # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of
@@ -65,12 +62,11 @@ def as_graph(dct):
 
     # print("overwriting with diagonal covariances")
     # tag_edge_prescaling = 1./np.hstack((tag_position_variances, tag_orientation_variances[:,:-1]))
-    # print('resetting prescaling to identity')
-    # tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
+    print('resetting prescaling to identity')
+    tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
 
     unique_tag_ids = np.unique(tag_ids)
-    tag_vertex_id_by_tag_id = dict(
-        zip(unique_tag_ids, range(unique_tag_ids.size)))
+    tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
     tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
 
     # Enable lookup of tags by the frame they appear in
@@ -127,7 +123,7 @@ def as_graph(dct):
             fixed=not first_odom_processed
         )
         first_odom_processed = True
-
+        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         vertex_counter += 1
 
         # Connect odom to tag vertex
