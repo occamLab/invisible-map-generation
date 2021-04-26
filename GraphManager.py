@@ -791,11 +791,11 @@ def make_parser():
         "--pso",
         type=int,
         required=False,
-        help="Specifies the prescaling option used in the as_graph method. Viable options are:\n"
-             " 0: Sparse bundle adjustment\n"
-             " 1: Tag prescaling uses the full covariance matrix\n"
-             " 2: Tag prescaling uses only the covariance matrix diagonal\n"
-             " 3: Tag prescaling is a matrix of ones.",
+        help="Specifies the prescaling option used in the as_graph method. Viable options are: "
+             " 0-Sparse bundle adjustment, "
+             " 1-Tag prescaling uses the full covariance matrix,"
+             " 2-Tag prescaling uses only the covariance matrix diagonal,"
+             " 3-Tag prescaling is a matrix of ones.",
         default=0
     )
     p.add_argument(
