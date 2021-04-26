@@ -41,10 +41,16 @@ def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_
     for i in optimizer.vertices():
         mode = vertices[i].mode
         if mode == VertexType.TAGPOINT:
+            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+
+            if tag_vert is None:
+                # TODO: double-check that the right way to handle this case is to continue
+                continue
+
             location = optimizer.vertex(i).estimate()
             if exaggerate_tag_corners:
                 location = location * np.array([10, 10, 1])
-            tag_vert = find_connected_tag_vert(optimizer, optimizer.vertex(i))
+
             tagpoints = np.vstack((tagpoints, tag_vert.estimate().inverse() * location))
         else:
             location = optimizer.vertex(i).estimate().translation()
@@ -97,15 +103,17 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundl
         with each odometry node is a chi2 calculated from the `map_odom_to_adj_chi2` method of the `Graph` class, which
         is stored in the vector in the locationsAdjChi2 vector.
     """
-    ret_map = optimizer_to_map(graph.vertices, optimizer,
-                               is_sparse_bundle_adjustment=is_sparse_bundle_adjustment)
+    ret_map = optimizer_to_map(graph.vertices, optimizer, is_sparse_bundle_adjustment=is_sparse_bundle_adjustment)
     locations_shape = np.shape(ret_map["locations"])
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
+    visible_tags_count = np.zeros([locations_shape[0], 1])
+
     for i, odom_node_vec in enumerate(ret_map["locations"]):
         uid = round(odom_node_vec[7])  # UID integer is stored as a floating point number, so cast it to an integer
-        locations_adj_chi2[i] = graph.map_odom_to_adj_chi2(uid)
+        locations_adj_chi2[i], visible_tags_count[i] = graph.map_odom_to_adj_chi2(uid)
 
     ret_map["locationsAdjChi2"] = locations_adj_chi2
+    ret_map["visibleTagsCount"] = visible_tags_count
     return ret_map
 
 
@@ -178,9 +186,6 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
 
 
 def locations_from_transforms(locations):
-    """TODO: documentation
-
-    """
     for i in range(locations.shape[0]):
         locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
     return locations
