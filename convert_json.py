@@ -1,41 +1,7 @@
-import numpy as np
-from scipy.spatial.transform import Rotation as R
 import itertools
-
+import numpy as np
+from as_graph import matrix2measurement
 import graph
-
-
-def pose2diffs(poses):
-    """Convert an array of poses in the odom frame to an array of
-    transformations from the last pose.
-
-    Args:
-      poses (np.ndarray): Pose or array of poses.
-    Returns:
-      An array of transformations
-    """
-    diffs = []
-    for previous_pose, current_pose in zip(poses[:-1], poses[1:]):
-        diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
-    diffs = np.array(diffs)
-    return diffs
-
-
-def matrix2measurement(pose):
-    """ Convert a pose or array of poses in matrix form to [x, y, z,
-    qx, qy, qz, qw].
-
-    The output will have one fewer dimension than the input.
-
-    Args:
-      pose (np.ndarray): Pose or array of poses in matrix form.
-        The poses are converted along the last two axes.
-    Returns:
-      Converted pose or array of poses.
-    """
-    translation = pose[..., :3, 3]
-    rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
-    return np.concatenate([translation, rotation], axis=-1)
 
 
 def as_graph(dct):
@@ -60,6 +26,7 @@ def as_graph(dct):
         [0, 0, -1, 0],
         [0, 0, 0, 1]
     ])
+
     # flatten the data into individual numpy arrays that we can operate on
     if 'tag_data' in dct:
         tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
@@ -75,15 +42,15 @@ def as_graph(dct):
         tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for tagsFromFrame \
                                                in dct['tag_data']])
     else:
-        tag_pose_flat = np.zeros((0,16))
-        tag_ids = np.zeros((0,1), type=np.int)
-        pose_ids = np.zeros((0,1), type=np.int)
-        tag_joint_covar = np.zeros((0,49), type=np.double)
-        tag_position_variances = np.zeros((0,3), type=np.double)
-        tag_orientation_variances = np.zeros((0,4), type=np.double)
+        tag_pose_flat = np.zeros((0, 16))
+        tag_ids = np.zeros((0, 1), type=np.int)
+        pose_ids = np.zeros((0, 1), type=np.int)
+        tag_joint_covar = np.zeros((0, 49), type=np.double)
 
-    tag_edge_measurements_matrix = np.matmul(
-        camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
+        tag_position_variances = np.zeros((0, 3), type=np.double)
+        tag_orientation_variances = np.zeros((0, 4), type=np.double)
+
+    tag_edge_measurements_matrix = np.matmul(camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4))
     tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
 
     # Note that we are ignoring the variance deviation of qw since we use a compact quaternion parameterization of
@@ -99,8 +66,7 @@ def as_graph(dct):
     tag_edge_prescaling = np.ones(tag_edge_prescaling.shape)
 
     unique_tag_ids = np.unique(tag_ids)
-    tag_vertex_id_by_tag_id = dict(
-        zip(unique_tag_ids, range(unique_tag_ids.size)))
+    tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
     tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
 
     # Enable lookup of tags by the frame they appear in
@@ -119,7 +85,7 @@ def as_graph(dct):
     if waypoint_list_uniform:
         waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
     else:
-        waypoint_data_uniform = np.zeros((0,18))
+        waypoint_data_uniform = np.zeros((0, 18))
     waypoint_edge_measurements_matrix = waypoint_data_uniform[:, :16].reshape(-1, 4, 4)
     waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
 
@@ -226,7 +192,7 @@ def as_graph(dct):
         dummy_node_uid = vertex_counter
         vertices[dummy_node_uid] = graph.Vertex(
             mode=graph.VertexType.DUMMY,
-            estimate=np.hstack((np.zeros(3,),odom_vertex_estimates[i][3:])),
+            estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
             fixed=True
         )
         vertex_counter += 1
