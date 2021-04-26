@@ -319,9 +319,9 @@ class GraphManager:
                             "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
             del processed_map_json_2  # No longer needed
 
-            results += "No fixed tags with weights set {}: chi-sqr = {}\n" \
-                       "Subsequent optimization, fixed tags with weights set {}: chi-sqr = {}\n" \
-                       "Abs(delta chi-sqr): {}\n\n".format(iter_weights, g1sg_chi_sqr, self._selected_weights,
+            results += "No fixed tags with weights set {}: chi2 = {}\n" \
+                       "Subsequent optimization, fixed tags with weights set {}: chi2 = {}\n" \
+                       "Abs(delta chi2): {}\n\n".format(iter_weights, g1sg_chi_sqr, self._selected_weights,
                                                            g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
 
