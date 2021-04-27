@@ -1,36 +1,50 @@
 import parse_map
 import pprint as pp
 import json
+import numpy as np
+import shapely.geometry
+from shapely.geometry import LineString
 
 class Node:
-    def __init__(self, x, y, z):
+    def __init__(self, x, y, z, poseID):
         # data is in the form of [x,y,z] of odometry vertices
         self.data = [x,y,z]
+        self.poseID = poseID
 
 class Graph:
     
-    # create adjacency list
-    g={}
+    def __init__(self):
+        # create adjacency list
+        self.g={}
+        self.edges_set = set()
+        self.edges = []
     
     def addEdge(self,node,neighbour):
+
         # node -> neighbour  
-        if node not in self.g:
-            self.g[node]=[neighbour]
+        if node.poseID not in self.g:
+            self.g[node.poseID]=[neighbour.poseID]
         else:
-            self.g[node].append(neighbour)
+            self.g[node.poseID].append(neighbour.poseID)
 
         # neighbour -> node
-        if neighbour not in self.g:
-            self.g[neighbour] = [node]
+        if neighbour.poseID not in self.g:
+            self.g[neighbour.poseID] = [node.poseID]
         else:
-            self.g[neighbour].append(node)
+            self.g[neighbour.poseID].append(node.poseID)
 
-    def address2readable(self):
-        self.new_g = {}
-        for key in self.g:
-            self.new_g[key.data] = []
-            for neighbour in self.g[key]:
-                self.new_g[key.data].append(neighbour)
+        # add edge to set and list of edges
+        if (((node, neighbour) not in self.edges_set) and
+            ((neighbour, node) not in self.edges_set)):
+            self.edges_set.add((node, neighbour))
+            self.edges.append((node, neighbour))
+
+    # def address2readable(self):
+    #     self.new_g = {}
+    #     for key in self.g:
+    #         self.new_g[key.poseID] = []
+    #         for neighbour in self.g[key]:
+    #             self.new_g[key.poseID].append(neighbour)
 
     def show_edges(self):
         for node in self.g:
@@ -38,24 +52,117 @@ class Graph:
                 print("(",node.data,", ",neighbour.data,")")
 
     def show_graph(self):
-        pp.pprint(self.new_g)
+        pp.pprint(self.g)
 
-def generate_mapping_graph(x, y, z):
+
+    def get_intersections(self):
+        '''
+        Returns whether there is an intersection between 2 line segments using x-z coordinates
+        '''
+        # TODO: there are a suspiciously large number of intersection points. Double the number of edges
+        # Next step is to visualize it and validate intersections
+        intersect_nodes = []    # Node objects
+        self.intersect_vertices = [] # Same style as json objects
+        _id = 0
+
+        for e1 in self.edges:
+            for e2 in self.edges:
+                if e1 != e2:
+                    line1 = LineString([(e1[0].data[0], e1[0].data[2]), 
+                                        (e1[1].data[0], e1[1].data[2])])
+                    line2 = LineString([(e2[0].data[0], e2[0].data[2]), 
+                                        (e2[1].data[0], e2[1].data[2])])
+                    # print("LINE1 ", line1)
+                    # print("LINE2 ", line2)
+                    
+                    # find intersection
+                    if (str(line1.intersection(line2)) != "LINESTRING EMPTY" and
+                        str(type(line1.intersection(line2))) == "<class 'shapely.geometry.point.Point'>"):
+                        # TODO: implement check for y position to make sure not different floors
+                        # TODO: find out why some intersections are LineStrings instead of points
+                        intersect_pt = line1.intersection(line2)
+
+                        # Create new node for intersection and add to list
+                        intersect_node = Node(intersect_pt.x, 0, intersect_pt.y, _id)
+
+                        # Create json formatted vertex
+                        vertex = {}
+                        vertex["translation"] = {}
+                        vertex["translation"]["x"] = intersect_pt.x
+                        vertex["translation"]["y"] = 0
+                        vertex["translation"]["z"] = intersect_pt.y
+                        vertex["id"] = _id
+
+                        intersect_nodes.append(intersect_node)
+                        self.intersect_vertices.append(vertex)
+                        _id += 1
+
+        # pp.pprint(intersect_nodes[0])
+        # pp.pprint(vars(intersect_nodes[0]))
+
+        # for pt in intersect_nodes:
+        #     pp.pprint(vars(pt))
+
+        # pp.pprint(intersect_nodes)
+
+        # pp.pprint(self.intersect_vertices)
+                
+
+def generate_mapping_graph(x, y, z, poseID):
     map_g = Graph()
     
-    curr_node = Node(x[0], y[0], z[0])
+    curr_node = Node(x[0], y[0], z[0], poseID[0])
     for i in range(1, len(x)):
         # Create node
-        next_node = Node(x[i], y[i], z[i])
+        next_node = Node(x[i], y[i], z[i], poseID[i])
         map_g.addEdge(curr_node, next_node)
         curr_node = next_node
     # map_g.show_edges()
-    map_g.address2readable()
-    map_g.show_graph()
+    # map_g.address2readable()
+    # map_g.show_graph()
+    map_g.get_intersections()
+    return map_g
+
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(NpEncoder, self).default(obj)
+
+
+def modify_json(input_filename, output_filename, graph):
+
+    with open(input_filename, "r") as read_file:
+        mapping_data = json.load(read_file)
+        odometry_data = mapping_data["odometry_vertices"]
+
+    # add neighbors to odometry vertices
+    for pt in odometry_data:
+        pt["neighbors"] = graph.g[pt["poseId"]]
+
+    # add intersection vertices
+    #TODO: ask PAUL whether it would be better to put them in odometry vertices or keep separately. Currently separate
+    mapping_data["intersection_vertices"] = graph.intersect_vertices
+
+    with open(output_filename, 'w') as outfile:
+        json.dump(mapping_data, outfile, cls=NpEncoder)
+
+
 
 if __name__ == "__main__":
+    # filepath = 'data_jackie_AC_3rd_floor_processed.json'
 
-    map = parse_map.Map_Data('data_jackie_AC_3rd_floor_processed.json')
+    filepath = 'test_blocks_jackie.json'
+    map = parse_map.Map_Data(filepath)
     x, y, z, poseID = map.parse_odometry()
     
-    generate_mapping_graph(x, y, z)
+    graph = generate_mapping_graph(x, y, z, poseID)
+    modify_json(filepath, 'test_blocks_jackie_graph_w_intersections.json', graph)
+
+
+

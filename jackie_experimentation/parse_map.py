@@ -22,7 +22,7 @@ class Map_Data:
         '''
         Parses odometry data and returns numpy translation arrays and poseId array
         '''
-        self.trans_x, self.trans_y, self.trans_z, self.poseId = [], [], [], [], []
+        self.trans_x, self.trans_y, self.trans_z, self.poseId = [], [], [], []
         for pt in self.odometry_data:
             self.trans_x.append(pt["translation"]["x"])
             self.trans_y.append(pt["translation"]["y"])
