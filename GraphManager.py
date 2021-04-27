@@ -68,6 +68,12 @@ class GraphManager:
     """
 
     # Importance is set to e^{-weight}
+    ordered_weights_dict_keys = [
+        "sensible_default_weights",
+        "trust_odom",
+        "trust_tags",
+        "new_option",
+    ]
     _weights_dict = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
@@ -84,11 +90,11 @@ class GraphManager:
             -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
             0, 0, 0, -1e2, 3, 3
         ]),
-        # "new_option": np.array([
-        #     -6., -6., -6., -6., -6., -6.,  # Translation + rotation
-        #     1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
-        #     0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
-        # ])
+        "new_option": np.array([
+            -6., -6., -6., -6., -6., -6.,  # Translation + rotation
+            1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
+            0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
+        ])
     }  # TODO: Sanity check with extreme weights
 
     _comparison_graph1_subgraph_weights = ["sensible_default_weights", "trust_odom", "trust_tags"]
@@ -796,7 +802,21 @@ def make_parser():
              " 1-Tag prescaling uses the full covariance matrix,"
              " 2-Tag prescaling uses only the covariance matrix diagonal,"
              " 3-Tag prescaling is a matrix of ones.",
-        default=0
+        default=0,
+        choices={0, 1, 2, 3}
+    )
+    p.add_argument(
+        "-w",
+        type=int,
+        required=False,
+        help="Specifies which weight vector to be used (maps to a weight vector which is stored as a class attribute "
+             "of the GraphManager class). Viable options are: "
+             " 0-'sensible_default_weights',"
+             " 1-'trust_odom',"
+             " 2-'trust_tags',"
+             " 3-'new_option'.",
+        default=0,
+        choices={0, 1, 2, 3}
     )
     p.add_argument(
         "-f",
@@ -839,7 +859,7 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_handler = GraphManager("sensible_default_weights", cred,
+    graph_handler = GraphManager(GraphManager.ordered_weights_dict_keys[args.w], cred,
                                  pso=as_graph.PrescalingOptEnum.get_by_value(args.pso))
 
     if args.f:
