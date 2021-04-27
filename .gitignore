@@ -1,3 +1,20 @@
 *.pyc
 math.tex
 *adminsdk*.json
+
+# Ignore the g2opy dependency
+g2opy
+
+# Ignore a virtual environment
+venv
+
+# Pycharm workspace configuration
+.idea
+
+# Map cache folder
+**/.cache/
+
+# Ignore video files
+*.mp4
+
+/img/duncan_image_exports

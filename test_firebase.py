@@ -49,7 +49,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
     # Load these weights into the graph
     test_graph.update_edges()
     test_graph.generate_unoptimized_graph()
-    all_tags_original = graph_utils.get_tags_all_position_estimate(test_graph)
+    all_tags_original = test_graph.get_tags_all_position_estimate()
     starting_map = graph_utils.optimizer_to_map(
         test_graph.vertices, test_graph.unoptimized_graph)
     original_tag_verts = starting_map['tags']
@@ -69,7 +69,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
     tag_verts = resulting_map['tags']
     waypoint_verts = resulting_map['waypoints']
     if visualize:
-        all_tags = graph_utils.get_tags_all_position_estimate(test_graph)
+        all_tags = test_graph.get_tags_all_position_estimate()
 
         f = plt.figure()
         ax = f.add_subplot(111, projection='3d')
