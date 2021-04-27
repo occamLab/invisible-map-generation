@@ -120,10 +120,10 @@ def as_graph(dct):
         vertices[current_odom_vertex_uid] = graph.Vertex(
             mode=graph.VertexType.ODOMETRY,
             estimate=odom_vertex_estimates[i],
-            fixed=not first_odom_processed
+            fixed=not first_odom_processed,
+            meta_data={'poseId': odom_frame}
         )
         first_odom_processed = True
-        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         vertex_counter += 1
 
         # Connect odom to tag vertex

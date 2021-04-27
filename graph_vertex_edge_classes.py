@@ -21,7 +21,7 @@ class Vertex:
     It contains the :class: VertexType of the vertex as well as the pose.
     """
 
-    def __init__(self, mode, estimate, fixed):
+    def __init__(self, mode, estimate, fixed, meta_data = None):
         """The vertex class.
 
         Args:
@@ -31,7 +31,7 @@ class Vertex:
         self.mode = mode
         self.estimate = estimate
         self.fixed = fixed
-        self.meta_data = {}
+        self.meta_data = {} if meta_data is None else meta_data
 
 
 class Edge:

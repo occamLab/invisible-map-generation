@@ -116,12 +116,12 @@ def as_graph(dct, fix_tag_vertices=False):
         vertices[current_odom_vertex_uid] = graph.Vertex(
             mode=graph.VertexType.ODOMETRY,
             estimate=odom_vertex_estimates[i],
-            fixed=not first_odom_processed
+            fixed=not first_odom_processed,
+            meta_data={'poseId': odom_frame}
         )
-        vertices[current_odom_vertex_uid].meta_data['poseId'] = odom_frame
         first_odom_processed = True
-
         vertex_counter += 1
+
         # Connect odom to tag vertex
         for tag_vertex_id, tag_index in tag_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
             current_tag_transform_estimate = SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * SE3Quat(
