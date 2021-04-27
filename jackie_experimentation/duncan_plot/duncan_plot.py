@@ -67,7 +67,6 @@ class Plot_Chi2_Animation:
                     title='adjChi2 Plot')
         self.adjChi2_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes)
         self.line = self.ax.plot(poseID, adjChi2+1)
-        self.ax.set_yscale("log")
         # self.line.axes.axis('equal')
 
         poseID_interval = 100
