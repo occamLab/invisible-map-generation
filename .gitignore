@@ -17,4 +17,4 @@ venv
 # Ignore video files
 *.mp4
 
-/img/duncan_image_exports
+/optimization_weight_analysis/

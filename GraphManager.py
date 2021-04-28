@@ -1,26 +1,11 @@
 #!/usr/bin/env python3
 """
-Contains the GraphManager class and a main routine that makes use of it.
-
-Print the usage instructions:
->> python3 GraphManager.py -h
-
-Example usage that listens to the unprocessed maps database reference:
->> python3 GraphManager.py -f
-
-Example usage that optimizes and plots all graphs matching the pattern specified by the -p flag:
->> python3 GraphManager.py -p "unprocessed_maps/**/*Living Room*"
-
-Notes:
-- This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
-- The maps that are *processed* and cached are of a different format than the unprocessed graphs and cannot be-loaded
-  for further processing.
+Contains the GraphManager class. For the command line utility that makes use of it, see graph_manager_user.py.
 
 Author: Duncan Mazza
 """
 from __future__ import annotations
 
-import argparse
 import glob
 import json
 import os
@@ -29,13 +14,11 @@ from typing import *
 import firebase_admin
 import matplotlib.pyplot as plt
 import numpy as np
-from firebase_admin import credentials
 from firebase_admin import db
 from firebase_admin import storage
 from g2o import Quaternion
 from varname import nameof
 
-# import convert_json_sba
 import as_graph
 import graph_utils
 from graph import Graph
@@ -778,93 +761,5 @@ class GraphManager:
                            'waypoints_vertices': list(waypoint_vertex_map)}, indent=2)
 
 
-def make_parser():
-    """Makes an argument p object for this program
-
-    Returns:
-        Argument p
-    """
-    p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot")
-    p.add_argument(
-        "-p",
-        type=str,
-        help="Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., "
-             "'-g *Living_Room*' will plot any cached map with 'Living_Room' in its name); if no pattern is specified, "
-             "then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is searched "
-             "recursively, and '**/' is automatically prepended to the pattern"
-    )
-    p.add_argument(
-        "--pso",
-        type=int,
-        required=False,
-        help="Specifies the prescaling option used in the as_graph method. Viable options are: "
-             " 0-Sparse bundle adjustment, "
-             " 1-Tag prescaling uses the full covariance matrix,"
-             " 2-Tag prescaling uses only the covariance matrix diagonal,"
-             " 3-Tag prescaling is a matrix of ones.",
-        default=0,
-        choices={0, 1, 2, 3}
-    )
-    p.add_argument(
-        "-w",
-        type=int,
-        required=False,
-        help="Specifies which weight vector to be used (maps to a weight vector which is stored as a class attribute "
-             "of the GraphManager class). Viable options are: "
-             " 0-'sensible_default_weights',"
-             " 1-'trust_odom',"
-             " 2-'trust_tags',"
-             " 3-'new_option'.",
-        default=0,
-        choices={0, 1, 2, 3}
-    )
-    p.add_argument(
-        "-f",
-        action="store_true",
-        help="Acquire maps from Firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
-    )
-    p.add_argument(
-        "-F",
-        action="store_true",
-        help="Upload any graphs to Firebase that are optimized while this script is running. This option is mutually "
-             "exclusive with the -c option."
-    )
-    p.add_argument(
-        "-c",
-        action="store_true",
-        help="Compare graph optimizations by computing two different optimizations for two sub-graphs of the "
-             "specified graph: one where the tag vertices are not fixed, and one where they are. This option is "
-             "mutually exclusive with the -F option."
-    )
-    p.add_argument(
-        "-v",
-        action="store_true",
-        help="Visualize plots"
-    )
-    return p
-
-
 if __name__ == "__main__":
-    parser = make_parser()
-    args = parser.parse_args()
-
-    if args.f and (args.p or args.F or args.c):
-        print("Option in addition to -f specified, but -f option is mutually exclusive with other options due to the "
-              "asynchronous nature of Firebase updating.")
-        exit()
-
-    if args.c and args.F:
-        print("Options -c and -F are mutually exclusive; uploading is disabled for graph comparison")
-        exit()
-
-    # Fetch the service account key JSON file contents
-    cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_handler = GraphManager(GraphManager.ordered_weights_dict_keys[args.w], cred,
-                                 pso=as_graph.PrescalingOptEnum.get_by_value(args.pso))
-
-    if args.f:
-        graph_handler.firebase_listen()
-        exit()
-
-    map_pattern = args.p if args.p else "*"
-    graph_handler.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c)
+    print("The command line functionality using the GraphManager class has been moved to graph_manager_user.py")
