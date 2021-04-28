@@ -34,5 +34,4 @@ ax.plot(tags_estimate[:, 0], tags_estimate[:, 1],
 
 
 ax.legend()
-
 plt.show()

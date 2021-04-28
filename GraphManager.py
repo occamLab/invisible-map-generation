@@ -328,7 +328,7 @@ class GraphManager:
             results += "No fixed tags with weights set {}: chi2 = {}\n" \
                        "Subsequent optimization, fixed tags with weights set {}: chi2 = {}\n" \
                        "Abs(delta chi2): {}\n\n".format(iter_weights, g1sg_chi_sqr, self._selected_weights,
-                                                           g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
+                                                        g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:

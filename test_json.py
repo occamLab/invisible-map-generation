@@ -1,6 +1,6 @@
 import json
 
-import convert_json
+import as_graph
 import numpy as np
 import graph_utils
 import matplotlib.pyplot as plt
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 with open('data/round1.json', 'r') as f:
     x = json.load(f)
 
-test_graph = convert_json.as_graph(x)
+test_graph = as_graph.as_graph(x, prescaling_opt=as_graph.PrescalingOptEnum.FULL_COV)
 
 test_graph.weights = np.array([
     0.,  0.,  0., 0.,  0.,  0.,

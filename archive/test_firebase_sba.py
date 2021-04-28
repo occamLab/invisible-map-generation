@@ -2,7 +2,7 @@
 
 import json
 
-import convert_json_sba
+import as_graph
 import numpy as np
 import graph_utils
 import matplotlib.pyplot as plt
@@ -31,7 +31,7 @@ def axis_equal(ax):
 
 
 def optimize_map(x, tune_weights=False, visualize=False):
-    test_graph = convert_json_sba.as_graph(x)
+    test_graph = as_graph.as_graph(x)
     # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic, hence the large correction here)
     # trying to lock orientation
     sensible_default_weights = np.array([

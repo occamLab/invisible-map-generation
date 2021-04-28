@@ -2,7 +2,7 @@
 
 import json
 
-import convert_json
+import as_graph
 import numpy as np
 import graph_utils
 import matplotlib.pyplot as plt
@@ -25,7 +25,7 @@ def axis_equal(ax):
         ax.plot([xb], [yb], [zb], 'w')
 
 def optimize_map(x, tune_weights=False, visualize=False):
-    test_graph = convert_json.as_graph(x)
+    test_graph = as_graph.as_graph(x, prescaling_opt=as_graph.PrescalingOptEnum.FULL_COV)
     # higher means more noisy (note: the uncertainty estimates of translation seem to be pretty over optimistic, hence the large correction here)
     sensible_default_weights = np.array([
         -6.,  -6.,  -6.,  -6.,  -6.,  -6.,

@@ -12,7 +12,7 @@ from scipy.spatial.transform import Rotation as R
 from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
     measurement_to_matrix
 from graph_vertex_edge_classes import *
-from maximization_model import maxweights
+from expectation_maximization.maximization_model import maxweights
 import copy
 
 
