@@ -66,7 +66,7 @@ def make_parser():
     p.add_argument(
         "-f",
         action="store_true",
-        help="Acquire maps from Firebase and overwrite existing cache. Mutually exclusive with the rest of the options."
+        help="Acquire maps from Firebase and overwrite existing cache."
     )
     p.add_argument(
         "-F",
@@ -93,23 +93,17 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
 
-    if args.f and (args.p or args.F or args.c):
-        print("Option in addition to -f specified, but -f option is mutually exclusive with other options due to the "
-              "asynchronous nature of Firebase updating.")
-        exit()
-
     if args.c and args.F:
-        print("Options -c and -F are mutually exclusive; uploading is disabled for graph comparison")
-        exit()
+        print("Mutually exclusive flags -c and -F used")
+        exit(-1)
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_handler = GraphManager(GraphManager.ordered_weights_dict_keys[args.w], cred,
+    graph_manager = GraphManager(GraphManager.ordered_weights_dict_keys[args.w], cred,
                                  pso=as_graph.PrescalingOptEnum.get_by_value(args.pso))
 
     if args.f:
-        graph_handler.firebase_listen()
-        exit()
+        graph_manager.firebase_listen()
 
-    map_pattern = args.p if args.p else "*"
-    graph_handler.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c)
+    map_pattern = args.p if args.p else ""
+    graph_manager.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c)

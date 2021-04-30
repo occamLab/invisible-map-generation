@@ -10,6 +10,8 @@ import glob
 import json
 import os
 from typing import *
+from threading import Semaphore, Thread
+from threading import Timer
 
 import firebase_admin
 import matplotlib.pyplot as plt
@@ -124,11 +126,36 @@ class GraphManager:
         self._selected_weights = str(weights_specifier)
         self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
 
-    def firebase_listen(self) -> None:
+        # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
+        self._listen_kill_timer: Timer = Timer(0, lambda x: x)
+        self._firebase_listen_sem: Semaphore = Semaphore()
+        self._timer_mutex: Semaphore = Semaphore()
+        self._firebase_listen_max_wait: int = 0
+
+    def firebase_listen_in_thread(self):
+        self._db_ref.listen(self._df_listen_callback)
+
+    def firebase_listen(self, max_wait: int = 3) -> None:
         """Invokes the `listen` method of the `_db_ref` attribute and provides the `_df_listen_callback` method as the
         callback function argument.
+
+        This function is multi-threaded: the database listening happens in a new thread, and the parent thread blocks on
+        its child's completion.
+
+        Args:
+            max_wait: The maximum amount of time in seconds to wait after receiving a response before terminating the
+                      database listening and un-blocking the parent thread.
         """
-        self._db_ref.listen(self._df_listen_callback)
+        self._firebase_listen_max_wait = max_wait
+        self._firebase_listen_sem = Semaphore(0)
+        self._timer_mutex = Semaphore(1)
+        self._listen_kill_timer = Timer(self._firebase_listen_max_wait, self._firebase_listen_sem.release)
+        self._listen_kill_timer.start()
+        thread_obj = Thread(target=self.firebase_listen_in_thread)
+        thread_obj.start()
+        self._firebase_listen_sem.acquire()
+        thread_obj.join()
+        print("Finished listening to Firebase")
 
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False) -> None:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
@@ -148,6 +175,10 @@ class GraphManager:
             compare (bool): If true, run the routine for comparing graph optimization (invokes the `_compare_weights`
              method)
         """
+        if len(pattern) == 0:
+            print("Empty pattern provided; no maps will be processed")
+            return
+
         self._resolve_cache_dir()
         matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
 
@@ -328,8 +359,14 @@ class GraphManager:
         Returns:
             True if the map was successfully acquired and cached, and false if the map was not found by Firebase
         """
-        map_info = GraphManager.MapInfo(map_name, map_json, None)
+        # Reset the timer
+        self._timer_mutex.acquire()
+        self._listen_kill_timer.cancel()
+        self._listen_kill_timer = Timer(self._firebase_listen_max_wait, self._firebase_listen_sem.release)
+        self._listen_kill_timer.start()
+        self._timer_mutex.release()
 
+        map_info = GraphManager.MapInfo(map_name, map_json, None)
         json_blob = self._bucket.get_blob(map_info.map_json)
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
