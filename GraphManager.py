@@ -587,7 +587,8 @@ class GraphManager:
 
         starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
                                                     is_sparse_bundle_adjustment=True)
-        original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags'])
+        original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags']) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map['tags']
 
         if tune_weights:
             graph.expectation_maximization_once()
@@ -605,9 +606,12 @@ class GraphManager:
         odom_chi2_adj_vec: np.ndarray = resulting_map['locationsAdjChi2']
         visible_tags_count_vec: np.ndarray = resulting_map['visibleTagsCount']
 
-        prior_locations = graph_utils.locations_from_transforms(prior_map['locations'])
-        locations = graph_utils.locations_from_transforms(resulting_map['locations'])
-        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags'])
+        prior_locations = graph_utils.locations_from_transforms(prior_map['locations']) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map['locations']
+        locations = graph_utils.locations_from_transforms(resulting_map['locations']) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map['locations']
+        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags']) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map['tags']
         tagpoint_positions = resulting_map['tagpoints']
         waypoint_verts = tuple(resulting_map['waypoints'])
 
