@@ -99,8 +99,7 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_manager = GraphManager(GraphManager.ordered_weights_dict_keys[args.w], cred,
-                                 pso=as_graph.PrescalingOptEnum.get_by_value(args.pso))
+    graph_manager = GraphManager(args.w, cred, pso=args.pso)
 
     if args.f:
         graph_manager.firebase_listen()

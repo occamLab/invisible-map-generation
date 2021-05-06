@@ -34,32 +34,34 @@ class GraphManager:
         _weights_dict (Dict[str, np.ndarray]): Maps descriptive names of weight vectors to the corresponding weight
          vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation 
          seem to be pretty over optimistic, hence the large correction here) for the orientation
-        _app_initialize_dict (Dict[str, str]): Used for initializing the `app` attribute
-        _unprocessed_listen_to (str): Simultaneously specifies database reference to listen to in the `firebase_listen`
+        _app_initialize_dict (Dict[str, str]): Used for initializing the app attribute
+        _unprocessed_listen_to (str): Simultaneously specifies database reference to listen to in the firebase_listen
          method and the cache location of any maps associated with that database reference.
         _processed_upload_to (str): Simultaneously specifies Firebase bucket path to upload processed graphs to and the
          cache location of processed graphs.
         _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
-         `_weights_dict`; the keys identify the different weights vectors applied to the first subgraph when the
-         `_compare_weights` method is invoked.
+         _weights_dict; the keys identify the different weights vectors applied to the first subgraph when the
+         _compare_weights method is invoked.
+        _initialized_app: Set to true when the Firebase app is initialized and is used to only let the app be
+         initialized on the first invocation of the GraphManager constructor.
+        _app (firebase_admin.App): App initialized with a service account, granting admin privileges
 
     Attributes:
-        _app (firebase_admin.App): App initialized with a service account, granting admin privileges
         _bucket: Handle to the Google Cloud Storage bucket
-        _db_ref: Database reference representing the node as specified by the `GraphManager._unprocessed_listen_to`
-         class attribute _selected_weights (np.ndarray): Vector selected from the `GraphManager._weights_dict`
-        _cache_path (str): String representing the absolute path to the cache folder. The cache path is evaluated to
-         always be located at `<path to this file>.cache/`
+        _db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
+         class attribute _selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
+        _cache_path: String representing the absolute path to the cache folder. The cache path is evaluated to
+         always be located at <path to this file>.cache/
     """
 
     # Importance is set to e^{-weight}
-    ordered_weights_dict_keys = [
+    ordered_weights_dict_keys: List[str] = [
         "sensible_default_weights",
         "trust_odom",
         "trust_tags",
         "new_option",
     ]
-    _weights_dict = {
+    _weights_dict: Dict[str, np.ndarray] = {
         "sensible_default_weights": np.array([
             -6., -6., -6., -6., -6., -6.,
             18, 18, 0, 0, 0, 0,
@@ -80,50 +82,56 @@ class GraphManager:
             1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
             0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
         ])
-    }  # TODO: Sanity check with extreme weights
+    }
+    _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags"]
 
-    _comparison_graph1_subgraph_weights = ["sensible_default_weights", "trust_odom", "trust_tags"]
-
-    _app_initialize_dict = {
+    _app_initialize_dict: Dict[str, str] = {
         'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
         'storageBucket': 'invisible-map.appspot.com'
     }
+    _initialized_app: bool = False
 
-    _unprocessed_listen_to = "unprocessed_maps"
-    _processed_upload_to = "TestProcessed"
+    _unprocessed_listen_to: str = "unprocessed_maps"
+    _processed_upload_to: str = "TestProcessed"
 
     class MapInfo:
         """Container for identifying information for a graph (useful for caching process)
 
         Attributes:
             map_name (str): Specifies the child of the 'maps' database reference to upload the optimized
-             graph to; also passed as the `map_name` argument to the `_cache_map` method
+             graph to; also passed as the map_name argument to the _cache_map method
             map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
-             map relative to `parent_folder`
+             map relative to parent_folder
             map_dct (dict): String of json containing graph
         """
-
         def __init__(self, map_name: str, map_json: str, map_dct: Dict = None):
             self.map_name: str = str(map_name)
             self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
 
-    def __init__(self, weights_specifier: str, firebase_creds: firebase_admin.credentials.Certificate,
-                 pso: as_graph.PrescalingOptEnum = as_graph.PrescalingOptEnum.USE_SBA):
+
+    def __init__(self, weights_specifier: int, firebase_creds: firebase_admin.credentials.Certificate,
+                 pso: int = 0):
         """Initializes GraphManager instance (only populates instance attributes)
 
         Args:
-             weights_specifier (str): Used as the key to access the corresponding value in `GraphManager._weights_dict`
+             weights_specifier (int): Used as the key to access the corresponding value in
+             GraphManager._weights_dict (integer is mapped to the key with the GraphManager.ordered_weights_dict_keys
+              list).
              firebase_creds (firebase_admin.credentials.Certificate): Firebase credentials to pass as the first
-              argument to `firebase_admin.initialize_app(cred, ...)`
-             pso (PrescalingOptEnum):
+              argument to firebase_admin.initialize_app(cred, ...)
+             pso (int): Integer corresponding to the enum value in as_graph.PrescalingOptEnum which selects the
+              type of prescaling weights used in non-SBA optimizations
         """
-        self._app = firebase_admin.initialize_app(firebase_creds, GraphManager._app_initialize_dict)
-        self._bucket = storage.bucket(app=self._app)
+        if not GraphManager._initialized_app:
+            GraphManager._app = firebase_admin.initialize_app(firebase_creds, GraphManager._app_initialize_dict)
+            GraphManager._initialized_app = True
+
+        self._bucket = storage.bucket(app=GraphManager._app)
         self._db_ref = db.reference("/" + GraphManager._unprocessed_listen_to)
 
-        self._pso = pso
-        self._selected_weights = str(weights_specifier)
+        self._pso = as_graph.PrescalingOptEnum.get_by_value(pso)
+        self._selected_weights: str = GraphManager.ordered_weights_dict_keys[weights_specifier]
         self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
 
         # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
@@ -136,7 +144,7 @@ class GraphManager:
         self._db_ref.listen(self._df_listen_callback)
 
     def firebase_listen(self, max_wait: int = 3) -> None:
-        """Invokes the `listen` method of the `_db_ref` attribute and provides the `_df_listen_callback` method as the
+        """Invokes the listen method of the _db_ref attribute and provides the _df_listen_callback method as the
         callback function argument.
 
         This function is multi-threaded: the database listening happens in a new thread, and the parent thread blocks on
@@ -157,24 +165,35 @@ class GraphManager:
         thread_obj.join()
         print("Finished listening to Firebase")
 
-    def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False) -> None:
+    def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False,
+                     new_pso: Union[None, int] = None, new_weights_specifier: Union[None, int] = None) -> None:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
-        The `_resolve_cache_dir` method is first called, then the `glob` package is used to find matching files.
-        Matching maps' json strings are loaded, parsed, and provided to the `_process_map` method. If an exception is
+        The _resolve_cache_dir method is first called, then the glob package is used to find matching files.
+        Matching maps' json strings are loaded, parsed, and provided to the _process_map method. If an exception is
         raised in the process of loading a map or processing it, it is caught and its details are printed to the
         command line.
 
-        Additionally, save the optimized json in `<cache directory>/GraphManager._processed_upload_to`.
+        Additionally, save the optimized json in <cache directory>/GraphManager._processed_upload_to.
 
         Args:
-            pattern (str): Pattern to find matching cached graphs (which are stored as `.json` files. The cache
-             directory (specified by the `_cache_path` attribute) is searched recursively
-            visualize (bool): Value passed as the visualize argument to the invocation of the `_process_map` method.
-            upload (bool): Value passed as the upload argument to the invocation of the `_process_map` method.
-            compare (bool): If true, run the routine for comparing graph optimization (invokes the `_compare_weights`
-             method)
+            pattern: Pattern to find matching cached graphs (which are stored as .json files. The cache
+            pattern: Pattern to find matching cached graphs (which are stored as .json files. The cache
+             directory (specified by the _cache_path attribute) is searched recursively
+            visualize: Value passed as the visualize argument to the invocation of the _process_map method.
+            upload: Value passed as the upload argument to the invocation of the _process_map method.
+            compare: If true, run the routine for comparing graph optimization (invokes the _compare_weights
+             method).
+            new_pso: If not None, then it overrides what was specified by the constructor's pso argument (and changes
+             the corresponding _pso instance attribute).
+            new_weights_specifier: If not none, then it overrides what was specified by the constructor's
+             weights_specifier argument (and changes the corresponding _selected_weights instance attribute).
         """
+        if new_pso is not None:
+            self._pso = as_graph.PrescalingOptEnum.get_by_value(new_pso)
+        if new_weights_specifier is not None:
+            self._selected_weights: str = GraphManager.ordered_weights_dict_keys[new_weights_specifier]
+
         if len(pattern) == 0:
             print("Empty pattern provided; no maps will be processed")
             return
@@ -251,7 +270,7 @@ class GraphManager:
 
         Args:
             map_info (GraphManager.MapInfo): Map to use for weights comparison
-            visualize (bool): Used as the visualize argument for the `_process_map` method invocation.
+            visualize (bool): Used as the visualize argument for the _process_map method invocation.
         """
         results = "\n### Results ###\n\n"
         graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False, prescaling_opt=self._pso)
@@ -348,12 +367,12 @@ class GraphManager:
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
 
-        A diagnostic message is printed if the `map_json` blob name was not found by Firebase.
+        A diagnostic message is printed if the map_json blob name was not found by Firebase.
 
         Args:
-            map_name (str): Value passed as the `map_name` argument to the `_cache_map` method; the value of map_name is
+            map_name (str): Value passed as the map_name argument to the _cache_map method; the value of map_name is
              ultimately used for uploading a map to firebase by specifying the child of the 'maps' database reference.
-            map_json (str): Value passed as the `blob_name` argument to the `get_blob` method of the `_bucket`
+            map_json (str): Value passed as the blob_name argument to the get_blob method of the _bucket
              attribute.
 
         Returns:
@@ -379,7 +398,7 @@ class GraphManager:
 
     def _upload(self, map_info: GraphManager.MapInfo, json_string: str) -> None:
         """Uploads the map json string into the Firebase bucket under the path
-        `<GraphManager._processed_upload_to>/<processed_map_filename>` and updates the appropriate database reference.
+        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
         Note that no exception catching is implemented.
 
@@ -399,14 +418,14 @@ class GraphManager:
 
     def _append_to_cache_directory(self, key: str, value: str) -> None:
         """Appends the specified key-value pair to the dictionary stored as a json file in
-        `<cache folder>/directory.json`.
+        <cache folder>/directory.json.
 
         If the key already exists in the dictionary, its value is overwritten. Note that no error handling is
         implemented.
 
         Args:
-            key (str): Key to store `value` in
-            value (str): Value to store under `key`
+            key (str): Key to store value in
+            value (str): Value to store under key
         """
         directory_json_path = os.path.join(self._cache_path, "directory.json")
         with open(directory_json_path, "r") as directory_file_read:
@@ -419,7 +438,7 @@ class GraphManager:
             directory_file_write.close()
 
     def _read_cache_directory(self, key: str) -> str:
-        """Reads the dictionary stored as a json file in `<cache folder>/directory.json` and returns the value
+        """Reads the dictionary stored as a json file in <cache folder>/directory.json and returns the value
         associated with the specified key.
 
         Note that no error handling is implemented.
@@ -445,19 +464,19 @@ class GraphManager:
 
         Arguments:
             parent_folder (str): Specifies the sub-directory of the cache directory that the map is cached in
-            map_info (GraphManager.MapInfo): Contains the map name and map json path in the `map_name` and `map_json`
+            map_info (GraphManager.MapInfo): Contains the map name and map json path in the map_name and map_json
              fields respectively. If the last 5 characters of this string do not form the substring ".json",
              then ".json" will be appended automatically.
             json_string (str): The json string that defines the map (this is what is written as the contents of the
              cached map file).
-            file_suffix (str): String to append to the file name given by `map_info.map_json`.
+            file_suffix (str): String to append to the file name given by map_info.map_json.
 
         Returns:
             True if map was successfully cached, and False otherwise
 
         Raises:
-            ValueError: Raised if there is any argument (except `file_suffix`) that is of an incorrect type
-            NotADirectoryError: Raised if `_resolve_cache_dir` method returns false.
+            ValueError: Raised if there is any argument (except file_suffix) that is of an incorrect type
+            NotADirectoryError: Raised if _resolve_cache_dir method returns false.
         """
         if not isinstance(map_info, GraphManager.MapInfo):
             raise ValueError("Cannot cache map because '{}' argument is not a {} instance"
@@ -505,7 +524,7 @@ class GraphManager:
     def _resolve_cache_dir(self) -> bool:
         """Returns true if the cache folder exists, and attempts to create a new one if there is none.
 
-        A file named `directory.json` is also created in the cache folder.
+        A file named directory.json is also created in the cache folder.
 
         This method catches all exceptions associated with creating new directories/files and displays a corresponding
         diagnostic message.
@@ -533,7 +552,7 @@ class GraphManager:
             return True
 
     def _df_listen_callback(self, m) -> None:
-        """Callback function used in the `firebase_listen` method.
+        """Callback function used in the firebase_listen method.
         """
         if type(m.data) == str:
             # A single new map just got added
@@ -552,13 +571,13 @@ class GraphManager:
         Arguments:
             graph (Graph): A graph instance to optimize. The following methods of this instance are (possibly) called:
              update_edges, generate_unoptimized_graph, get_tags_all_position_estimate, expectation_maximization_once,
-             generate_unoptimized_graph, and optimize_graph. Additionally, the `weights` attribute of this instance is
+             generate_unoptimized_graph, and optimize_graph. Additionally, the weights attribute of this instance is
              set.
-            tune_weights (bool): A boolean for whether `expectation_maximization_once` is called on the graph instance.
-            visualize (bool): A boolean for whether the `visualize` static method of this class is called.
-            weights_key (str or None): Specifies the weight vector to set the `weights` attribute of the graph
-             instance to from one of the weight vectors in `GraphManager._weights_dict`. If weights_key is None,
-             then the weight vector corresponding to `self._selected_weights` is selected; otherwise, the weights_key
+            tune_weights (bool): A boolean for whether expectation_maximization_once is called on the graph instance.
+            visualize (bool): A boolean for whether the visualize static method of this class is called.
+            weights_key (str or None): Specifies the weight vector to set the weights attribute of the graph
+             instance to from one of the weight vectors in GraphManager._weights_dict. If weights_key is None,
+             then the weight vector corresponding to self._selected_weights is selected; otherwise, the weights_key
              selects the weight vector from the dictionary.
             graph_plot_title (str or None): Plot title argument to pass to the visualization routine.
 
@@ -567,7 +586,7 @@ class GraphManager:
             - The numpy array of tag vertices from the optimized graph
             - The numpy array of odometry vertices from the optimized graph
             - The numpy array of waypoint vertices from the optimized graph
-            - The total chi2 value of the optimized graph as returned by the `optimize_graph` method of the `graph`
+            - The total chi2 value of the optimized graph as returned by the optimize_graph method of the graph
               instance.
             - A numpy array where each element corresponds to the chi2 value for each odometry node; each chi2
               value is calculated as the sum of chi2 values of the (up to) two incident edges to the odometry node
