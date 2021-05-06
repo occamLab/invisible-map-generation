@@ -105,4 +105,5 @@ if __name__ == "__main__":
         graph_manager.firebase_listen()
 
     map_pattern = args.p if args.p else ""
-    graph_manager.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c)
+    graph_manager.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c, new_pso=args.pso,
+                               new_weights_specifier=args.w)
