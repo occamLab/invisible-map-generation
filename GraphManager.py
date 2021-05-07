@@ -86,8 +86,8 @@ class GraphManager:
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags"]
 
     _app_initialize_dict: Dict[str, str] = {
-        'databaseURL': 'https://invisible-map-sandbox.firebaseio.com/',
-        'storageBucket': 'invisible-map.appspot.com'
+        "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
+        "storageBucket": "invisible-map.appspot.com"
     }
     _initialized_app: bool = False
 
@@ -98,7 +98,7 @@ class GraphManager:
         """Container for identifying information for a graph (useful for caching process)
 
         Attributes:
-            map_name (str): Specifies the child of the 'maps' database reference to upload the optimized
+            map_name (str): Specifies the child of the "maps" database reference to upload the optimized
              graph to; also passed as the map_name argument to the _cache_map method
             map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
              map relative to parent_folder
@@ -148,7 +148,7 @@ class GraphManager:
         callback function argument.
 
         This function is multi-threaded: the database listening happens in a new thread, and the parent thread blocks on
-        its child's completion.
+        its child"s completion.
 
         Args:
             max_wait: The maximum amount of time in seconds to wait after receiving a response before terminating the
@@ -406,13 +406,13 @@ class GraphManager:
             map_info (GraphManager.MapInfo): Contains the map name and map json path
             json_string (str): Json string of the map to upload
         """
-        processed_map_filename = os.path.basename(map_info.map_json)[:-5] + '_processed.json'
+        processed_map_filename = os.path.basename(map_info.map_json)[:-5] + "_processed.json"
         processed_map_full_path = GraphManager._processed_upload_to + "/" + processed_map_filename
         print("Attempting to upload {} to the bucket blob {}".format(map_info.map_name, processed_map_full_path))
         processed_map_blob = self._bucket.blob(processed_map_full_path)
         processed_map_blob.upload_from_string(json_string)
         print("Successfully uploaded map data for {}".format(map_info.map_name))
-        db.reference('maps').child(map_info.map_name).child('map_file').set(processed_map_full_path)
+        db.reference("maps").child(map_info.map_name).child("map_file").set(processed_map_full_path)
         print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
             map_info.map_name))
 
@@ -556,7 +556,7 @@ class GraphManager:
         """
         if type(m.data) == str:
             # A single new map just got added
-            self._firebase_get_unprocessed_map(m.path.lstrip('/'), m.data)
+            self._firebase_get_unprocessed_map(m.path.lstrip("/"), m.data)
         elif type(m.data) == dict:
             # This will be a dictionary of all the data that is there initially
             for map_name, map_json in m.data.items():
@@ -606,8 +606,8 @@ class GraphManager:
 
         starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
                                                     is_sparse_bundle_adjustment=True)
-        original_tag_verts = graph_utils.locations_from_transforms(starting_map['tags']) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map['tags']
+        original_tag_verts = graph_utils.locations_from_transforms(starting_map["tags"]) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map["tags"]
 
         if tune_weights:
             graph.expectation_maximization_once()
@@ -622,17 +622,17 @@ class GraphManager:
         resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
                                                           is_sparse_bundle_adjustment=True)
 
-        odom_chi2_adj_vec: np.ndarray = resulting_map['locationsAdjChi2']
-        visible_tags_count_vec: np.ndarray = resulting_map['visibleTagsCount']
+        odom_chi2_adj_vec: np.ndarray = resulting_map["locationsAdjChi2"]
+        visible_tags_count_vec: np.ndarray = resulting_map["visibleTagsCount"]
 
-        prior_locations = graph_utils.locations_from_transforms(prior_map['locations']) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map['locations']
-        locations = graph_utils.locations_from_transforms(resulting_map['locations']) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map['locations']
-        tag_verts = graph_utils.locations_from_transforms(resulting_map['tags']) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map['tags']
-        tagpoint_positions = resulting_map['tagpoints']
-        waypoint_verts = tuple(resulting_map['waypoints'])
+        prior_locations = graph_utils.locations_from_transforms(prior_map["locations"]) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map["locations"]
+        locations = graph_utils.locations_from_transforms(resulting_map["locations"]) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["locations"]
+        tag_verts = graph_utils.locations_from_transforms(resulting_map["tags"]) \
+            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["tags"]
+        tagpoint_positions = resulting_map["tagpoints"]
+        waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
             self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
@@ -685,37 +685,41 @@ class GraphManager:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
-        ax = f.add_subplot(111, projection='3d')
+        ax = f.add_subplot(111, projection="3d")
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        ax.view_init(120, -90)
 
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], '-', c='b', label='Odom Vertices')
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], '-', c='g',
-                 label='Prior Odom Vertices')
+        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
+        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], "-", c="g",
+                 label="Prior Odom Vertices")
 
         if original_tag_verts is not None:
-            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], 'o', c='c',
-                     label='Tag Vertices Original')
+            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
+                     label="Tag Vertices Original")
 
-        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], 'o', c='r', label='Tag Vertices')
+        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], "o", c="r", label="Tag Vertices")
         for tag_vert in tag_verts:
             R = Quaternion(tag_vert[3:-1]).rotation_matrix()
-            axis_to_color = ['r', 'g', 'b']
+            axis_to_color = ["r", "g", "b"]
             for axis_id in range(3):
                 ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
                           R[2, axis_id], length=1, color=axis_to_color[axis_id])
 
-        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], '.', c='m',
-                 label='Tag Corners')
+        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], ".", c="m",
+                 label="Tag Corners")
 
         for vert in tag_verts:
-            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color='black')
+            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color="black")
 
-        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], 'o', c='y',
-                 label='Waypoint Vertices')
+        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], "o", c="y",
+                 label="Waypoint Vertices")
 
         for vert_idx in range(len(waypoint_verts[0])):
             vert = waypoint_verts[1][vert_idx]
-            waypoint_name = waypoint_verts[0][vert_idx]['name']
-            ax.text(vert[0], vert[1], vert[2], waypoint_name, color='black')
+            waypoint_name = waypoint_verts[0][vert_idx]["name"]
+            ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
 
         # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
         # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
@@ -727,9 +731,9 @@ class GraphManager:
 
         tag_vertex_shift = original_tag_verts - tag_verts
         print("tag_vertex_shift", tag_vertex_shift)
-        plt.legend()
+        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
         GraphManager.axis_equal(ax)
-
+        plt.gcf().set_dpi(300)
         if isinstance(plot_title, str):
             plt.title(plot_title, wrap=True)
         plt.show()
@@ -750,7 +754,7 @@ class GraphManager:
 
         # Comment or uncomment following both lines to test the fake bounding box:
         for xb, yb, zb in zip(Xb, Yb, Zb):
-            ax.plot([xb], [yb], [zb], 'w')
+            ax.plot([xb], [yb], [zb], "w")
 
     @staticmethod
     def compare_std_dev(all_tags, all_tags_original):
@@ -767,25 +771,25 @@ class GraphManager:
 
         tag_vertex_map = map(
             lambda curr_tag: {
-                'translation': {'x': curr_tag[0], 'y': curr_tag[1], 'z': curr_tag[2]},
-                'rotation': {'x': curr_tag[3],
-                             'y': curr_tag[4],
-                             'z': curr_tag[5],
-                             'w': curr_tag[6]},
-                'id': int(curr_tag[7])
+                "translation": {"x": curr_tag[0], "y": curr_tag[1], "z": curr_tag[2]},
+                "rotation": {"x": curr_tag[3],
+                             "y": curr_tag[4],
+                             "z": curr_tag[5],
+                             "w": curr_tag[6]},
+                "id": int(curr_tag[7])
             }, tag_locations
         )
 
         if adj_chi2_arr is None:
             odom_vertex_map = map(
                 lambda curr_odom: {
-                    'translation': {'x': curr_odom[0], 'y': curr_odom[1],
-                                    'z': curr_odom[2]},
-                    'rotation': {'x': curr_odom[3],
-                                 'y': curr_odom[4],
-                                 'z': curr_odom[5],
-                                 'w': curr_odom[6]},
-                    'poseId': int(curr_odom[8]),
+                    "translation": {"x": curr_odom[0], "y": curr_odom[1],
+                                    "z": curr_odom[2]},
+                    "rotation": {"x": curr_odom[3],
+                                 "y": curr_odom[4],
+                                 "z": curr_odom[5],
+                                 "w": curr_odom[6]},
+                    "poseId": int(curr_odom[8]),
                 }, odom_locations
             )
         else:
@@ -793,32 +797,32 @@ class GraphManager:
                                                                    axis=1)
             odom_vertex_map = map(
                 lambda curr_odom: {
-                    'translation': {'x': curr_odom[0], 'y': curr_odom[1],
-                                    'z': curr_odom[2]},
-                    'rotation': {'x': curr_odom[3],
-                                 'y': curr_odom[4],
-                                 'z': curr_odom[5],
-                                 'w': curr_odom[6]},
-                    'poseId': int(curr_odom[8]),
-                    'adjChi2': curr_odom[9],
-                    'vizTags': curr_odom[10]
+                    "translation": {"x": curr_odom[0], "y": curr_odom[1],
+                                    "z": curr_odom[2]},
+                    "rotation": {"x": curr_odom[3],
+                                 "y": curr_odom[4],
+                                 "z": curr_odom[5],
+                                 "w": curr_odom[6]},
+                    "poseId": int(curr_odom[8]),
+                    "adjChi2": curr_odom[9],
+                    "vizTags": curr_odom[10]
                 }, odom_locations_with_chi2_and_viz_tags
             )
         waypoint_vertex_map = map(
             lambda idx: {
-                'translation': {'x': waypoint_locations[1][idx][0],
-                                'y': waypoint_locations[1][idx][1],
-                                'z': waypoint_locations[1][idx][2]},
-                'rotation': {'x': waypoint_locations[1][idx][3],
-                             'y': waypoint_locations[1][idx][4],
-                             'z': waypoint_locations[1][idx][5],
-                             'w': waypoint_locations[1][idx][6]},
-                'id': waypoint_locations[0][idx]['name']
+                "translation": {"x": waypoint_locations[1][idx][0],
+                                "y": waypoint_locations[1][idx][1],
+                                "z": waypoint_locations[1][idx][2]},
+                "rotation": {"x": waypoint_locations[1][idx][3],
+                             "y": waypoint_locations[1][idx][4],
+                             "z": waypoint_locations[1][idx][5],
+                             "w": waypoint_locations[1][idx][6]},
+                "id": waypoint_locations[0][idx]["name"]
             }, range(len(waypoint_locations[0]))
         )
-        return json.dumps({'tag_vertices': list(tag_vertex_map),
-                           'odometry_vertices': list(odom_vertex_map),
-                           'waypoints_vertices': list(waypoint_vertex_map)}, indent=2)
+        return json.dumps({"tag_vertices": list(tag_vertex_map),
+                           "odometry_vertices": list(odom_vertex_map),
+                           "waypoints_vertices": list(waypoint_vertex_map)}, indent=2)
 
 
 if __name__ == "__main__":
