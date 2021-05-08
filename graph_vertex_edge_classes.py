@@ -3,6 +3,9 @@ Vertex, VertexType, and Edge classes which are used in the Graph class.
 """
 
 from enum import Enum
+from typing import List, Union, Dict, Any
+
+import numpy as np
 
 
 class VertexType(Enum):
@@ -21,7 +24,8 @@ class Vertex:
     It contains the :class: VertexType of the vertex as well as the pose.
     """
 
-    def __init__(self, mode, estimate, fixed, meta_data = None):
+    def __init__(self, mode: VertexType, estimate: np.ndarray, fixed: bool,
+                 meta_data: Union[Dict[str, Any], None] = None):
         """The vertex class.
 
         Args:
@@ -40,14 +44,9 @@ class Edge:
     It encodes UIDs for the start and end vertices, the measurement, and the information matrix.
     """
 
-    def __init__(self,
-                 startuid,
-                 enduid,
-                 corner_ids,
-                 information,
-                 information_prescaling,
-                 camera_intrinsics,
-                 measurement):
+    def __init__(self, startuid: int, enduid: int, corner_ids: Union[None, List], information: np.ndarray,
+                 information_prescaling: Union[None, np.ndarray], camera_intrinsics: Union[None, np.ndarray],
+                 measurement: np.ndarray):
         """The edge class.
 
         The arguments are a startuid, enduid, an information matrix represented by a 6x6 numpy array, and a measurement.
