@@ -49,7 +49,9 @@ def convert_edge(edge):
                 information=edge.importance_matrix,
                 information_prescaling=None,
                 measurement=np.concatenate
-                ([edge.translation, edge.rotation]))
+                ([edge.translation, edge.rotation]),
+                corner_ids=None,
+                camera_intrinsics=None)
 
 
 def convert(posegraph):
