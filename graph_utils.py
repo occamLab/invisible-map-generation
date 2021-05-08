@@ -5,7 +5,7 @@ from typing import Union, List, Dict
 import g2o
 import numpy as np
 from g2o import SE3Quat, EdgeProjectPSI2UV
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as Rot
 
 from graph_vertex_edge_classes import VertexType
 
@@ -129,7 +129,7 @@ def find_connected_tag_vert(optimizer, location_vert):
 def measurement_to_matrix(measurement):
     transformation = np.eye(4)
     transformation[:3, 3] = measurement[:3]
-    transformation[:3, :3] = R.from_quat(measurement[3:7]).as_matrix()
+    transformation[:3, :3] = Rot.from_quat(measurement[3:7]).as_matrix()
     return transformation
 
 
@@ -180,7 +180,7 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
     Returns:
         A 3x3 numpy array where the columns are the new basis.
     """
-    rotation1 = R.from_euler(gravity_axis, 0.05) * rotation
+    rotation1 = Rot.from_euler(gravity_axis, 0.05) * rotation
     change = rotation1.as_quat()[:3] - rotation.as_quat()[:3]
     return np.linalg.svd(change[:, np.newaxis])[0]
 

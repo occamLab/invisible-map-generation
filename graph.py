@@ -4,10 +4,9 @@
 from __future__ import annotations
 
 import copy
-from typing import List, Union, Dict, Set, Tuple
+from typing import Union, Set, Tuple
 
 import g2o
-import numpy as np
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 

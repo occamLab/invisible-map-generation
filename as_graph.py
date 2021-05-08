@@ -1,14 +1,14 @@
 import itertools
 from collections import defaultdict
 from enum import Enum
+from typing import Union
 
 import numpy as np
 from g2o import SE3Quat, Quaternion
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as Rot
 
 import graph
 from graph_utils import camera_to_odom_transform
-from typing import Union
 
 
 def pose2diffs(poses):
@@ -42,7 +42,7 @@ def matrix2measurement(pose, invert=False):
     """
     translation = pose[..., :3, 3]
     if pose.shape[0] != 0:
-        rotation = R.from_matrix(pose[..., :3, :3]).as_quat()
+        rotation = Rot.from_matrix(pose[..., :3, :3]).as_quat()
     else:
         rotation = np.zeros([0, 4])
     ret_val = np.concatenate([translation, rotation], axis=-1)
