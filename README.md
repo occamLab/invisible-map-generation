@@ -48,7 +48,7 @@ The `graph_manager_user` script and `GraphManager` class in `GraphManager.py` pr
 - Acquiring and caching unprocessed maps from the Firebase database.
 - Performing standard graph optimization with plotting capabilities.
 - Performing a graph optimization comparison routine (see help for the `-c` flag or, for more detail, documentation 
-  of the `GraphManager._compare_weights` instance method).
+  of the `GraphManager.compare_weights` instance method).
 
 The script is operated through command line arguments. To see the help message, run:
 

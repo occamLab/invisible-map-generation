@@ -43,7 +43,7 @@ class GraphManager:
          cache location of processed graphs.
         _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
          _weights_dict; the keys identify the different weights vectors applied to the first subgraph when the
-         _compare_weights method is invoked.
+         compare_weights method is invoked.
         _initialized_app: Set to true when the Firebase app is initialized and is used to only let the app be
          initialized on the first invocation of the GraphManager constructor.
         _app (firebase_admin.App): App initialized with a service account, granting admin privileges
@@ -183,7 +183,7 @@ class GraphManager:
              directory (specified by the _cache_path attribute) is searched recursively
             visualize: Value passed as the visualize argument to the invocation of the _process_map method.
             upload: Value passed as the upload argument to the invocation of the _process_map method.
-            compare: If true, run the routine for comparing graph optimization (invokes the _compare_weights
+            compare: If true, run the routine for comparing graph optimization (invokes the compare_weights
              method).
             new_pso: If not None, then it overrides what was specified by the constructor's pso argument (and changes
              the corresponding _pso instance attribute).
@@ -224,7 +224,7 @@ class GraphManager:
             if compare:
                 if upload:
                     print("Warning: Ignoring True upload argument because comparing graphs")
-                self._compare_weights(map_info, visualize)
+                self.compare_weights(map_info, visualize)
             else:
                 graph = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
                                           prescaling_opt=self._pso)
@@ -252,9 +252,7 @@ class GraphManager:
 
                 self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
 
-    # -- Private Methods --
-
-    def _compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
+    def compare_weights(self, map_info: GraphManager.MapInfo, visualize=True) -> None:
         """Invocation results in the weights comparison routine.
 
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
@@ -364,6 +362,8 @@ class GraphManager:
                        "Abs(delta chi2): {}\n\n".format(iter_weights, g1sg_chi_sqr, self._selected_weights,
                                                         g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
+
+    # -- Private Methods --
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
