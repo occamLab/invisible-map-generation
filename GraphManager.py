@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """
-Contains the GraphManager class. For the command line utility that makes use of it, see graph_manager_user.py.
+Contains the GraphManager class. For the command line utility that makes use of it, see graph_manager_user.py. The
+graph_optimization_analysis.ipynb notebook also makes use of this class.
 
 Author: Duncan Mazza
 """
+
 from __future__ import annotations
 
 import glob
@@ -108,7 +110,6 @@ class GraphManager:
             self.map_name: str = str(map_name)
             self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
-
 
     def __init__(self, weights_specifier: int, firebase_creds: firebase_admin.credentials.Certificate,
                  pso: int = 0):
@@ -635,8 +636,8 @@ class GraphManager:
         waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
-            self.visualize(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                           original_tag_verts, graph_plot_title)
+            self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
+                                          original_tag_verts, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
@@ -679,9 +680,10 @@ class GraphManager:
         plt.show()
 
     @staticmethod
-    def visualize(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray, tagpoint_positions: \
-                  np.ndarray, waypoint_verts: Tuple[List, np.ndarray], original_tag_verts: Union[None, np.ndarray] \
-                  = None, plot_title: Union[str, None] = None) -> None:
+    def plot_optimization_result(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
+                                 tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
+                                 original_tag_verts: Union[None, np.ndarray] = None,
+                                 plot_title: Union[str, None] = None) -> None:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
@@ -744,7 +746,7 @@ class GraphManager:
         """
         axis_range_from_limits = lambda limits: limits[1] - limits[0]
         max_range = np.max(np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
-                              axis_range_from_limits(ax.get_zlim())]))
+                                    axis_range_from_limits(ax.get_zlim())]))
         Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
             (ax.get_xlim()[1] + ax.get_xlim()[0])
         Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
@@ -826,4 +828,5 @@ class GraphManager:
 
 
 if __name__ == "__main__":
-    print("The command line functionality using the GraphManager class has been moved to graph_manager_user.py")
+    print("The command line functionality using the GraphManager class is in graph_manager_user.py. The "
+          "graph_optimization_analysis.ipynb notebook also makes use of this class.")
