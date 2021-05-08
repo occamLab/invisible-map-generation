@@ -16,11 +16,12 @@ Notes:
   for further processing.
 """
 
-from GraphManager import GraphManager
 import argparse
 import os
+
 from firebase_admin import credentials
-import as_graph
+
+from GraphManager import GraphManager
 
 
 def make_parser():

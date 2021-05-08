@@ -3,17 +3,18 @@
 
 from __future__ import annotations
 
+import copy
 from typing import List, Union, Dict, Set, Tuple
 
 import g2o
 import numpy as np
 from scipy.optimize import OptimizeResult
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation as Rot
+
+from expectation_maximization.maximization_model import maxweights
 from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
     measurement_to_matrix
 from graph_vertex_edge_classes import *
-from expectation_maximization.maximization_model import maxweights
-import copy
 
 
 class Graph:
@@ -23,10 +24,10 @@ class Graph:
     def __init__(self, vertices: Dict[int, Vertex],
                  edges: Dict[int, Edge],
                  weights: np.ndarray = np.zeros(18),
-                 gravity_axis = 'y',
+                 gravity_axis="y",
                  is_sparse_bundle_adjustment: bool = False,
                  use_huber: bool = False,
-                 huber_delta = None,
+                 huber_delta=None,
                  damping_status: bool = False):
         """The graph class
 
@@ -66,7 +67,6 @@ class Graph:
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[g2o.SparseOptimizer, None] = None
         self.optimized_graph: Union[g2o.SparseOptimizer, None] = None
-
         self.update_edges()
 
         # This is populated in graph_to_optimizer and is currently no updated anywhere else
@@ -368,14 +368,14 @@ class Graph:
                     # TODO: not sure what this should be
                     self.edges[uid].information = np.eye(6, 6)
                 else:
-                    raise Exception('Edge of end type {} not recognized.'.format(end_mode))
+                    raise Exception("Edge of end type {} not recognized.".format(end_mode))
                 if self.edges[uid].information_prescaling is not None:
                     prescaling_matrix = self.edges[uid].information_prescaling
                     if prescaling_matrix.ndim == 1:
                         prescaling_matrix = np.diag(prescaling_matrix)
                     self.edges[uid].information = prescaling_matrix * self.edges[uid].information
             else:
-                raise Exception('Edge of start type {} not recognized.'.format(start_mode))
+                raise Exception("Edge of start type {} not recognized.".format(start_mode))
 
     def update_vertices(self) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.
@@ -402,7 +402,7 @@ class Graph:
                 basis_matrices[uid] = np.eye(6)
                 if not self.is_sparse_bundle_adjustment:
                     basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                        R.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
+                        Rot.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
             else:
                 basis_matrices[uid] = np.eye(6)
         self._basis_matrices = basis_matrices
@@ -444,7 +444,7 @@ class Graph:
             transform = measurement_to_matrix(self.edges[edgeuid].measurement)
             new_pose = old_pose.dot(transform)
             translation = new_pose[:3, 3]
-            rotation = R.from_matrix(new_pose[:3, :3]).as_quat()
+            rotation = Rot.from_matrix(new_pose[:3, :3]).as_quat()
             poses.append(np.concatenate([translation, rotation]))
         return np.array(poses)
 
@@ -464,7 +464,7 @@ class Graph:
 
                 tag_transform = odom_transform.dot(edge_transform)
                 tag_translation = tag_transform[:3, 3]
-                tag_rotation = R.from_matrix(tag_transform[:3, :3]).as_quat()
+                tag_rotation = Rot.from_matrix(tag_transform[:3, :3]).as_quat()
                 tag_pose = np.concatenate(
                     [tag_translation, tag_rotation, [edge.enduid]])
                 tags = np.vstack([tags, tag_pose])
@@ -647,7 +647,8 @@ class Graph:
                 elif end_mode == VertexType.WAYPOINT:
                     continue
                 else:
-                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,                                                                                          end_mode))
+                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
+                                                                                                            end_mode))
             else:
                 raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
                                                                                                         end_mode))
