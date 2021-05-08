@@ -743,8 +743,8 @@ class GraphManager:
         """Create cubic bounding box to simulate equal aspect ratio
         """
         axis_range_from_limits = lambda limits: limits[1] - limits[0]
-        max_range = np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
-                              axis_range_from_limits(ax.get_zlim())]).max()
+        max_range = np.max(np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
+                              axis_range_from_limits(ax.get_zlim())]))
         Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
             (ax.get_xlim()[1] + ax.get_xlim()[0])
         Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
