@@ -258,7 +258,7 @@ class GraphManager:
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
         following:
         1. Acquire two sub-graphs: one from the first half of the ordered odometry nodes (called g1sg) and one from the
-           other half (called g2sg); note that g2sg is created from the as_graph.as_graph method with the
+           other half (called g2sg); note that g2sg is created from the as_graph.as_graph function with the
            fix_tag_vertices as True, whereas g1sg is created with fix_tag_vertices as False.
         2. Optimize the g1sg with the iter_weights, then transfer the estimated locations of its tag vertices to the
            g2sg. The assumption is that a majority - if not all - tag vertices are present in both sub-graphs; the
