@@ -606,7 +606,7 @@ class GraphManager:
         # all_tags_original = graph.get_tags_all_position_estimate()
 
         starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
-                                                    is_sparse_bundle_adjustment=True)
+                                                    is_sparse_bundle_adjustment=self._pso == 0)
         original_tag_verts = graph_utils.locations_from_transforms(starting_map["tags"]) \
             if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map["tags"]
 
@@ -621,7 +621,7 @@ class GraphManager:
 
         prior_map = graph_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
         resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
-                                                          is_sparse_bundle_adjustment=True)
+                                                          is_sparse_bundle_adjustment=self._pso == 0)
 
         odom_chi2_adj_vec: np.ndarray = resulting_map["locationsAdjChi2"]
         visible_tags_count_vec: np.ndarray = resulting_map["visibleTagsCount"]
