@@ -72,17 +72,17 @@ class GraphManager:
         "trust_odom": np.array([
             -3., -3., -3., -3., -3., -3.,
             10.6, 10.6, 10.6, 10.6, 10.6, 10.6,
-            0., 0., 0., -1, -1, 1e2
+            0., 0., 0., -1, 1e2, -1
         ]),
         "trust_tags": np.array([
             10, 10, 10, 10, 10, 10,
             -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
-            0, 0, 0, -1e2, 3, 3
+            0, 0, 0, -1, 1e2, -1
         ]),
         "new_option": np.array([
-            -6., -6., -6., -6., -6., -6.,  # Translation + rotation
-            1, 1, 0, 0, 0, 0,  # first 2 = x and y pixels, rest are unused during SBA
-            0., 0., 0., -1, 1e2, -1  # dummy nodes (roll, yaw, pitch)
+            -6., -6., -6., -6., -6., -6.,
+            1, 1, 0, 0, 0, 0,
+            0., 0., 0., -1, 1e2, -1
         ])
     }
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags"]
