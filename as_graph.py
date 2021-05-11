@@ -126,7 +126,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
          between the remaining enum values by how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum
          class documentation for more information.
 
-    Returns:        A graph derived from the input dictionary.
+    Returns: A graph derived from the input dictionary.
 
     Raises:
         An exception if prescaling_opt is a enum_value that is not handled.
