@@ -7,7 +7,6 @@ import pickle
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
-from graph_utils import ordered_odometry_edges
 
 if len(sys.argv) < 2:
     FILENAME = 'converted-data/academic_center.pkl'
@@ -133,7 +132,7 @@ def main():
     print(GRAPH.weights)
     GRAPH.expectation_maximization_once()
     print(GRAPH.weights)
-    edges = ordered_odometry_edges(GRAPH)
+    edges = GRAPH.get_ordered_odometry_edges()
     errs = np.reshape([], [0, 6])
     edge_lookup = {x.id(): x.error()[:6]
                    for x in GRAPH.optimized_graph.edges()}

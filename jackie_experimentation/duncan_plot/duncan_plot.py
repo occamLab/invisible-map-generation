@@ -5,6 +5,7 @@ matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import mpl_toolkits.mplot3d
+# import parse_map
 import numpy as np
 
 
@@ -65,7 +66,7 @@ class Plot_Chi2_Animation:
         self.ax.set(xlabel='poseID', ylabel='adjChi2',
                     title='adjChi2 Plot')
         self.adjChi2_text = self.ax.text(0.02, 0.95, '', transform=self.ax.transAxes)
-        self.line, = self.ax.loglog(poseID, adjChi2+1)
+        self.line = self.ax.plot(poseID, adjChi2+1)
         # self.line.axes.axis('equal')
 
         poseID_interval = 100
