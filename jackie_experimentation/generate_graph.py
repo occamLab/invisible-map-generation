@@ -1,3 +1,6 @@
+'''
+Generate graph that connects intersecting nodes from odometry vertices. 
+'''
 import parse_map
 import pprint as pp
 import json
@@ -7,7 +10,7 @@ from shapely.geometry import LineString
 
 class Node:
     def __init__(self, x, y, z, poseID):
-        # data is in the form of [x,y,z] of odometry vertices
+        # data is in the form of the [x,y,z] translation of odometry vertices
         self.data = [x,y,z]
         self.poseID = poseID
 
@@ -39,12 +42,6 @@ class Graph:
             self.edges_set.add((node, neighbour))
             self.edges.append((node, neighbour))
 
-    # def address2readable(self):
-    #     self.new_g = {}
-    #     for key in self.g:
-    #         self.new_g[key.poseID] = []
-    #         for neighbour in self.g[key]:
-    #             self.new_g[key.poseID].append(neighbour)
 
     def show_edges(self):
         for node in self.g:
@@ -54,33 +51,38 @@ class Graph:
     def show_graph(self):
         pp.pprint(self.g)
 
-
+    def no_overlapping_endpoints(self, e1, e2):
+        ''' Makes sure that the two edges are not intersecting 
+        '''
+        endpoint_set = set([e1[0].data[0], e1[0].data[2], 
+                            e1[1].data[0], e1[1].data[2],
+                            e2[0].data[0], e2[0].data[2], 
+                            e2[1].data[0], e2[1].data[2]])
+        return len(endpoint_set) == 8
+        
     def get_intersections(self):
         '''
         Returns whether there is an intersection between 2 line segments using x-z coordinates
         '''
-        # TODO: there are a suspiciously large number of intersection points. Double the number of edges
-        # Next step is to visualize it and validate intersections
         intersect_nodes = []    # Node objects
         self.intersect_vertices = [] # Same style as json objects
         _id = 0
 
         for e1 in self.edges:
             for e2 in self.edges:
-                if e1 != e2:
+                # check that there are no overlapping endpoints for intersection
+                if e1 != e2 and self.no_overlapping_endpoints(e1, e2):
                     line1 = LineString([(e1[0].data[0], e1[0].data[2]), 
                                         (e1[1].data[0], e1[1].data[2])])
                     line2 = LineString([(e2[0].data[0], e2[0].data[2]), 
                                         (e2[1].data[0], e2[1].data[2])])
-                    # print("LINE1 ", line1)
-                    # print("LINE2 ", line2)
                     
                     # find intersection
                     if (str(line1.intersection(line2)) != "LINESTRING EMPTY" and
                         str(type(line1.intersection(line2))) == "<class 'shapely.geometry.point.Point'>"):
                         # TODO: implement check for y position to make sure not different floors
-                        # TODO: find out why some intersections are LineStrings instead of points
                         intersect_pt = line1.intersection(line2)
+                        print("INTERSECTION: ", intersect_pt)
 
                         # Create new node for intersection and add to list
                         intersect_node = Node(intersect_pt.x, 0, intersect_pt.y, _id)
@@ -96,16 +98,6 @@ class Graph:
                         intersect_nodes.append(intersect_node)
                         self.intersect_vertices.append(vertex)
                         _id += 1
-
-        # pp.pprint(intersect_nodes[0])
-        # pp.pprint(vars(intersect_nodes[0]))
-
-        # for pt in intersect_nodes:
-        #     pp.pprint(vars(pt))
-
-        # pp.pprint(intersect_nodes)
-
-        # pp.pprint(self.intersect_vertices)
                 
 
 def generate_mapping_graph(x, y, z, poseID):
@@ -117,9 +109,6 @@ def generate_mapping_graph(x, y, z, poseID):
         next_node = Node(x[i], y[i], z[i], poseID[i])
         map_g.addEdge(curr_node, next_node)
         curr_node = next_node
-    # map_g.show_edges()
-    # map_g.address2readable()
-    # map_g.show_graph()
     map_g.get_intersections()
     return map_g
 
@@ -146,7 +135,6 @@ def modify_json(input_filename, output_filename, graph):
         pt["neighbors"] = graph.g[pt["poseId"]]
 
     # add intersection vertices
-    #TODO: ask PAUL whether it would be better to put them in odometry vertices or keep separately. Currently separate
     mapping_data["intersection_vertices"] = graph.intersect_vertices
 
     with open(output_filename, 'w') as outfile:
