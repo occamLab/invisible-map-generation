@@ -85,7 +85,8 @@ class GraphManager:
             0., 0., 0., -1, 1e2, -1
         ])
     }
-    _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags"]
+    _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
+                                                      "new_option"]
 
     _app_initialize_dict: Dict[str, str] = {
         "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
