@@ -669,10 +669,13 @@ class GraphManager:
         odom_uids.flatten()
         chi2_values.flatten()
 
-        plt.plot(odom_uids, chi2_values)
-        plt.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
-        plt.xlim([min(odom_uids), max(odom_uids)])
-        plt.legend(["chi2 value", ">=1 tag vertex visible"])
+        f = plt.figure()
+        ax: plt.Axes = f.add_axes([0.1, 0.1, 0.8, 0.7])
+        ax.plot(odom_uids, chi2_values)
+        ax.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
+        ax.set_xlim(min(odom_uids), max(odom_uids))
+        ax.legend(["chi2 value", ">=1 tag vertex visible"])
+        ax.set_xlabel("Odometry vertex UID")
 
         plt.xlabel("Odometry vertex UID")
         if plot_title is not None:
@@ -687,7 +690,7 @@ class GraphManager:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
-        ax = f.add_subplot(111, projection="3d")
+        ax = f.add_axes([0.1, 0.1, 0.6, 0.75], projection="3d")
         ax.set_xlabel("X")
         ax.set_ylabel("Y")
         ax.set_zlabel("Z")
