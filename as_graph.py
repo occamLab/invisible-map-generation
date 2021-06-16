@@ -146,36 +146,36 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     initialize_with_averages = None
 
     # Pull out this equality from the enum (this equality is checked many times)
-    use_sba = True if prescaling_opt == PrescalingOptEnum.USE_SBA else False
+    use_sba = prescaling_opt == PrescalingOptEnum.USE_SBA
 
     if use_sba:
         true_3d_points, true_3d_tag_center = make_sba_tag_arrays()
 
-    pose_data = np.array(dct['pose_data'])
-    if not pose_data.size:
-        pose_data = np.zeros((0, 18))
-    pose_matrices = pose_data[:, :16].reshape(-1, 4, 4).transpose(0, 2, 1)
+    frame_ids = [pose['id'] for pose in dct['pose_data']]
+    pose_matrices = np.zeros((0, 16))
+    if len(dct['pose_data']) > 0:
+        pose_matrices = np.array([pose['pose'] for pose in dct['pose_data']]).reshape((-1, 4, 4)).transpose(0, 2, 1)
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=use_sba)
 
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
-        tag_pose_flat = np.vstack([[x['tagPose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        tag_pose_flat = np.vstack([[x['tag_pose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
 
         if use_sba:
-            camera_intrinsics_for_tag = np.vstack([[x['cameraIntrinsics'] for x in tagsFromFrame] for tagsFromFrame in \
+            camera_intrinsics_for_tag = np.vstack([[x['camera_intrinsics'] for x in tagsFromFrame] for tagsFromFrame in\
                                                    dct['tag_data']])
-            tag_corners = np.vstack([[x['tagCornersPixelCoordinates'] for x in tagsFromFrame] for tagsFromFrame in \
+            tag_corners = np.vstack([[x['tag_corners_pixel_coordinates'] for x in tagsFromFrame] for tagsFromFrame in\
                                      dct['tag_data']])
         else:
-            tag_joint_covar = np.vstack([[x['jointCovar'] for x in tagsFromFrame] for tagsFromFrame in
+            tag_joint_covar = np.vstack([[x['joint_covar'] for x in tagsFromFrame] for tagsFromFrame in
                                          dct['tag_data']])
-            tag_position_variances = np.vstack([[x['tagPositionVariance'] for x in tagsFromFrame] for tagsFromFrame
+            tag_position_variances = np.vstack([[x['tag_position_variance'] for x in tagsFromFrame] for tagsFromFrame
                                                 in dct['tag_data']])
-            tag_orientation_variances = np.vstack([[x['tagOrientationVariance'] for x in tagsFromFrame] for \
+            tag_orientation_variances = np.vstack([[x['tag_orientation_variance'] for x in tagsFromFrame] for \
                                                    tagsFromFrame in dct['tag_data']])
 
-        tag_ids = np.vstack(list(itertools.chain(*[[x['tagId'] for x in tagsFromFrame] for tagsFromFrame in \
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tag_id'] for x in tagsFromFrame] for tagsFromFrame in \
                                                    dct['tag_data']])))
-        pose_ids = np.vstack(list(itertools.chain(*[[x['poseId'] for x in tagsFromFrame] for tagsFromFrame in \
+        pose_ids = np.vstack(list(itertools.chain(*[[x['pose_id'] for x in tagsFromFrame] for tagsFromFrame in \
                                                     dct['tag_data']])))
     else:
         tag_pose_flat = np.zeros((0, 16))
@@ -228,16 +228,16 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(tag_frame, [])
         tag_vertex_id_and_index_by_frame_id[tag_frame].append((tag_vertex_id, tag_index))
 
-    waypoint_list_uniform = list(map(lambda x: np.asarray(x[:-1]).reshape((-1, 18)), dct.get('location_data', [])))
-    waypoint_names = list(map(lambda x: x[-1], dct.get('location_data', [])))
+    waypoint_names = [location_data['name'] for location_data in dct['location_data']]
     unique_waypoint_names = np.unique(waypoint_names)
     num_unique_waypoint_names = unique_waypoint_names.size
-    if waypoint_list_uniform:
-        waypoint_data_uniform = np.concatenate(waypoint_list_uniform)
-    else:
-        waypoint_data_uniform = np.zeros((0, 18))
-    waypoint_edge_measurements_matrix = waypoint_data_uniform[:, :16].reshape(-1, 4, 4)
+
+    waypoint_edge_measurements_matrix = np.zeros((0, 4, 4))
+    if len(dct['location_data']) > 0:
+        waypoint_edge_measurements_matrix = np.concatenate([np.asarray(location_data['transform']).reshape((-1, 4, 4))
+                                                            for location_data in dct['location_data']])
     waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
+    waypoint_frame_ids = [location_data['pose_id'] for location_data in dct['location_data']]
 
     if use_sba:
         waypoint_vertex_id_by_name = dict(
@@ -250,7 +250,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     waypoint_name_by_vertex_id = dict(zip(waypoint_vertex_id_by_name.values(), waypoint_vertex_id_by_name.keys()))
     waypoint_vertex_id_and_index_by_frame_id = {}  # Enable lookup of waypoints by the frame they appear in
 
-    for waypoint_index, (waypoint_name, waypoint_frame) in enumerate(zip(waypoint_names, waypoint_data_uniform[:, 17])):
+    for waypoint_index, (waypoint_name, waypoint_frame) in enumerate(zip(waypoint_names, waypoint_frame_ids)):
         waypoint_vertex_id = waypoint_vertex_id_by_name[waypoint_name]
         waypoint_vertex_id_and_index_by_frame_id[waypoint_frame] = waypoint_vertex_id_and_index_by_frame_id.get(
             waypoint_name, [])
@@ -270,13 +270,13 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         tag_transform_estimates = defaultdict(lambda: [])
     else:
         vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
-    for i, odom_frame in enumerate(pose_data[:, 17]):
+    for i, odom_frame in enumerate(frame_ids):
         current_odom_vertex_uid = vertex_counter
         vertices[current_odom_vertex_uid] = graph.Vertex(
             mode=graph.VertexType.ODOMETRY,
             estimate=odom_vertex_estimates[i],
             fixed=not first_odom_processed,
-            meta_data={'poseId': odom_frame})
+            meta_data={'pose_id': odom_frame})
         first_odom_processed = True
         vertex_counter += 1
 
