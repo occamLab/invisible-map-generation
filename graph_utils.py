@@ -57,7 +57,7 @@ def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_
             rotation = optimizer.vertex(i).estimate().rotation().coeffs()
 
             if mode == VertexType.ODOMETRY:
-                pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['poseId']]])
+                pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['pose_id']]])
                 locations = np.vstack([locations, pose])
 
             elif mode == VertexType.TAG:
