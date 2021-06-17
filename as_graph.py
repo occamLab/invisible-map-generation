@@ -158,25 +158,29 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=use_sba)
 
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
-        tag_pose_flat = np.vstack([[x['tag_pose'] for x in tagsFromFrame] for tagsFromFrame in dct['tag_data']])
+        good_tag_detections = list(filter(lambda l: len(l) > 0,
+                                     [[tag_data for tag_data in tags_from_frame
+                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
+                                       and tag_data['tag_pose'][10] < 0.95] for tags_from_frame in dct['tag_data']]))
+        tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in good_tag_detections])
 
         if use_sba:
-            camera_intrinsics_for_tag = np.vstack([[x['camera_intrinsics'] for x in tagsFromFrame] for tagsFromFrame in\
-                                                   dct['tag_data']])
-            tag_corners = np.vstack([[x['tag_corners_pixel_coordinates'] for x in tagsFromFrame] for tagsFromFrame in\
-                                     dct['tag_data']])
+            camera_intrinsics_for_tag = np.vstack([[x['camera_intrinsics'] for x in tags_from_frame] for tags_from_frame
+                                                   in good_tag_detections])
+            tag_corners = np.vstack([[x['tag_corners_pixel_coordinates'] for x in tags_from_frame] for tags_from_frame
+                                     in good_tag_detections])
         else:
-            tag_joint_covar = np.vstack([[x['joint_covar'] for x in tagsFromFrame] for tagsFromFrame in
-                                         dct['tag_data']])
-            tag_position_variances = np.vstack([[x['tag_position_variance'] for x in tagsFromFrame] for tagsFromFrame
-                                                in dct['tag_data']])
-            tag_orientation_variances = np.vstack([[x['tag_orientation_variance'] for x in tagsFromFrame] for \
-                                                   tagsFromFrame in dct['tag_data']])
+            tag_joint_covar = np.vstack([[x['joint_covar'] for x in tags_from_frame] for tags_from_frame in
+                                         good_tag_detections])
+            tag_position_variances = np.vstack([[x['tag_position_variance'] for x in tags_from_frame] for
+                                                tags_from_frame in good_tag_detections])
+            tag_orientation_variances = np.vstack([[x['tag_orientation_variance'] for x in tags_from_frame] for
+                                                   tags_from_frame in dct['tag_data']])
 
-        tag_ids = np.vstack(list(itertools.chain(*[[x['tag_id'] for x in tagsFromFrame] for tagsFromFrame in \
-                                                   dct['tag_data']])))
-        pose_ids = np.vstack(list(itertools.chain(*[[x['pose_id'] for x in tagsFromFrame] for tagsFromFrame in \
-                                                    dct['tag_data']])))
+        tag_ids = np.vstack(list(itertools.chain(*[[x['tag_id'] for x in tags_from_frame] for tags_from_frame in
+                                                   good_tag_detections])))
+        pose_ids = np.vstack(list(itertools.chain(*[[x['pose_id'] for x in tags_from_frame] for tags_from_frame in
+                                                    good_tag_detections])))
     else:
         tag_pose_flat = np.zeros((0, 16))
         tag_ids = np.zeros((0, 1), dtype=np.int64)
