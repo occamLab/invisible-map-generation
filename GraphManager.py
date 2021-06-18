@@ -21,6 +21,7 @@ import numpy as np
 from firebase_admin import db
 from firebase_admin import storage
 from g2o import Quaternion
+from geneticalgorithm import geneticalgorithm as ga
 from varname import nameof
 
 import as_graph
@@ -62,6 +63,7 @@ class GraphManager:
         "trust_odom",
         "trust_tags",
         "new_option",
+        "comparison_baseline"
     ]
     _weights_dict: Dict[str, np.ndarray] = {
         "sensible_default_weights": np.array([
@@ -81,9 +83,10 @@ class GraphManager:
         ]),
         "new_option": np.array([
             -6., -6., -6., -6., -6., -6.,
-            1, 1, 0, 0, 0, 0,
-            0., 0., 0., -1, 1e2, -1
-        ])
+            18, 18, -5, -2, -2, -2,
+            0., 0., 0., 0., 1e2, 0.
+        ]),
+        "comparison_baseline": np.ones(18)
     }
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
                                                       "new_option"]
@@ -273,15 +276,7 @@ class GraphManager:
             visualize (bool): Used as the visualize argument for the _process_map method invocation.
         """
         results = "\n### Results ###\n\n"
-        graph1 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False, prescaling_opt=self._pso)
-        graph2 = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=True, prescaling_opt=self._pso)
-        ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
-        start_uid = graph1.edges[ordered_odom_edges[0]].startuid
-        middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
-        middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
-        end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
-        g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
-        g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
+        g1sg, g2sg = graph_utils.create_graphs_for_weight_comparison(map_info.map_dct, self._pso)
 
         missing_vertex_count = 0
         for graph1_sg_vert in g1sg.get_tag_verts():
@@ -364,7 +359,67 @@ class GraphManager:
                                                         g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
 
+    def optimize_weights(self, map_json_path):
+        """
+        Determines the best weights to optimize a graph with
+
+        Args:
+            map_json_path: the path to the json containing the unprocessed map information
+
+        Returns:
+            A list of the best weights
+        """
+        with open(os.path.join(self._cache_path, map_json_path), "r") as json_string_file:
+            json_string = json_string_file.read()
+            json_string_file.close()
+
+        map_json = os.path.sep.join(map_json_path.split(os.path.sep)[len(self._cache_path.split(
+            os.path.sep)) + 1:])
+        map_dct = json.loads(json_string)
+        map_name = self._read_cache_directory(os.path.basename(map_json))
+        map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
+
+        sg1, sg2 = self._create_graphs_for_weight_comparison(map_info.map_dct)
+        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2), dimension=18,
+                   variable_type='int', variable_boundaries=np.array([[-10, 10]] * 18))
+        model.run()
+        return model.report
+
     # -- Private Methods --
+    def _create_graphs_for_weight_comparison(self, dct: Dict):
+        """
+        Creates then splits a graph in half, as required for weight comparison
+
+        Specifically, this will create the graph based off the information in dct with the given prescaling option. It will
+        then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary, while the
+        second does not.
+
+        Args:
+            dct (Dict): A dictionary containing the unprocessed data to create the graph
+
+        Returns:
+            A tuple of 2 graphs, an even split of graph, as described above
+        """
+        graph1 = as_graph.as_graph(dct, fix_tag_vertices=False, prescaling_opt=self._pso)
+        graph2 = as_graph.as_graph(dct, fix_tag_vertices=True, prescaling_opt=self._pso)
+        ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
+        start_uid = graph1.edges[ordered_odom_edges[0]].startuid
+        middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
+        middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
+        end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
+        g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
+        g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
+
+        return g1sg, g2sg
+
+    def _get_chi2_weight_optimization(self, weights, g1sg, g2sg):
+        self._weights_dict['variable'] = weights
+        g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_chi_sqr, g1sg_odom_adj_chi2, g1sg_visible_tags_count =\
+            self._optimize_graph(g1sg, weights_key='variable')
+        for graph1_sg_vert in g1sg.get_tag_verts():
+            if g2sg.vertices.__contains__(graph1_sg_vert):
+                g2sg.vertices[graph1_sg_vert].estimate = g1sg.vertices[graph1_sg_vert].estimate
+        return self._optimize_graph(g2sg, weights_key='comparison_baseline')[3]
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
@@ -697,9 +752,9 @@ class GraphManager:
         ax.set_zlabel("Z")
         ax.view_init(120, -90)
 
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
         plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], "-", c="g",
                  label="Prior Odom Vertices")
+        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
 
         if original_tag_verts is not None:
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
