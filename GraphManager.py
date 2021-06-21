@@ -27,6 +27,7 @@ from varname import nameof
 import as_graph
 import graph_utils
 from graph import Graph
+from graph_vertex_edge_classes import Vertex, VertexType
 
 
 class GraphManager:
@@ -386,7 +387,7 @@ class GraphManager:
         return model.report
 
     # -- Private Methods --
-    def _create_graphs_for_weight_comparison(self, dct: Dict):
+    def _create_graphs_for_weight_comparison(self, dct: Dict) -> (Graph, Graph):
         """
         Creates then splits a graph in half, as required for weight comparison
 
@@ -412,14 +413,13 @@ class GraphManager:
 
         return g1sg, g2sg
 
-    def _get_chi2_weight_optimization(self, weights, g1sg, g2sg):
+    def _get_chi2_weight_optimization(self, weights, sg1, sg2):
         self._weights_dict['variable'] = weights
-        g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_chi_sqr, g1sg_odom_adj_chi2, g1sg_visible_tags_count =\
-            self._optimize_graph(g1sg, weights_key='variable')
-        for graph1_sg_vert in g1sg.get_tag_verts():
-            if g2sg.vertices.__contains__(graph1_sg_vert):
-                g2sg.vertices[graph1_sg_vert].estimate = g1sg.vertices[graph1_sg_vert].estimate
-        return self._optimize_graph(g2sg, weights_key='comparison_baseline')[3]
+        chi2, vertices = self._get_optimized_graph_info(sg1, weights_key='variable')
+        for uid, vertex in vertices.items():
+            if sg2.vertices.__contains__(uid):
+                sg2.vertices[uid].estimate = vertex.estimate
+        return self._get_optimized_graph_info(sg2, weights_key='comparison_baseline')[0]
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
@@ -618,6 +618,30 @@ class GraphManager:
             # This will be a dictionary of all the data that is there initially
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
+
+    def _get_optimized_graph_info(self, graph: Graph, weights_key: Union[str, None] = None)\
+            -> Tuple[float, Dict[int, Vertex]]:
+        """
+        Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
+        """
+
+        # Load in new weights and update graph
+        graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str)
+                                                   else self._selected_weights]
+        graph.update_edges()
+        graph.generate_unoptimized_graph()
+
+        # Run optimization
+        optimizer = graph.graph_to_optimizer()
+        optimizer.initialize_optimization()
+        optimizer.optimize(256)
+
+        # Find info
+        chi2 = Graph.check_optimized_edges(optimizer, weights=graph.weights)
+        tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
+                                    graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
+                        for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
+        return chi2, tag_vertices
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
                         Union[None, str] = None, graph_plot_title: Union[str, None] = None, chi2_plot_title: \
