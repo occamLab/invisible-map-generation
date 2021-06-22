@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from typing import Union, Set, Tuple
 
 import g2o
@@ -93,7 +94,7 @@ class Graph:
                     self._verts_to_edges[vertex_uid] = {edge_uid, }
 
     @staticmethod
-    def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
+    def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True, weights = None) -> float:
         """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.
 
         Args:
@@ -105,7 +106,7 @@ class Graph:
         """
         total_chi2 = 0.0
         for edge in graph.edges():
-            total_chi2 += Graph.get_chi2_of_edge(edge)
+            total_chi2 += Graph.get_chi2_of_edge(edge, weights)
 
         if verbose:
             print("Total chi2:", total_chi2)
@@ -113,7 +114,7 @@ class Graph:
         return total_chi2
 
     @staticmethod
-    def get_chi2_of_edge(edge: Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]) -> float:
+    def get_chi2_of_edge(edge: Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3], weights = None) -> float:
         """Computes the chi2 value associated with the provided edge
 
         Arguments:
@@ -133,7 +134,17 @@ class Graph:
             return error.dot(edge.information()).dot(error)
         elif isinstance(edge, g2o.EdgeSE3Expmap):
             error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
-            return error.log().T.dot(edge.information()).dot(error.log())
+            chi2 = error.log().T.dot(edge.information()).dot(error.log())
+            if math.isnan(chi2):
+                print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}\nfull:\n{edge.vertex(0).estimate().adj()}')
+                print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}\nfull:\n{edge.vertex(1).estimate().adj()}')
+                print(f'measurement:\n{edge.measurement().matrix()}\nfull:\n{edge.measurement().adj()}')
+                print(f'calc. error:\n{error.matrix()}\nfull:{error.adj()}')
+                print(f'omega:\n{edge.information()}')
+                if weights is not None:
+                    print(f'weights:\n{weights}')
+                raise Exception('chi2 is NaN for an edge of type EdgeSE3Expmap')
+            return chi2
         elif isinstance(edge, g2o.EdgeSE3):
             delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
             error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
@@ -149,7 +160,7 @@ class Graph:
 
         Returns:
             Tuple containing two elements:
-            - Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_ege`
+            - Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_edge`
               static method) that are incident to both the specified odometry node and two other odometry nodes. If
               there is only one such incident edge, then only that edge's chi2 value is returned.
             - Integer indicating how many tag vertices are visible from the specified odometry node
@@ -195,9 +206,9 @@ class Graph:
         run_status = self.optimized_graph.optimize(1024)
 
         print("checking unoptimized edges")
-        self.check_optimized_edges(self.unoptimized_graph)
+        self.check_optimized_edges(self.unoptimized_graph, weights=self.weights)
         print("checking optimized edges")
-        optimized_chi_sqr = self.check_optimized_edges(self.optimized_graph)
+        optimized_chi_sqr = self.check_optimized_edges(self.optimized_graph, weights=self.weights)
 
         self.g2o_status = run_status
         return optimized_chi_sqr

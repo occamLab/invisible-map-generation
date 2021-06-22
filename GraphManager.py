@@ -381,8 +381,16 @@ class GraphManager:
         map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
 
         sg1, sg2 = self._create_graphs_for_weight_comparison(map_info.map_dct)
-        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2), dimension=18,
-                   variable_type='int', variable_boundaries=np.array([[-10, 10]] * 18))
+        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2), dimension=12,
+                   variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
+                   algorithm_parameters={'max_num_iteration': 2000,
+                                         'population_size': 50,
+                                         'mutation_probability': 0.1,
+                                         'elit_ratio': 0.01,
+                                         'crossover_probability': 0.5,
+                                         'parents_portion': 0.3,
+                                         'crossover_type': 'uniform',
+                                         'max_iteration_without_improv': None})
         model.run()
         return model.report
 
@@ -414,7 +422,7 @@ class GraphManager:
         return g1sg, g2sg
 
     def _get_chi2_weight_optimization(self, weights, sg1, sg2):
-        self._weights_dict['variable'] = weights
+        self._weights_dict['variable'] = np.append(weights, [0, 0, 0, -1, 1e2, -1])
         chi2, vertices = self._get_optimized_graph_info(sg1, weights_key='variable')
         for uid, vertex in vertices.items():
             if sg2.vertices.__contains__(uid):
