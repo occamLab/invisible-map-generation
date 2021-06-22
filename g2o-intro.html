@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body {
+                margin: 3%
+            }
+        </style>
+        <meta charset="utf-12">
+        <meta name="viewport" content="width=device-width">
+        <title>Invisible Map Onboarding Materials | The Solution</title>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </head>
+    <body>
+        <a href="index.html">Home</a>
+        <h1>The Solution: G2O</h1>
+        <p>
+            G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf"
+            target="_blank">an algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty
+            standard. G2O, like most other SLAM solutions, represents measurements as a graph. Each vertex
+            contains a pose - some position and orientation, either represented as a vector of 3
+            position elements followed by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation
+            and a translation. One can easily be translated to the other. The edges each have some linear
+            transformation representing the conversion from one vertex to the next.
+        </p>
+        <p>
+            The most important intuition to get first is that the edge values (the measurements) are fixed, while
+            the vertex values (the poses) are variable. G2O will not change the measurements, instead altering the
+            poses to best match them. To do this, G2O defines an error function, F(X), and attempts to minimize it.
+        </p>
+    </body>
+</html>
