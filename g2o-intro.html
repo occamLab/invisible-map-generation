@@ -6,24 +6,82 @@
         <meta name="viewport" content="width=device-width">
         <title>Invisible Map Onboarding Materials | The Solution</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        <script type="text/javascript" id="MathJax-script" async
+            src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
+        </script>
     </head>
     <body>
         <a href="index.html">Home</a>
         <h1>The Solution: G2O</h1>
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#definitions">Definitions</a></li>
+            <li><a href="#math">The Math</a></li>
+                <ul>
+
+                </ul>
+        </ul>
         <p>
             G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf"
             target="_blank">an algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty
-            standard. G2O, like most other SLAM solutions, represents measurements as a graph. Each vertex
-            contains a pose - some position and orientation, either represented as a vector of 3
-            position elements followed by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation
-            and a translation. One can easily be translated to the other. The edges each have some linear
-            transformation representing the conversion from one vertex to the next.
+            standard. G2O, like most other SLAM solutions, represents measurements as a graph. Each vertex contains
+            a pose - some position and orientation, either represented as a vector of 3 position elements followed
+            by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation and a translation. One can
+            easily be translated to the other. The edges each have some linear transformation representing the
+            conversion from one vertex to the next.
         </p>
         <p>
             The most important intuition to get first is that the edge values (the measurements) are fixed, while
             the vertex values (the poses) are variable. G2O will not change the measurements, instead altering the
-            poses to best match them. To do this, G2O defines an error function, F(X), and attempts to minimize it.
+            poses to best match them. The result will (hopefully) be a more accurate version of the already recorded
+            map.
+        </p>
+        <h2 id="definitions">Definitions</h2>
+        <ul>
+            <li>
+                \(x_i\) - a vector defining the pose corresponding to node i. Can be thought of as equivalent to
+                the node itself. Typically, this is either 6-dimensional (x, y, z, yaw, pitch, roll or x, y, z, qx,
+                qy, qz, where q is the quaternion defining the rotation - don’t worry about what quaternions are,
+                just that they are helpful for rotations). These will change as G2O runs.
+            </li>
+            <li>
+                <i>X</i> - a vector containing all \(x_i\). The goal of G2O is to find an X to minimize F(<i>X</i>)
+                (see <a href="#error-func">below</a>)
+            </li>
+            <li>
+                \(z_{ij}\) - a matrix, the transformation from \(x_i\) to \(x_j\). Essentially the edge. This is what
+                is being measured by the phone or robot or whatever sensor. These will stay constant as G2O runs.
+                Note that in the case of more than one connection between the two nodes, \(z_{ij}\) is the average
+                of all the transformations.
+            </li>
+            <li>
+                \(e(x_i,x_j,z_{ij})\), often abbreviated as \(e(X)_{ij}\) or \(e_{ij}\) - a vector, the error between
+                the two poses based on the transformation between them. Although \(z_{ij}\) is a parameter, it will
+                not change. This function tests how good a certain guess for the nodes <i>i</i> and <i>j</i> are. The
+                exact details of the function may vary with different types of edges, but all functions have
+                two properties: 1. the 0 vector when the nodes exactly match the transformation, 2. it increases
+                the further apart the two nodes are from being described by the transformation.
+            </li>
+            <li>
+                \(\Omega_{ij}\)- the “information” matrix for edge <i>i</i>, <i>j</i>. All it does is provide a
+                scale for each term of the error. While it can be different for each specific edge, it often is
+                only different for different types of edges - i.e. edges connecting odometry versus edges
+                connecting odometry and april tags. In most explanations of G2O, this matrix is a side note,
+                but it will be pretty important as we get into weight evaluations for reasons that will become
+                clear later. For now, just know it scales the errors.
+            </li>
+            <li id="error-func">
+                \(F(X)\) - the error function. The goal of G2O is to minimize this function. It is defined as
+                \(\sum\limits_{i,j} e_{ij}^T\Omega_{ij}e_{ij}\). Get used to the ABA form - this is effectively
+                \(ba^2\) for matrices, and just ensures that each term of the error sum is positive. This is how
+                it scales each part of the error. Note that this means \(\Omega\)must also be positive (or
+                technically positive definite, but that is not necessary to know the details of - just know that
+                each term is positive).
+            </li>
+        </ul>
+        <h2 id="math">The Math</h2>
+        <p>
+            
         </p>
     </body>
 </html>
