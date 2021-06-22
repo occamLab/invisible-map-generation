@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            body {
+                margin: 3%
+            }
+            li {
+                font-size: large
+            }
+        </style>
+        <meta charset="utf-12">
+        <meta name="viewport" content="width=device-width">
+        <title>Invisible Map Onboarding Materials</title>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </head>
+    <body>
+        <h1>Invisible Map Onboarding Materials</h1>
+        <h2>Table of Contents</h2>
+        <ul>
+            <li><a href="#slam-intro">The Problem: SLAM</a></li>
+            <li><a href="#graphs-intro">The Model: Introduction to Graphs</a></li>
+                <ul>
+
+                </ul>
+            <li><a href="#g2o-intro">The Solution: G2O</a></li>
+        </ul>
+
+        <h2 id="slam-intro">The Problem: SLAM</h2>
+        <p>
+            SLAM stands for “Simultaneous Localization and Mapping”, and is a general class of problems especially
+            prevalent in robotics. It involves recording measurements from various sensors (Visual Inertial
+            Odometry (VIO), <a href="https://april.eecs.umich.edu/software/apriltag.html">April Tag</a> detection,
+            LIDAR, etc.) to create a map of some space, and your location within it (hence, localization and
+            mapping). This has many applications, especially in autonomous navigation for robots. Invisible Map
+            encounters this problem when a user is creating a new map.
+        </p>
+
+        <h2 id="graphs-intro">The Model: Introduction to Graphs</h2>
+        <p>
+            Most SLAM solutions represent sensor data as a
+            <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)">graph</a>. The main vertices
+            (nodes) that appear in graph-based SLAM are the camera poses and sometimes landmarks, and the edges
+            between vertices are constraints (some physical relationship). In the Invisible Map, the nodes are
+            camera poses, April tag poses, and dummy nodes (explained further in --SECTION--). The edges are the
+            VIO and tag detection data gathered during map creation.
+        </p>
+
+        <h2 id="g2o-intro">The Solution: G2O</h2>
+        <p>
+            G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf">an
+            algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty standard. G2O, like
+            most other SLAM solutions, represents measurements as a graph. Each vertex contains a pose - some
+            position and orientation, either represented as a vector of 3
+            position elements followed by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation
+            and a translation. One can easily be translated to the other. The edges each have some linear
+            transformation representing the conversion from one vertex to the next.
+        </p>
+        <p>
+            The most important intuition to get first is that the edge values (the measurements) are fixed, while
+            the vertex values (the poses) are variable. G2O will not change the measurements, instead altering the
+            poses to best match them. To do this, G2O defines an error function, F(X), and attempts to minimize it.
+        </p>
+    </body>
+</html>
