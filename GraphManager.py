@@ -216,15 +216,7 @@ class GraphManager:
                 continue  # Ignore directories
 
             print("\n---- Attempting to process map {} ----".format(map_json_abs_path))
-            with open(os.path.join(self._cache_path, map_json_abs_path), "r") as json_string_file:
-                json_string = json_string_file.read()
-                json_string_file.close()
-
-            map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
-                os.path.sep)) + 1:])
-            map_dct = json.loads(json_string)
-            map_name = self._read_cache_directory(os.path.basename(map_json))
-            map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
+            map_info = self._map_info_from_path(map_json_abs_path)
 
             if compare:
                 if upload:
@@ -277,7 +269,7 @@ class GraphManager:
             visualize (bool): Used as the visualize argument for the _process_map method invocation.
         """
         results = "\n### Results ###\n\n"
-        g1sg, g2sg = graph_utils.create_graphs_for_weight_comparison(map_info.map_dct, self._pso)
+        g1sg, g2sg = self._create_graphs_for_weight_comparison(map_info.map_dct)
 
         missing_vertex_count = 0
         for graph1_sg_vert in g1sg.get_tag_verts():
@@ -360,28 +352,20 @@ class GraphManager:
                                                         g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
 
-    def optimize_weights(self, map_json_path):
+    def optimize_weights(self, map_json_path: str, verbose: bool = True) -> np.ndarray:
         """
         Determines the best weights to optimize a graph with
 
         Args:
             map_json_path: the path to the json containing the unprocessed map information
+            verbose (bool): whether to provide output for the chi2 calculation
 
         Returns:
             A list of the best weights
         """
-        with open(os.path.join(self._cache_path, map_json_path), "r") as json_string_file:
-            json_string = json_string_file.read()
-            json_string_file.close()
-
-        map_json = os.path.sep.join(map_json_path.split(os.path.sep)[len(self._cache_path.split(
-            os.path.sep)) + 1:])
-        map_dct = json.loads(json_string)
-        map_name = self._read_cache_directory(os.path.basename(map_json))
-        map_info = GraphManager.MapInfo(map_name, map_name, map_dct)
-
-        sg1, sg2 = self._create_graphs_for_weight_comparison(map_info.map_dct)
-        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2), dimension=12,
+        map_dct = self._map_info_from_path(map_json_path).map_dct
+        sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2, verbose=verbose), dimension=12,
                    variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
                    algorithm_parameters={'max_num_iteration': 2000,
                                          'population_size': 50,
@@ -394,8 +378,47 @@ class GraphManager:
         model.run()
         return model.report
 
+    def sweep_weights(self, map_json_path: str, two_d: bool = True, bounds: Tuple[float, float] = (-10., 10.),
+                      step: float = 0.5, verbose: bool = True, visualize: bool = True) -> np.ndarray:
+        """
+        Sweeps a set of weights, returning the resulting chi2 values from each
+
+        Args:
+            map_json_path (str): the path to the json containing the map data to optimize on
+            two_d (bool): whether to assume all weights for a certain edge are the same
+            bounds (tuple): the lower and upper limits of which to sweep, inclusive
+            step (float): the step size to use between sweeps
+            verbose (bool): whether to print out the chi2 values
+            visualize (bool): whether to display the visualization plot. If not two_d, this will be ignored
+
+        Returns:
+            An ndarray, where each axis is a weight and each value is the resulting chi2. Note that the indexes will
+                start at 0 with a step size of 1 regardless of actual bounds and step size
+        """
+        map_dct = self._map_info_from_path(map_json_path).map_dct
+        sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        sweep = np.arange(bounds[0], bounds[1] + step, step)
+        dimensions = 2 if two_d else 12
+        chi2s = self._sweep_weights(sg1, sg2, sweep, dimensions, verbose=verbose)
+
+        if two_d and visualize:
+            graph_utils.plot_chi2s(sweep, chi2s)
+        return chi2s
+
     # -- Private Methods --
-    def _create_graphs_for_weight_comparison(self, dct: Dict) -> (Graph, Graph):
+    def _map_info_from_path(self, map_json_path: str) -> MapInfo:
+        map_json_abs_path = os.path.join(self._cache_path, map_json_path)
+        with open(map_json_abs_path, "r") as json_string_file:
+            json_string = json_string_file.read()
+            json_string_file.close()
+
+        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
+            os.path.sep)) + 1:])
+        map_dct = json.loads(json_string)
+        map_name = self._read_cache_directory(os.path.basename(map_json))
+        return GraphManager.MapInfo(map_name, map_name, map_dct)
+
+    def _create_graphs_for_weight_comparison(self, dct: Dict) -> Tuple[Graph, Graph]:
         """
         Creates then splits a graph in half, as required for weight comparison
 
@@ -421,13 +444,50 @@ class GraphManager:
 
         return g1sg, g2sg
 
-    def _get_chi2_weight_optimization(self, weights, sg1, sg2):
-        self._weights_dict['variable'] = np.append(weights, [0, 0, 0, -1, 1e2, -1])
+    def _sweep_weights(self, sg1: Graph, sg2: Graph, sweep: np.ndarray, dimensions: int, verbose: bool = True,
+                       _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
+        """
+        Sweeps the weights with the current chi2 algorithm evaluated on the given map
+
+        Args:
+            sg1 (Graph): the first subgraph for weight comparison
+            sg2 (Graph): the second subgraph for weight comparison
+            sweep (ndarray): a 1D array containing the values to sweep over
+            dimensions (int): the number of dimensions to sweep over (2 or 12)
+            verbose (bool): whether to print the chi2 values
+            _cur_weights (ndarray): the weights that are already set (do not set manually!)
+        """
+        if dimensions == 1:
+            chi2s = np.asarray([])
+            for weight in sweep:
+                full_weights = np.append(_cur_weights, weight)
+                if verbose:
+                    print(f'{full_weights.tolist()}: ', end='')
+                chi2s = np.append(chi2s, self._get_chi2_weight_optimization(full_weights, sg1, sg2, verbose))
+            return chi2s
+        else:
+            chi2s = np.asarray([])
+            first_run = True
+            for weight in sweep:
+                if first_run:
+                    chi2s = self._sweep_weights(sg1, sg2, sweep, dimensions - 1, verbose,
+                                                np.append(_cur_weights, weight)).reshape(1, -1)
+                    first_run = False
+                else:
+                    chi2s = np.concatenate((chi2s, self._sweep_weights(sg1, sg2, sweep, dimensions - 1, verbose,
+                                                                       np.append(_cur_weights, weight)).reshape(1, -1)))
+            return chi2s
+
+    def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
+        actual_weights = weights
+        if len(weights) == 2:
+            actual_weights = np.asarray([weights[0]] * 6 + [weights[1]] * 6)
+        self._weights_dict['variable'] = np.append(actual_weights, [0, 0, 0, -1, 1e2, -1])
         chi2, vertices = self._get_optimized_graph_info(sg1, weights_key='variable')
         for uid, vertex in vertices.items():
             if sg2.vertices.__contains__(uid):
                 sg2.vertices[uid].estimate = vertex.estimate
-        return self._get_optimized_graph_info(sg2, weights_key='comparison_baseline')[0]
+        return self._get_optimized_graph_info(sg2, weights_key='comparison_baseline', verbose=verbose)[0]
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
@@ -627,7 +687,7 @@ class GraphManager:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _get_optimized_graph_info(self, graph: Graph, weights_key: Union[str, None] = None)\
+    def _get_optimized_graph_info(self, graph: Graph, weights_key: Union[str, None] = None, verbose: bool = False)\
             -> Tuple[float, Dict[int, Vertex]]:
         """
         Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
@@ -645,7 +705,7 @@ class GraphManager:
         optimizer.optimize(256)
 
         # Find info
-        chi2 = Graph.check_optimized_edges(optimizer, weights=graph.weights)
+        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose, weights=graph.weights)
         tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
                                     graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
                         for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}

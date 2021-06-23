@@ -3,6 +3,8 @@
 from typing import Union, List, Dict
 
 import g2o
+from matplotlib import pyplot as plt
+from matplotlib import cm
 import numpy as np
 from g2o import SE3Quat, EdgeProjectPSI2UV
 from scipy.spatial.transform import Rotation as Rot
@@ -189,3 +191,13 @@ def locations_from_transforms(locations):
     for i in range(locations.shape[0]):
         locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
     return locations
+
+
+def plot_chi2s(sweep: np.ndarray, chi2s: np.ndarray):
+    fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
+    surf = ax.plot_surface(sweep, sweep.reshape(-1, 1), np.log(chi2s), cmap=cm.get_cmap('viridis'))
+    ax.set_xlabel('Odometry Weights')
+    ax.set_ylabel('April Tag Weights')
+    ax.set_zlabel('Chi^2 (log scale)')
+    fig.colorbar(surf)
+    plt.show()
