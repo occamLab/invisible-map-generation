@@ -4,7 +4,7 @@
         <link rel="stylesheet" href="basicstyle.css">
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
-        <title>Invisible Map Onboarding Materials | The Solution</title>
+        <title>G2O | Invisible Map Onboarding Materials</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script type="text/javascript" id="MathJax-script" async
             src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
@@ -12,7 +12,7 @@
     </head>
     <body>
         <a href="index.html">Home</a>
-        <h1>The Solution: G2O</h1>
+        <h1>The Solution: Introduction to G2O</h1>
         <h2>On this page</h2>
         <ul>
             <li><a href="#definitions">Definitions</a></li>
@@ -45,8 +45,8 @@
                 just that they are helpful for rotations). These will change as G2O runs.
             </li>
             <li>
-                <i>X</i> - a vector containing all \(x_i\). The goal of G2O is to find an X to minimize F(<i>X</i>)
-                (see <a href="#error-func">below</a>)
+                <i>X</i> - a vector containing all \(x_i\). The goal of G2O is to find an X to minimize F(<i>X</i>),
+                <a href="#error-func">the error function</a>.
             </li>
             <li>
                 \(z_{ij}\) - a matrix, the transformation from \(x_i\) to \(x_j\). Essentially the edge. This is what
@@ -81,7 +81,18 @@
         </ul>
         <h2 id="math">The Math</h2>
         <p>
-            
+            For those who want the full understanding, we will work through all the math here, step by step. If
+            you don’t care, feel free to skip this section.
+        </p>
+        <p>
+            First, define \(X^*\) to be the ideal poses - \(argmin F(X)\). Given an initial guess \(\check{X}\),
+            tipically defined as the initial pose guesses given by measurement, define \(\Delta X\) so that
+            \(\check{X} + \Delta X = X^*\). In this way, we just need to find \(\Delta X\). This may seem like a
+            small difference, but it will help a lot.
+        </p>
+        <p>
+            Now we need to minimize \(F(\check{X} + \Delta X)\). Substituing into <a href="#error-func">the
+            error function</a>, we get:
         </p>
     </body>
 </html>

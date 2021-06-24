@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="basicstyle.css">
+        <meta charset="utf-12">
+        <meta name="viewport" content="width=device-width">
+        <title>Code Structure | Invisible Map Onboarding Materials</title>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </head>
+    <body>
+        <a href="index.html">Home</a>
+        <h1 id="structure-intro">Code Structure</h1>
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#map-creator">Invisible Map Creator</a></li>
+            <li><a href="#back-end">Map Processing (Optimization)</a></li>
+            <li><a href="#map-viewer">Invisible Map</a></li>
+        </ul>
+        <p>
+            Currently, the code consists of three main parts: the front-end map creation (Invisible Map Creator),
+            the back-end map processing, and the front-end map viewing (Invisible Map). The code for the front-end
+            parts are in the <a href="https://github.com/occamLab/InvisibleMap">InvisibleMap repository on
+            Github</a>, and the code for the back-end is in the
+            <a href="https://github.com/occamLab/invisible-map-generation">invisible-map-generation repository</a>.
+        </p>
+        <p>
+            <b>An important usage note:</b> as of 6/17/2021, maps generated using the code in the master branches of
+            the invisible map repositories are not compatible with the code in the floor-detection branches of the
+            repositories and vice versa. The map data was restrucured, thus most maps uploaded to Firebase after this 
+            date only work with the newest code.
+        </p>
+        <h2 id="map-creator">Invisible Map Creator</h2>
+        <p>
+            InvisibleMapCreator is an iOS app written in Swift and using
+            <a href="https://developer.apple.com/xcode/swiftui/" target="_blank">SwiftUI</a> and ARKit.
+            The most recent version of the map creator is in the InvisibleMapCreator2 folder of the master branch
+            of the InvisibleMap repository. The floor-detection branch of this repository also contains an updated
+            version of the structure of the data collected and includes gathering extra data about the planes
+            detected by ARKit.
+        </p>
+        <p>
+            InvisibleMapCreator2 is a restructuring and redesign of the original
+            InvisibleMapCreator app. Marion and Avery describe the code structure in
+            <a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing"
+            target="_blank">their write-up of their work</a> and also
+            link to more detailed resources to understand the architecture. In summary, the app utilizes a 
+            composable finite state machine, which tracks the different UIs (views) of the app. The state machine
+            responds to <b>events</b> which are usually triggered by some user input or action, and can 
+            <b>transition</b> between states or emit a <b>command</b> in response to an events. The commands are 
+            used to communicate with the main functional components of the app (such as gathering data points).
+            The map creator uploads the data to <a href="https://firebase.google.com/" target="_blank">
+            Firebase</a>, which hosts the Invisible Map's data.
+        </p>
+        <p>
+            The InvisibleMapCreator detects AprilTags as the user walks and also allows the user to save locations
+            at any points of interest they choose.
+        </p>
+        <h2 id="back-end">Map Processing (Optimization)</h2>
+        <p>
+            The back-end map processing code is written in Python and must be run from a Linux machine.
+            The most recent version of the processing code is in the duncan-work-branch branch of the
+            invisible-map-generation repository. The README contains instructions on installing and running
+            the code and its dependencies. The back-end imports the raw map data from Firebase, runs it through
+            the G2O algorithm to optimize the map (phone positions and tag positions), and uploads the optimized map
+            to Firebase for the Invisible Map app to access.
+        </p>
+        <h2 id="map-viewer">Invisible Map</h2>
+        <p>
+            Invisible Map is an app written in Swift and C++ and using
+            <a href="https://developer.apple.com/documentation/uikit">UIKit</a> and ARKit.
+            The most recent version of the code is in the master branch of the InvisibleMap repository. This app
+            pulls the optimized map data from Firebase, and allows the user to pick a map and navigate around
+            a space. The app will show predicted locations of the AprilTags as well as any saved locations as the
+            user walks around.
+        </p>
+    </body>
+</html>

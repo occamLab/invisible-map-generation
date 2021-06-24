@@ -1,9 +1,12 @@
 body {
-    margin: 3%
+    margin: 5%
 }
 p {
     font-size: large
 }
 li {
+    font-size: large
+}
+a {
     font-size: large
 }

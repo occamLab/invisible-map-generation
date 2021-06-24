@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="basicstyle.css">
+        <meta charset="utf-12">
+        <meta name="viewport" content="width=device-width">
+        <title>Model | Invisible Map Onboarding Materials</title>
+        <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+        <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    </head>
+    <body>
+        <a href="index.html">Home</a>
+        <h1>The Model: Graphs in the Invisible Map</h1>
+        <p>
+            Most SLAM solutions represent sensor data as a
+            <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)" target="_blank">graph</a>.
+            The main vertices (nodes) that appear in graph-based SLAM are the camera poses and sometimes landmarks,
+            and the edges between vertices are constraints (some physical relationship). In the Invisible Map,
+            the nodes are camera poses, April tag poses, and dummy nodes (explained further in --SECTION--).
+            The edges are the transformations from the camera pose to the tags and dummy nodes at each frame.
+            Edges are constraints and thus their values are fixed. SLAM will change the positions of the nodes to
+            best fit the edges.
+        </p>
+        <p>
+            Camera, tag and dummy node positions are represented in the world reference frame using a 4-by-4
+            transformation matrix. The upper left 3-by-3 matrix represents the rotation and the 4th column
+            represents the translation from the origin of the world referene frame. The world reference frame
+            has the y axis oriented vertically with gravity and the x and z axis are oriented based on the starting
+            position of the phone.
+        </p>
+        <h2>Camera Nodes</h2>
+        <p>
+            The camera nodes are the phone odometry data points captured during map creation. InvisibleMapCreator
+            captures 10 frames per second, and ARKit tracks the transform of the camera pose. The app then stores
+            the information as the user records the map.
+        </p>
+        <h2>Tag Nodes</h2>
+        <p>
+            The C++ code in InvisibleMap is used to detect and recognize tags. How the AprilTag detection itself
+            works is not necessary to know. The important piece is that the app will save the position of the
+            tags as a transform in the world frame. Each separate detection of a tag is saved as a separate
+            data point.
+        </p>
+        <h2>Dummy Nodes</h2>
+        <p>
+            Dummy nodes are added in the back-end processing before sending the graph through G2O for optimization.
+            Their purpose is to restrict the rotation of the camera nodes in order to prevent them from tilting and
+            causing the path to stray vertically. We will work through the conceptual math below, but feel free to
+            skip this section.
+        </p>
+        <h3>Dummy Node Math</h3>
+        <p>
+            The \(\chi^2\) for an edge is given by the equation \(\chi^2 = e^T \Omega e\). These terms are defined in
+            more detail on <a href="g2o-intro.html#definitions" target="_blank">the G2O page in the definitions
+            section</a>. In short, \(e\) is the error between vertices of the edge and \(\Omega\) is the information
+            matrix providing scale factors for the errors.
+        </p>
+        <p>
+            Each camera node has a single associated dummy node, and both nodes are connected by an edge. The error
+            can be represented as a vector:
+            $$\begin{bmatrix} \Delta x \\ \Delta y \\ \Delta z \\ \Delta q_x \\ \Delta q_y \\ \Delta q_z \end{bmatrix}$$
+            where \(\Delta x, \Delta y, \Delta z\) are the errors in displacement and \(\Delta q_x, \Delta q_y, \Delta q_z\)
+            are the errors in the quaternion components (used for rotation, e.g. yaw, pitch, roll). The information matrix
+            \(\Omega\) is a 6-by-6 matrix. 
+        </p>
+        <p>
+            The goal of dummy nodes is to prevent G2O from rotating the camera nodes about any axis except the global y-axis,
+            which is aligned with gravity. This is because rotating about the global y-axis is the only direction that does not
+            change the projection of gravity onto the camera's local coordinate system's basis vectors. If the camera nodes
+            were allowed to rotate about other axes, it could cause the path to warp up and down vertically as the poses
+            get tilted. Since dummy nodes only restrict rotation, the information matrix has weights of 0 for anything involving
+            the three displacement components (only the bottom right 3-by-3 matrix has content, the rest is zeros). Putting this
+            and the representation of the error vector above together and subtituting into the \(\chi^2\) function we obtain:
+            $$\chi^2 = \begin{bmatrix} \Delta x \\ \Delta y \\ \Delta z \\ \Delta q_x \\ \Delta q_y \\ \Delta q_z \end{bmatrix} ^ T
+            \begin{bmatrix}
+            0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & 0 & 0 & 0 \\
+            0 & 0 & 0 & . & . & . \\
+            0 & 0 & 0 & . & . & . \\
+            0 & 0 & 0 & . & . & .
+            \end{bmatrix}
+            \begin{bmatrix} \Delta x \\ \Delta y \\ \Delta z \\ \Delta q_x \\ \Delta q_y \\ \Delta q_z \end{bmatrix}$$
+            The content of the bottom right 3-by-3 matrix will be explained next.
+        </p>
+        <p>
+            Next, we define three unit vectors \(u, v, g\). Only one of these vectors needs to be defined specifically;
+            we'll define \(u\). The other two are essentially arbitrary as long as they are both orthogonal to \(u\).
+            We define \(u\) as $$q_{spin\,about\,y} - q_{original} \over ||q_{spin\,about\,y} - q_{original}||$$ where
+            \(q_{spin\,about\,y}\) is the vector of the quaternion components after being rotated some amount about the
+            y-axis by the graph optimization, and \(q_{original}\) is the original quaternion vector.
+        </p>
+        <p>
+            The bottom right 3-by-3 matrix can now be defined as $$uu^Tc_1 + vv^Tc_2 + gg^Tc_3$$ where
+            \(c_1, c_2, c_3\) are weights. Substituing this matrix into the \(\chi^2\) function and simplifying to
+            remove all the zero terms, we obtain: $$\Delta q^T (uu^Tc_1 + vv^Tc_2 + gg^Tc_3) \Delta q$$ where \(\Delta q\)
+            is \(\begin{bmatrix} \Delta q_x \\ \Delta q_y \\ \Delta q_z \end{bmatrix}\). This can further be simplified
+            to $$c_1(\Delta q^T u)^2 + c_2(\Delta q^T v)^2 + c_3(\Delta q^T g)^2$$ From this equation we can see how a
+            change in \(q\) about different axes would increase and decrease each of the three terms. For the dummy nodes
+            to allow rotation about the y-axis and not any others, we set \(c_1\) to be small and the the other two
+            weights to be large. This causes rotations about the y axis to be low in effect on \(\chi^2\) while other rotations
+            have high effect.
+        </p>
+    </body>
+</html>
