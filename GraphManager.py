@@ -784,8 +784,18 @@ class GraphManager:
         waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
+            s = np.sin(np.pi / 4)
+            c = np.cos(np.pi / 4)
+            actual_tags = np.asarray([[0, 63.25, 0, 1, 0, 0, 0],
+                                      [269, 48.5, -31.25, 1, 0, 0, 0],
+                                      [350, 58.25, 86.25, c, 0, -s, 0],
+                                      [345.5, 58, 357.75, 0, 0, 1, 0],
+                                      [119.75, 86, 393, 0, 0, 1, 0],
+                                      [104, 31.75, 393, 0, 0, 1, 0],
+                                      [-76.75, 56.5, 316.75, c, 0, s, 0],
+                                      [-76.75, 54, 75, c, 0, s, 0]]) * 0.0254
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                                          original_tag_verts, graph_plot_title)
+                                          original_tag_verts, actual_tags, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
@@ -834,6 +844,7 @@ class GraphManager:
     def plot_optimization_result(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
                                  tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
                                  original_tag_verts: Union[None, np.ndarray] = None,
+                                 ground_truth_tags: Union[None, np.ndarray] = None,
                                  plot_title: Union[str, None] = None) -> None:
         """Visualization used during the optimization routine.
         """
@@ -851,6 +862,24 @@ class GraphManager:
         if original_tag_verts is not None:
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                      label="Tag Vertices Original")
+
+        if ground_truth_tags is not None:
+            tag_list = tag_verts.tolist()
+            tag_list.sort(key=lambda x: x[-1])
+            ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
+            print(f"ordered tags: {ordered_tags[1]}")
+            anchor_tag = 0
+            world_transform = GraphManager.transformation_matrix(ordered_tags[anchor_tag])
+            print(world_transform)
+            ground_tag_transform = GraphManager.transformation_matrix(ground_truth_tags[anchor_tag])
+            to_world = world_transform.dot(np.linalg.inv(ground_tag_transform))
+            print(to_world)
+            world_frame_ground_truth = to_world.dot(np.vstack((ground_truth_tags[:, :3].transpose(),
+                                                               np.ones((1, ground_truth_tags.shape[0]))))).transpose()
+            plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
+                     'o', c='k', label=f'Actual Tags')
+            for i, tag in enumerate(world_frame_ground_truth):
+                ax.text(tag[0], tag[1], tag[2], str(i), c='k')
 
         plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], "o", c="r", label="Tag Vertices")
         for tag_vert in tag_verts:
@@ -890,6 +919,16 @@ class GraphManager:
         if isinstance(plot_title, str):
             plt.title(plot_title, wrap=True)
         plt.show()
+
+    @staticmethod
+    def transformation_matrix(pose: Union[List[float], np.ndarray], invert: bool = False) -> np.ndarray:
+        mat = np.eye(4)
+        if invert:
+            mat[:3, :3] = np.linalg.inv(Quaternion(pose[3:]).rotation_matrix())
+        else:
+            mat[:3, :3] = Quaternion(pose[3:]).rotation_matrix()
+        mat[:3, 3] = (-1 if invert else 1) * np.asarray(pose[0:3])
+        return mat
 
     @staticmethod
     def axis_equal(ax):
