@@ -11,7 +11,7 @@
         </script>
     </head>
     <body>
-        <a href="index.html">Home</a>
+        <a href="../index.html">Home</a>
         <h1>The Solution: Introduction to G2O</h1>
         <h2>On this page</h2>
         <ul>
@@ -92,7 +92,55 @@
         </p>
         <p>
             Now we need to minimize \(F(\check{X} + \Delta X)\). Substituing into <a href="#error-func">the
-            error function</a>, we get:
+            error function</a>, we get: $$F(\check{X} + \Delta X) = \sum\limits_{i,j} e_{ij} (\check{X} + 
+            \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$ However, we do not know exactly what
+            \(e_{ij}\) is, so we cannot just plug in \(\check{X} + \Delta X\) without first knowing \(\Delta X\)
+            (which is what we want to find!). We can, however, approximate it through linearization with the
+            following equation: $$e_{ij}(\check{X} + \Delta X) \approx e_{ij}(\check{X}) + J_{ij}\Delta X$$ where
+            \(J_{ij}\) is the Jacobian of \(e_{ij}\). IF the gradient is the vector-to-scalar analog of the 
+            derivative, the Jacobian is the vector-to-vector analog of the gradient - a matrix of partial
+            derivatives of each output variable with respect to each input variale. This effectively creates
+            a plane through \(e_{ij}(\check{X})\) in the direction of the error function, then takes a step
+            of size \(\Delta X\) in that direcion. For sufficiently smooth functions, this will be a pretty
+            good estimation of the resulting value. Notice that this only works with the sum
+            \(\check{X} + \Delta X\); this is why we restated the problem this way in the first place.
         </p>
+        <p>
+            From here, it will be a lot of math and simplifying. You can follow along or just skip to the
+            final answer. We will take \(e_{ij} = e_{ij}(\check{X})\) for simplicity.
+            $$F_{ij}(\check{X} + \Delta X) = e_{ij}(\check{X} + \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$
+            $$F_{ij}(\check{X} + \Delta X) = (e_{ij} + J_{ij}\Delta X)^T \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
+            $$F_{ij}(\check{X} + \Delta X) = (e_{ij}^T + \Delta X^T J_{ij}^T) \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
+            $$F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + e_{ij}^T\Omega_{ij}J_{ij}\Delta X +
+            \Delta X^T J_{ij}^T\Omega_{ij}e_{ij} + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X$$
+        </p>
+        <p style="text-align:center">
+            \(F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + 2e_{ij}^T\Omega_{ij}J_{ij}\Delta X + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X\)
+            <sup><a href="#notes-footer">1</a></sup>
+        </p>
+        <p>
+            $$c_{ij} = e_{ij}^T\Omega_{ij}e_{ij} \;\;\;\;\;\;\; b_{ij} = e_{ij}^T\Omega_{ij}J_{ij} \;\;\;\;\;\;\; H_{ij} = J_{ij}^T\Omega_{ij}J_{ij}$$
+            $$F_{ij}(\check{X} + \Delta X) = c_{ij} + 2b_{ij}\Delta X + \Delta X^T H_{ij}\Delta X$$
+            $$F(\check{X} + \Delta X) = c + 2b\Delta X + \Delta X^T H\Delta X$$
+        </p>
+        <p>
+            Now we have \(F(\check{X} + \Delta X)\) in terms of constants and \(\Delta X\). To find the minimum,
+            we take the derivative and set it equal to 0. Or, more accurately, take the gradient and set it to
+            equal to \(\vec{0}\):
+            $$\nabla(\check{X} + \Delta X) = \nabla(c + 2b\Delta X + \Delta X^T H \Delta X) = \vec{0}$$
+            $$2b + 2H\Delta X = \vec{0}$$
+            $$H\Delta X = -b$$
+            $$\Delta X = -H^{-1}b$$
+            And now we have a definition for \(\Delta X\) given \(\check{X}\), \(e_{ij}(X)\) and \(J_{ij}(X)\),
+            and can solve for it accordingly. From here, all we need to do is add \(\Delta X\) to \(\check{X}\)
+            to get \(X^*\) and we are done.
+        </p>
+        <footer id="notes-footer">
+            <sup>1</sup> Remember the sizes of these vectors - J and \(\Omega\) are square matrices while
+            \(\Delta X\) and e are column vectors. For both of the middle two terms in the previous equation,
+            this evaluates to a scalar. Since \(\Omega\) is a diagonal matrix, it is its own transpose. This
+            means the middle two terms are transposes of each other, and since they are scalars, it means they
+            are equivalent. Hence, they are combined.
+        </footer>
     </body>
 </html>
