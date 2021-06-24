@@ -131,18 +131,19 @@ class Graph:
             cam = edge.parameter(0)
             error = edge.measurement() - cam.cam_map(
                 edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
+            print(f"Error: {error}")
             return error.dot(edge.information()).dot(error)
         elif isinstance(edge, g2o.EdgeSE3Expmap):
             error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
             chi2 = error.log().T.dot(edge.information()).dot(error.log())
             if math.isnan(chi2):
-                print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}\nfull:\n{edge.vertex(0).estimate().adj()}')
-                print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}\nfull:\n{edge.vertex(1).estimate().adj()}')
-                print(f'measurement:\n{edge.measurement().matrix()}\nfull:\n{edge.measurement().adj()}')
-                print(f'calc. error:\n{error.matrix()}\nfull:{error.adj()}')
-                print(f'omega:\n{edge.information()}')
-                if weights is not None:
-                    print(f'weights:\n{weights}')
+                # print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}\nfull:\n{edge.vertex(0).estimate().adj()}')
+                # print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}\nfull:\n{edge.vertex(1).estimate().adj()}')
+                # print(f'measurement:\n{edge.measurement().matrix()}\nfull:\n{edge.measurement().adj()}')
+                # print(f'calc. error:\n{error.matrix()}\nfull:{error.adj()}')
+                # print(f'omega:\n{edge.information()}')
+                # if weights is not None:
+                #     print(f'weights:\n{weights}')
                 raise Exception('chi2 is NaN for an edge of type EdgeSE3Expmap')
             return chi2
         elif isinstance(edge, g2o.EdgeSE3):
@@ -264,7 +265,6 @@ class Graph:
                         edge.set_vertex(2, optimizer.vertex(self.edges[i].enduid))
                         edge.set_information(self.edges[i].information)
                         edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
-
                         cpp_bool_ret_val_check &= edge.set_parameter_id(0, cam_idx)
                         if self.use_huber:
                             cpp_bool_ret_val_check &= edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))

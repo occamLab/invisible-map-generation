@@ -786,14 +786,14 @@ class GraphManager:
         if visualize:
             s = np.sin(np.pi / 4)
             c = np.cos(np.pi / 4)
-            actual_tags = np.asarray([[0, 63.25, 0, 1, 0, 0, 0],
-                                      [269, 48.5, -31.25, 1, 0, 0, 0],
-                                      [350, 58.25, 86.25, c, 0, -s, 0],
-                                      [345.5, 58, 357.75, 0, 0, 1, 0],
-                                      [119.75, 86, 393, 0, 0, 1, 0],
-                                      [104, 31.75, 393, 0, 0, 1, 0],
-                                      [-76.75, 56.5, 316.75, c, 0, s, 0],
-                                      [-76.75, 54, 75, c, 0, s, 0]]) * 0.0254
+            actual_tags = np.asarray([[0, 63.25 * 0.0254, 0, 1, 0, 0, 0],
+                                      [269 * 0.0254, 48.5 * 0.0254, -31.25 * 0.0254, 1, 0, 0, 0],
+                                      [350 * 0.0254, 58.25 * 0.0254, 86.25 * 0.0254, c, 0, -s, 0],
+                                      [345.5 * 0.0254, 58 * 0.0254, 357.75 * 0.0254, 0, 0, 1, 0],
+                                      [240 * 0.0254, 86 * 0.0254, 393 * 0.0254, 0, 0, 1, 0],
+                                      [104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 0, 1, 0],
+                                      [-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, c, 0, s, 0],
+                                      [-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, c, 0, s, 0]])
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                           original_tag_verts, actual_tags, graph_plot_title)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
@@ -867,13 +867,15 @@ class GraphManager:
             tag_list = tag_verts.tolist()
             tag_list.sort(key=lambda x: x[-1])
             ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
-            print(f"ordered tags: {ordered_tags[1]}")
-            anchor_tag = 0
-            world_transform = GraphManager.transformation_matrix(ordered_tags[anchor_tag])
-            print(world_transform)
+            anchor_tag = 1
+            anchor_tag_info = ordered_tags[anchor_tag]
+            swapped_tag = np.ones(7)
+            swapped_tag[:3] = anchor_tag_info[:3]
+            swapped_tag[3] = anchor_tag_info[-1]
+            swapped_tag[4:] = anchor_tag_info[3:-1]
+            world_transform = GraphManager.transformation_matrix(swapped_tag)
             ground_tag_transform = GraphManager.transformation_matrix(ground_truth_tags[anchor_tag])
             to_world = world_transform.dot(np.linalg.inv(ground_tag_transform))
-            print(to_world)
             world_frame_ground_truth = to_world.dot(np.vstack((ground_truth_tags[:, :3].transpose(),
                                                                np.ones((1, ground_truth_tags.shape[0]))))).transpose()
             plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
