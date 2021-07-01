@@ -158,10 +158,11 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=use_sba)
 
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
+        # good_tag_detections = dct['tag_data']
         good_tag_detections = list(filter(lambda l: len(l) > 0,
                                      [[tag_data for tag_data in tags_from_frame
-                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
-                                       and tag_data['tag_pose'][10] < 0.95] for tags_from_frame in dct['tag_data']]))
+                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < .7
+                                       and tag_data['tag_pose'][10] < 0.4] for tags_from_frame in dct['tag_data']]))
         tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in good_tag_detections])
 
         if use_sba:
@@ -289,6 +290,8 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
             if use_sba:
                 current_tag_transform_estimate = SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * SE3Quat(
                     tag_edge_measurements[tag_index]).inverse() * SE3Quat(vertices[current_odom_vertex_uid].estimate)
+                # if(tag_vertex_id == 5):
+                #     print(current_tag_transform_estimate.to_homogeneous_matrix())
                 # keep track of estimates in case we want to average them to initialize the graph
                 tag_transform_estimates[tag_vertex_id].append(current_tag_transform_estimate)
                 if tag_vertex_id not in counted_tag_vertex_ids:

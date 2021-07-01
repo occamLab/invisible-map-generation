@@ -128,10 +128,19 @@ class Graph:
              g2o.EdgeSE3Expmap, and g2o.EdgeSE3)
         """
         if isinstance(edge, g2o.EdgeProjectPSI2UV):
+            # if np.abs(edge.measurement()[1] - 939.6618652) < 0.00001:
+            #     print('test')
             cam = edge.parameter(0)
+            camera_coords = edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate()
+            pixel_coords = cam.cam_map(camera_coords)
             error = edge.measurement() - cam.cam_map(
                 edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
-            print(f"Error: {error}")
+            # if edge.vertex(2).id() == 0:
+            #     print(f"Camera: {camera_coords}")
+            #     print(f"Pixel: {pixel_coords}")
+            #     print(f"Edge: {edge.measurement()}")
+            #     print(f"Error: {error}")
+
             return error.dot(edge.information()).dot(error)
         elif isinstance(edge, g2o.EdgeSE3Expmap):
             error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()

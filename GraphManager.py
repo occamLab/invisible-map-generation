@@ -860,14 +860,32 @@ class GraphManager:
         plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
 
         if original_tag_verts is not None:
+            for i, tag_vertex in enumerate(original_tag_verts):
+                swapped_tag = np.ones(7)
+                swapped_tag[:3] = tag_vertex[:3]
+                swapped_tag[3] = tag_vertex[-2]
+                swapped_tag[4:] = tag_vertex[3:-2]
+                world_transform = GraphManager.transformation_matrix(swapped_tag)
+                z_unit_vector = world_transform[:3, 2]
+                original_tag_verts[i, :3] += z_unit_vector
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                      label="Tag Vertices Original")
+
+        # Fix the 1 meter offset on the tag anchors
+        for i, tag_vertex in enumerate(tag_verts):
+            swapped_tag = np.ones(7)
+            swapped_tag[:3] = tag_vertex[:3]
+            swapped_tag[3] = tag_vertex[-2]
+            swapped_tag[4:] = tag_vertex[3:-2]
+            world_transform = GraphManager.transformation_matrix(swapped_tag)
+            z_unit_vector = world_transform[:3, 2]
+            tag_verts[i, :3] += z_unit_vector
 
         if ground_truth_tags is not None:
             tag_list = tag_verts.tolist()
             tag_list.sort(key=lambda x: x[-1])
             ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
-            anchor_tag = 1
+            anchor_tag = 0
             anchor_tag_info = ordered_tags[anchor_tag]
             swapped_tag = np.ones(7)
             swapped_tag[:3] = anchor_tag_info[:3]
