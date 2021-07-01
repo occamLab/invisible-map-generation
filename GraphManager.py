@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from firebase_admin import db
 from firebase_admin import storage
-from g2o import Quaternion
+from g2o import Quaternion, SE3Quat
 from geneticalgorithm import geneticalgorithm as ga
 from varname import nameof
 
@@ -786,17 +786,17 @@ class GraphManager:
         if visualize:
             s = np.sin(np.pi / 4)
             c = np.cos(np.pi / 4)
-            actual_tags = np.asarray([[0, 63.25 * 0.0254, 0, 1, 0, 0, 0],
-                                      [269 * 0.0254, 48.5 * 0.0254, -31.25 * 0.0254, 1, 0, 0, 0],
-                                      [350 * 0.0254, 58.25 * 0.0254, 86.25 * 0.0254, c, 0, -s, 0],
-                                      [345.5 * 0.0254, 58 * 0.0254, 357.75 * 0.0254, 0, 0, 1, 0],
-                                      [240 * 0.0254, 86 * 0.0254, 393 * 0.0254, 0, 0, 1, 0],
-                                      [104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 0, 1, 0],
-                                      [-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, c, 0, s, 0],
-                                      [-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, c, 0, s, 0]])
+            actual_tags = np.asarray([SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]),
+                                      SE3Quat([269 * 0.0254, 48.5 * 0.0254, -31.25 * 0.0254, 0, 0, 0, 1]),
+                                      SE3Quat([350 * 0.0254, 58.25 * 0.0254, 86.25 * 0.0254, 0, c, 0, -s]),
+                                      SE3Quat([345.5 * 0.0254, 58 * 0.0254, 357.75 * 0.0254, 0, 1, 0, 0]),
+                                      SE3Quat([240 * 0.0254, 86 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
+                                      SE3Quat([104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
+                                      SE3Quat([-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, 0, c, 0, s]),
+                                      SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, c, 0, s])])
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                           original_tag_verts, actual_tags, graph_plot_title)
-            GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
+            #GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
@@ -861,41 +861,49 @@ class GraphManager:
 
         if original_tag_verts is not None:
             for i, tag_vertex in enumerate(original_tag_verts):
-                swapped_tag = np.ones(7)
-                swapped_tag[:3] = tag_vertex[:3]
-                swapped_tag[3] = tag_vertex[-2]
-                swapped_tag[4:] = tag_vertex[3:-2]
-                world_transform = GraphManager.transformation_matrix(swapped_tag)
-                z_unit_vector = world_transform[:3, 2]
-                original_tag_verts[i, :3] += z_unit_vector
+                original_tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse())
+                                                  .inverse().to_vector(), tag_vertex[-1])
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                      label="Tag Vertices Original")
 
         # Fix the 1 meter offset on the tag anchors
         for i, tag_vertex in enumerate(tag_verts):
-            swapped_tag = np.ones(7)
-            swapped_tag[:3] = tag_vertex[:3]
-            swapped_tag[3] = tag_vertex[-2]
-            swapped_tag[4:] = tag_vertex[3:-2]
-            world_transform = GraphManager.transformation_matrix(swapped_tag)
-            z_unit_vector = world_transform[:3, 2]
-            tag_verts[i, :3] += z_unit_vector
+            tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse()
+                                     .to_vector(), tag_vertex[-1])
 
         if ground_truth_tags is not None:
             tag_list = tag_verts.tolist()
             tag_list.sort(key=lambda x: x[-1])
             ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
             anchor_tag = 0
-            anchor_tag_info = ordered_tags[anchor_tag]
-            swapped_tag = np.ones(7)
-            swapped_tag[:3] = anchor_tag_info[:3]
-            swapped_tag[3] = anchor_tag_info[-1]
-            swapped_tag[4:] = anchor_tag_info[3:-1]
-            world_transform = GraphManager.transformation_matrix(swapped_tag)
-            ground_tag_transform = GraphManager.transformation_matrix(ground_truth_tags[anchor_tag])
-            to_world = world_transform.dot(np.linalg.inv(ground_tag_transform))
-            world_frame_ground_truth = to_world.dot(np.vstack((ground_truth_tags[:, :3].transpose(),
-                                                               np.ones((1, ground_truth_tags.shape[0]))))).transpose()
+            anchor_tag_se3quat = SE3Quat(ordered_tags[anchor_tag])
+            to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
+            world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
+
+            ground_truth_tags_transforms = {}
+            optimized_tags_transforms = {}
+
+            for index, tag in enumerate(ordered_tags):
+                optimized_tags_transforms[index] = (anchor_tag_se3quat.inverse() * SE3Quat(tag)).to_vector()
+            for index, tag in enumerate(ground_truth_tags):
+                ground_truth_tags_transforms[index] = (ground_truth_tags[anchor_tag].inverse() * tag).to_vector()
+
+            translation_sum = 0
+            for index in optimized_tags_transforms.keys():
+                print(f"--------------- Tag {index} ---------------")
+                print(f"Optimized: {optimized_tags_transforms[index]}")
+                print(f"Ground Truth: {ground_truth_tags_transforms[index]}")
+                difference = optimized_tags_transforms[index] - ground_truth_tags_transforms[index]
+                print(f"Difference: {difference}")
+                translation_difference = np.linalg.norm(difference[:3])
+                translation_sum += translation_difference
+                print(f"Translation Diff: {np.linalg.norm(difference[:3])} meters")
+                quaternion_difference = 2 * (np.arccos(optimized_tags_transforms[index][-1]) -
+                                             np.arccos(ground_truth_tags_transforms[index][-1]))
+                print(f"Quaternion Diff: {quaternion_difference  * (180/np.pi)} degrees")
+
+            print(f"\nAverage translation difference: {translation_sum/len(optimized_tags_transforms)} meters\n")
+
             plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                      'o', c='k', label=f'Actual Tags')
             for i, tag in enumerate(world_frame_ground_truth):
@@ -932,23 +940,13 @@ class GraphManager:
         # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
 
         tag_vertex_shift = original_tag_verts - tag_verts
-        print("tag_vertex_shift", tag_vertex_shift)
+        #print("tag_vertex_shift", tag_vertex_shift)
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
         GraphManager.axis_equal(ax)
         plt.gcf().set_dpi(300)
         if isinstance(plot_title, str):
             plt.title(plot_title, wrap=True)
-        plt.show()
-
-    @staticmethod
-    def transformation_matrix(pose: Union[List[float], np.ndarray], invert: bool = False) -> np.ndarray:
-        mat = np.eye(4)
-        if invert:
-            mat[:3, :3] = np.linalg.inv(Quaternion(pose[3:]).rotation_matrix())
-        else:
-            mat[:3, :3] = Quaternion(pose[3:]).rotation_matrix()
-        mat[:3, 3] = (-1 if invert else 1) * np.asarray(pose[0:3])
-        return mat
+        #plt.show()
 
     @staticmethod
     def axis_equal(ax):
