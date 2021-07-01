@@ -8,6 +8,7 @@ import math
 from typing import Union, Set, Tuple
 
 import g2o
+import numpy as np
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
@@ -23,7 +24,10 @@ class Graph:
 
     def __init__(self, vertices: Dict[int, Vertex],
                  edges: Dict[int, Edge],
-                 weights: np.ndarray = np.zeros(18),
+                 weights: Dict[str, np.ndarray] = {'odometry': np.zeros(6),
+                                                   'tag_sba': np.zeros(2),
+                                                   'tag': np.zeros(6),
+                                                   'dummy': np.zeros(3)},
                  gravity_axis="y",
                  is_sparse_bundle_adjustment: bool = False,
                  use_huber: bool = False,
@@ -48,7 +52,7 @@ class Graph:
         self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
         self.original_vertices = copy.deepcopy(vertices)
         self.huber_delta: bool = copy.deepcopy(huber_delta)
-        self.weights: np.ndarray = copy.deepcopy(weights)
+        self.weights: Dict[str, np.ndarray] = copy.deepcopy(weights)
         self.gravity_axis: str = copy.deepcopy(gravity_axis)
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
         self.damping_status: bool = damping_status
@@ -62,7 +66,7 @@ class Graph:
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
-        self.observations = np.reshape([], [0, self.weights.size])
+        self.observations = np.reshape([], [0, len(weights) * 6]) # TODO ensure the shape is right
         self.maximization_success: bool = False
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[g2o.SparseOptimizer, None] = None
@@ -94,7 +98,7 @@ class Graph:
                     self._verts_to_edges[vertex_uid] = {edge_uid, }
 
     @staticmethod
-    def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True, weights = None) -> float:
+    def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
         """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.
 
         Args:
@@ -106,7 +110,7 @@ class Graph:
         """
         total_chi2 = 0.0
         for edge in graph.edges():
-            total_chi2 += Graph.get_chi2_of_edge(edge, weights)
+            total_chi2 += Graph.get_chi2_of_edge(edge)
 
         if verbose:
             print("Total chi2:", total_chi2)
@@ -114,7 +118,7 @@ class Graph:
         return total_chi2
 
     @staticmethod
-    def get_chi2_of_edge(edge: Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3], weights = None) -> float:
+    def get_chi2_of_edge(edge: Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]) -> float:
         """Computes the chi2 value associated with the provided edge
 
         Arguments:
@@ -216,9 +220,9 @@ class Graph:
         run_status = self.optimized_graph.optimize(1024)
 
         print("checking unoptimized edges")
-        self.check_optimized_edges(self.unoptimized_graph, weights=self.weights)
+        self.check_optimized_edges(self.unoptimized_graph)
         print("checking optimized edges")
-        optimized_chi_sqr = self.check_optimized_edges(self.optimized_graph, weights=self.weights)
+        optimized_chi_sqr = self.check_optimized_edges(self.optimized_graph)
 
         self.g2o_status = run_status
         return optimized_chi_sqr
@@ -360,17 +364,17 @@ class Graph:
             end_mode = self.vertices[edge.enduid].mode
             if start_mode == VertexType.ODOMETRY:
                 if end_mode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(np.exp(-self.weights[:6]))
+                    self.edges[uid].information = np.diag(np.exp(-self.weights['odometry']))
                 elif end_mode == VertexType.TAG:
                     if self.is_sparse_bundle_adjustment:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:8]))
+                        self.edges[uid].information = np.diag(np.exp(-self.weights['tag_sba']))
                     else:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights[6:12]))
+                        self.edges[uid].information = np.diag(np.exp(-self.weights['tag']))
                 elif end_mode == VertexType.DUMMY:
                     # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
                     #  to work though)
                     basis = self._basis_matrices[uid][3:6, 3:6]
-                    cov = np.diag(np.exp(-self.weights[15:18]))
+                    cov = np.diag(np.exp(-self.weights['dummy']))
                     information = basis.dot(cov).dot(basis.T)
                     template = np.zeros([6, 6])
 

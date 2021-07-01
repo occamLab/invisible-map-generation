@@ -66,28 +66,37 @@ class GraphManager:
         "new_option",
         "comparison_baseline"
     ]
-    _weights_dict: Dict[str, np.ndarray] = {
-        "sensible_default_weights": np.array([
-            -6., -6., -6., -6., -6., -6.,
-            18, 18, 0, 0, 0, 0,
-            0., 0., 0., -1, 1e2, -1
-        ]),
-        "trust_odom": np.array([
-            -3., -3., -3., -3., -3., -3.,
-            10.6, 10.6, 10.6, 10.6, 10.6, 10.6,
-            0., 0., 0., -1, 1e2, -1
-        ]),
-        "trust_tags": np.array([
-            10, 10, 10, 10, 10, 10,
-            -10.6, -10.6, -10.6, -10.6, -10.6, -10.6,
-            0, 0, 0, -1, 1e2, -1
-        ]),
-        "new_option": np.array([
-            -6., -6., -6., -6., -6., -6.,
-            18, 18, -5, -2, -2, -2,
-            0., 0., 0., 0., 1e2, 0.
-        ]),
-        "comparison_baseline": np.ones(18)
+    _weights_dict: Dict[str, Dict[str, np.ndarray]] = {
+        "sensible_default_weights": {
+            'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
+            'tag_sba': np.array([18, 18]),
+            'tag': np.array([18, 18, 0, 0, 0, 0]),
+            'dummy': np.array([-1, 1e2, -1]),
+        },
+        "trust_odom": {
+            'odometry': np.array([-3., -3., -3., -3., -3., -3.]),
+            'tag_sba': np.array([10.6, 10.6]),
+            'tag': np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
+            'dummy': np.array([-1, 1e2, -1]),
+        },
+        "trust_tags": {
+            'odometry': np.array([10, 10, 10, 10, 10, 10]),
+            'tag_sba': np.array([-10.6, -10.6]),
+            'tag': np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
+            'dummy': np.array([-1, 1e2, -1]),
+        },
+        "new_option": {
+            'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
+            'tag_sba': np.array([18, 18]),
+            'tag': np.array([18, 18, -5, -2, -2, -2]),
+            'dummy': np.array([0., 1e2, 0.]),
+        },
+        "comparison_baseline": {
+            'odometry': np.ones(6),
+            'tag_sba': np.ones(2),
+            'tag': np.ones(6),
+            'dummy': np.ones(3),
+        }
     }
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
                                                       "new_option"]
@@ -479,10 +488,16 @@ class GraphManager:
             return chi2s
 
     def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
-        actual_weights = weights
+        actual_weights = {'dummy': np.array([-1, 1e2, -1])}
         if len(weights) == 2:
-            actual_weights = np.asarray([weights[0]] * 6 + [weights[1]] * 6)
-        self._weights_dict['variable'] = np.append(actual_weights, [0, 0, 0, -1, 1e2, -1])
+            actual_weights['odometry'] = np.array([weights[0]] * 6)
+            actual_weights['tag'] = np.array([weights[1]] * 6)
+        elif len(weights) == 12:
+            actual_weights['odometry'] = np.array(weights[:6])
+            actual_weights['tag'] = np.array(weights[6:])
+        else:
+            raise Exception('Given weights must be either length of 2 or 12')
+        self._weights_dict['variable'] = actual_weights
         chi2, vertices = self._get_optimized_graph_info(sg1, weights_key='variable')
         for uid, vertex in vertices.items():
             if sg2.vertices.__contains__(uid):
