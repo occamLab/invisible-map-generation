@@ -26,6 +26,7 @@ from varname import nameof
 
 import as_graph
 import graph_utils
+from graph_utils import occam_room_tags
 from graph import Graph
 from graph_vertex_edge_classes import Vertex, VertexType
 
@@ -373,9 +374,10 @@ class GraphManager:
             A list of the best weights
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
-        sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
-        model = ga(function=lambda X: self._get_chi2_weight_optimization(X, sg1, sg2, verbose=verbose), dimension=12,
-                   variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
+        graph = as_graph.as_graph(map_dct)
+        # sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        model = ga(function=lambda X: self._get_ground_truth_weight_optimization(X, graph, occam_room_tags, verbose),
+                   dimension=12, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
                    algorithm_parameters={'max_num_iteration': 2000,
                                          'population_size': 50,
                                          'mutation_probability': 0.1,
@@ -486,6 +488,30 @@ class GraphManager:
                     chi2s = np.concatenate((chi2s, self._sweep_weights(sg1, sg2, sweep, dimensions - 1, verbose,
                                                                        np.append(_cur_weights, weight)).reshape(1, -1)))
             return chi2s
+
+    def _get_ground_truth_weight_optimization(self, weights: np.ndarray, graph: Graph, ground_truth_tags: np.ndarray,
+                                              verbose: bool = True) -> float:
+        actual_weights = {'dummy': np.array([-1, 1e2, -1])}
+        if len(weights) == 2:
+            actual_weights['odometry'] = np.array([weights[0]] * 6)
+            actual_weights['tag'] = np.array([weights[1]] * 6)
+            actual_weights['tag_sba'] = np.array([weights[1]] * 2)
+        elif len(weights) == 12:
+            actual_weights['odometry'] = np.array(weights[:6])
+            actual_weights['tag'] = np.array(weights[6:])
+            actual_weights['tag_sba'] = np.array(weights[6:8])
+        else:
+            raise Exception('Given weights must be either length of 2 or 12')
+        self._weights_dict['variable'] = actual_weights
+        chi2, vertices = self._get_optimized_graph_info(graph, weights_key='variable')
+        optimized_tag_verts = np.zeros((len(vertices), 7))
+        for vertex in vertices.values():
+            estimate = vertex.estimate
+            optimized_tag_verts[vertex.meta_data['tag_id']] = \
+                (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
+        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, verbose=verbose)
+        print(metric)
+        return metric
 
     def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
         actual_weights = {'dummy': np.array([-1, 1e2, -1])}
@@ -720,7 +746,7 @@ class GraphManager:
         optimizer.optimize(256)
 
         # Find info
-        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose, weights=graph.weights)
+        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose)
         tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
                                     graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
                         for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
@@ -799,18 +825,8 @@ class GraphManager:
         waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
-            s = np.sin(np.pi / 4)
-            c = np.cos(np.pi / 4)
-            actual_tags = np.asarray([SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]),
-                                      SE3Quat([269 * 0.0254, 48.5 * 0.0254, -31.25 * 0.0254, 0, 0, 0, 1]),
-                                      SE3Quat([350 * 0.0254, 58.25 * 0.0254, 86.25 * 0.0254, 0, c, 0, -s]),
-                                      SE3Quat([345.5 * 0.0254, 58 * 0.0254, 357.75 * 0.0254, 0, 1, 0, 0]),
-                                      SE3Quat([240 * 0.0254, 86 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
-                                      SE3Quat([104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
-                                      SE3Quat([-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, 0, c, 0, s]),
-                                      SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, c, 0, s])])
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                                          original_tag_verts, actual_tags, graph_plot_title)
+                                          original_tag_verts, occam_room_tags, graph_plot_title)
             #GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
@@ -856,6 +872,54 @@ class GraphManager:
         plt.show()
 
     @staticmethod
+    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, anchor_tag: int = 0,
+                            verbose: bool = False):
+        """
+        Generates a metric to compare the accuracy of a map with the ground truth.
+
+        Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
+        then compares the transforms and finds the difference in the translation components.
+
+        Args:
+            optimized_tag_verts: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
+                represent the translation (xyz) and rotation (quaternion) of the optimized tags.
+            ground_truth_tags: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
+                represent the translation (xyz) and rotation (quaternion) of the ground truth tags.
+            anchor_tag: An int representing which tag to use as the comparison tag.
+            verbose: A boolean representing whether to print the full comparisons for each tag.
+
+        Returns:
+            A float representing the average difference in tag positions (translation only) in meters.
+        """
+        anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
+
+        ground_truth_tags_transforms = {}
+        optimized_tags_transforms = {}
+
+        for index, tag in enumerate(optimized_tag_verts):
+            optimized_tags_transforms[index] = (anchor_tag_se3quat.inverse() * SE3Quat(tag)).to_vector()
+        for index, tag in enumerate(ground_truth_tags):
+            ground_truth_tags_transforms[index] = (ground_truth_tags[anchor_tag].inverse() * tag).to_vector()
+
+        translation_sum = 0
+
+        for index in optimized_tags_transforms.keys():
+            difference = optimized_tags_transforms[index] - ground_truth_tags_transforms[index]
+            translation_difference = np.linalg.norm(difference[:3])
+            translation_sum += translation_difference
+            quaternion_difference = 2 * (np.arccos(optimized_tags_transforms[index][-1]) -
+                                         np.arccos(ground_truth_tags_transforms[index][-1]))
+            if verbose:
+                print(f"--------------- Tag {index} ---------------")
+                print(f"Optimized: {optimized_tags_transforms[index]}")
+                print(f"Ground Truth: {ground_truth_tags_transforms[index]}")
+                print(f"Difference: {difference}")
+                print(f"Translation Diff: {np.linalg.norm(difference[:3])} meters")
+                print(f"Quaternion Diff: {quaternion_difference * (180 / np.pi)} degrees")
+
+        return translation_sum / len(optimized_tags_transforms)
+
+    @staticmethod
     def plot_optimization_result(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
                                  tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
                                  original_tag_verts: Union[None, np.ndarray] = None,
@@ -895,29 +959,7 @@ class GraphManager:
             to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
             world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
 
-            ground_truth_tags_transforms = {}
-            optimized_tags_transforms = {}
-
-            for index, tag in enumerate(ordered_tags):
-                optimized_tags_transforms[index] = (anchor_tag_se3quat.inverse() * SE3Quat(tag)).to_vector()
-            for index, tag in enumerate(ground_truth_tags):
-                ground_truth_tags_transforms[index] = (ground_truth_tags[anchor_tag].inverse() * tag).to_vector()
-
-            translation_sum = 0
-            for index in optimized_tags_transforms.keys():
-                print(f"--------------- Tag {index} ---------------")
-                print(f"Optimized: {optimized_tags_transforms[index]}")
-                print(f"Ground Truth: {ground_truth_tags_transforms[index]}")
-                difference = optimized_tags_transforms[index] - ground_truth_tags_transforms[index]
-                print(f"Difference: {difference}")
-                translation_difference = np.linalg.norm(difference[:3])
-                translation_sum += translation_difference
-                print(f"Translation Diff: {np.linalg.norm(difference[:3])} meters")
-                quaternion_difference = 2 * (np.arccos(optimized_tags_transforms[index][-1]) -
-                                             np.arccos(ground_truth_tags_transforms[index][-1]))
-                print(f"Quaternion Diff: {quaternion_difference  * (180/np.pi)} degrees")
-
-            print(f"\nAverage translation difference: {translation_sum/len(optimized_tags_transforms)} meters\n")
+            print(f"\nAverage translation difference: {GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags, anchor_tag, True)}\n")
 
             plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                      'o', c='k', label=f'Actual Tags')
