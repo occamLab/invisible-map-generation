@@ -376,8 +376,8 @@ class GraphManager:
         map_dct = self._map_info_from_path(map_json_path).map_dct
         graph = as_graph.as_graph(map_dct)
         # sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
-        model = ga(function=lambda X: self._get_ground_truth_weight_optimization(X, graph, occam_room_tags, verbose),
-                   dimension=12, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
+        model = ga(function=lambda X: self._get_ground_truth_weight_optimization(X, graph, occam_room_tags, 0, verbose),
+                   dimension=8, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 8),
                    algorithm_parameters={'max_num_iteration': 2000,
                                          'population_size': 50,
                                          'mutation_probability': 0.1,
@@ -529,10 +529,9 @@ class GraphManager:
             estimate = vertex.estimate
             optimized_tag_verts[vertex.meta_data['tag_id']] = \
                 (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
-        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, anchor_tag=anchor_tag,
-                                                  verbose=verbose)
+        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, anchor_tag=anchor_tag)
         if verbose:
-            print(metric)
+            print(f"{metric} {weights}")
         return metric
 
     def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
