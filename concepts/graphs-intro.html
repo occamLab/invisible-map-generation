@@ -98,8 +98,15 @@
             to $$c_1(\Delta q^T u)^2 + c_2(\Delta q^T v)^2 + c_3(\Delta q^T g)^2$$ From this equation we can see how a
             change in \(q\) about different axes would increase and decrease each of the three terms. For the dummy nodes
             to allow rotation about the y-axis and not any others, we set \(c_1\) to be small and the the other two
-            weights to be large. This causes rotations about the y axis to be low in effect on \(\chi^2\) while other rotations
-            have high effect.
+            weights to be large. This causes rotations about the y axis to be low in effect on \(\chi^2\) while other
+            rotations have high effect.
+        </p>
+        <h2>Edges</h2>
+        <p>
+            In the Invisible Map code, there are four types of edges: odometry to odometry, odometry to tag, odometry
+            to dummy, and a special edge with three vertices between an odometry node, a tag anchor node (the center),
+            and a tag corner. This last special edge is only used when using Sparse Bundle Adjustment (SBA) for the
+            optimization. Only the tag anchor is used when not using SBA.
         </p>
     </body>
 </html>
