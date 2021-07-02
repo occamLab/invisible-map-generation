@@ -11,6 +11,16 @@
     <body>
         <a href="../index.html">Home</a>
         <h1>The Model: Graphs in the Invisible Map</h1>
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#camera-nodes">Camera Nodes</a></li>
+            <li><a href="#tag-nodes">Tag Nodes</a></li>
+            <li><a href="#dummy-nodes">Dummy Nodes</a></li>
+                <ul>
+                    <li><a href="#dummy-node-math">Dummy Node Math</a></li>
+                </ul>
+            <li><a href="#edges">Edges</a></li>
+        </ul>
         <p>
             Most SLAM solutions represent sensor data as a
             <a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)" target="_blank">graph</a>.
@@ -28,27 +38,27 @@
             has the y axis oriented vertically with gravity and the x and z axis are oriented based on the starting
             position of the phone.
         </p>
-        <h2>Camera Nodes</h2>
+        <h2 id="camera-nodes">Camera Nodes</h2>
         <p>
             The camera nodes are the phone odometry data points captured during map creation. InvisibleMapCreator
             captures 10 frames per second, and ARKit tracks the transform of the camera pose. The app then stores
             the information as the user records the map.
         </p>
-        <h2>Tag Nodes</h2>
+        <h2 id="tag-nodes">Tag Nodes</h2>
         <p>
             The C++ code in InvisibleMap is used to detect and recognize tags. How the AprilTag detection itself
             works is not necessary to know. The important piece is that the app will save the position of the
             tags as a transform in the world frame. Each separate detection of a tag is saved as a separate
             data point.
         </p>
-        <h2>Dummy Nodes</h2>
+        <h2 id="dummy-nodes">Dummy Nodes</h2>
         <p>
             Dummy nodes are added in the back-end processing before sending the graph through G2O for optimization.
             Their purpose is to restrict the rotation of the camera nodes in order to prevent them from tilting and
             causing the path to stray vertically. We will work through the conceptual math below, but feel free to
             skip this section.
         </p>
-        <h3>Dummy Node Math</h3>
+        <h3 id="dummy-node-math">Dummy Node Math</h3>
         <p>
             The \(\chi^2\) for an edge is given by the equation \(\chi^2 = e^T \Omega e\). These terms are defined in
             more detail on <a href="g2o-intro.html#definitions" target="_blank">the G2O page in the definitions
@@ -101,7 +111,7 @@
             weights to be large. This causes rotations about the y axis to be low in effect on \(\chi^2\) while other
             rotations have high effect.
         </p>
-        <h2>Edges</h2>
+        <h2 id="edges">Edges</h2>
         <p>
             In the Invisible Map code, there are four types of edges: odometry to odometry, odometry to tag, odometry
             to dummy, and a special edge with three vertices between an odometry node, a tag anchor node (the center),
