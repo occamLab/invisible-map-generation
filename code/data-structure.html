@@ -10,5 +10,145 @@
     </head>
     <body>
         <a href="../index.html">Home</a>
+        <h1>Structure of the Data</h1>
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#raw-data">Raw Map Data</a></li>
+            <li><a href="#processed-data">Processed Map Data</a></li>
+        </ul>
+        <p>
+            The main data for the Invisible Map is stored in <a href="https://www.json.org/json-en.html">
+            JSON (JavaScript Object Notation)</a> files. There are two sets of JSON files; the raw data, which
+            is collected by Invisible Map Creator and uploaded to Firebase, and the processed data, which is
+            written by the back-end Invisible Map Generation code and uploaded to Firebase. The processed data is
+            read by Invisible Map so that the user can interact with the finished map.
+        </p>
+        
+        <h2 id="raw-data">Raw Map Data</h2>
+        <p>
+            <b>
+                Note about this data structure: As of 6/17/2021, this structure is only implemented in the
+                floor-detection branch of the InvisibleMap repository, and can only be read by the code in
+                the floor-detection branch of invisible-map-generation. Older maps will not work with
+                the floor-detection back-end code and newer maps will not work with the current master branch
+                back-end code.
+            </b>
+        </p>
+        <p>
+            The overall structure of the raw data is a dictionary with 5 keys: map_id, pose_data, tag_data,
+            location_data (the waypoints or points of interest recorded during map creation), and plane_data.
+            Each of these entries with the exception of map_id is another dictionary. The full structure of the
+            file is detailed below in a nested bulleted list. 
+        </p>
+        <ul>
+            <li>"map_id": String, the unique ID for the map</li>
+            <li>"pose_data": Dict, the odometry data taken at each frame 10 times per second</li>
+                <ul>
+                    <li>"timestamp": Float</li>
+                    <li>"id": Int</li>
+                    <li>"pose": 16 element list (4x4 Float matrix), the odometry pose in world frame</li>
+                    <li>
+                        "planes": [Dict] (List of Dicts), each new plane that was detected when this odom frame 
+                        was recorded
+                    </li>
+                        <ul>
+                            <li>"id": Int, id of the plane anchor</li>
+                            <li>
+                                "transform": 16 element list (4x4 Float matrix), the transformation matrix from
+                                the odometry to the plane anchor position.
+                            </li>
+                        </ul>
+                </ul>
+            <li>"tag_data": Dict</li>
+                <ul>
+                    <li>"timestamp": Float</li>
+                    <li>"tag_id": Int</li>
+                    <li>"pose_id": Int, id of the odometry frame when this tag was detected</li>
+                    <li>"tag_pose": 16 element list (4x4 Float matrix), the tag pose in camera frame (local to phone)</li>
+                    <li>"tag_corners_pixel_coordinates": 8 element List, coordinates for each tag corner in pixels</li>
+                    <li>
+                        "camera_intrinsics": 4 element List, the internal data unique to the camera used to record
+                        the map. First two elements are focal length in the x and y directions, third and fourth elements
+                        are the pixel coordinates of the center.
+                    </li>
+                    <li>"tag_position_variance": 3 element List, variability in tag position</li>
+                    <li>"tag_orientation_variance": 4 element List, variability in tag orientation</li>
+                    <li>"joint_covar": 49 element List (7x7 matrix), covariance</li>
+                </ul>
+            <li>"location_data": Dict</li>
+                <ul>
+                    <li>"timestamp": Float</li>
+                    <li>"name": String</li>
+                    <li>"pose_id": Int, id of the odometry frame when this location was saved</li>
+                    <li>"transform": 16 element list (4x4 Float matrix), the waypoint pose in world frame</li>
+                </ul>
+            <li>"plane_data": Dict</li>
+                <ul>
+                    <li>"id": Int</li>
+                    <li>"pose": 16 element list (4x4 Float matrix), the pose of the plane anchor in world frame</li>
+                    <li>"boundaries": List of 3 element Lists, the coordinates of the corners of the plane boundary</li>
+                </ul>
+        </ul>
+
+        <h2 id="processed-data">Processed Map Data</h2>
+        <p>
+            The processed data JSON stores the optimized positions of the odometry, tags and the waypoints.
+            The full structure is detailed below.
+        </p>
+        <ul>
+            <li>"odometry_vertices": [Dict] (List of Dicts)</li>
+                <ul>
+                    <li>"pose_id": Int</li>
+                    <li>"adjchi2": Float</li>
+                    <li>"viztags": Float</li>
+                    <li>"translation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                        </ul>
+                    <li>"rotation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                            <li>"w": Float</li>                            
+                        </ul>
+                </ul>
+            <li>"tag_vertices": [Dict]</li>
+                <ul>
+                    <li>"id": Int</li>
+                    <li>"translation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                        </ul>
+                    <li>"rotation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                            <li>"w": Float</li>                            
+                        </ul>
+                </ul>
+            <li>"waypoints_vertices": [Dict]</li>
+                <ul>
+                    <li>"id": String, name of the waypoint</li>
+                    <li>"translation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                        </ul>
+                    <li>"rotation": Dict</li>
+                        <ul>
+                            <li>"x": Float</li>
+                            <li>"y": Float</li>
+                            <li>"z": Float</li>
+                            <li>"w": Float</li>                            
+                        </ul>                    
+                </ul>
+        </ul>
     </body>
 </html>
