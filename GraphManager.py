@@ -87,10 +87,10 @@ class GraphManager:
             'dummy': np.array([-1, 1e2, -1]),
         },
         "new_option": {
-            'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
-            'tag_sba': np.array([18, 18]),
-            'tag': np.array([18, 18, -5, -2, -2, -2]),
-            'dummy': np.array([0., 1e2, 0.]),
+            'odometry': np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08]),
+            'tag_sba': np.array([9.91, 8.88]),
+            'tag': np.array([8] * 6),
+            'dummy': np.array([-1, 1e2, -1]),
         },
         "comparison_baseline": {
             'odometry': np.ones(6),
@@ -390,7 +390,7 @@ class GraphManager:
         return model.report
 
     def sweep_weights(self, map_json_path: str, two_d: bool = True, bounds: Tuple[float, float] = (-10., 10.),
-                      step: float = 0.5, verbose: bool = True, visualize: bool = True) -> np.ndarray:
+                      step: float = 0.5, verbose: bool = False, visualize: bool = True) -> np.ndarray:
         """
         Sweeps a set of weights, returning the resulting chi2 values from each
 
@@ -407,14 +407,19 @@ class GraphManager:
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
-        sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        #sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        graph = as_graph.as_graph(map_dct)
         sweep = np.arange(bounds[0], bounds[1] + step, step)
-        dimensions = 2 if two_d else 12
-        chi2s = self._sweep_weights(sg1, sg2, sweep, dimensions, verbose=verbose)
+        dimensions = 2 if two_d else 8
+        metrics = self._sweep_weights(graph, occam_room_tags, sweep, dimensions, verbose=verbose)
 
         if two_d and visualize:
-            graph_utils.plot_chi2s(sweep, chi2s)
-        return chi2s
+            graph_utils.plot_metrics(sweep, metrics)
+        if verbose:
+            best_metric = metrics.min()
+            best_weights = [sweep[i[0]] for i in np.where(metrics == best_metric)]
+            print(f'\nBEST METRIC: {best_weights}: {best_metric}')
+        return metrics
 
     # -- Private Methods --
     def _map_info_from_path(self, map_json_path: str) -> MapInfo:
@@ -455,53 +460,68 @@ class GraphManager:
 
         return g1sg, g2sg
 
-    def _sweep_weights(self, sg1: Graph, sg2: Graph, sweep: np.ndarray, dimensions: int, verbose: bool = True,
-                       _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
+    def _sweep_weights(self, graph: Graph, ground_truth_tags: np.ndarray, sweep: np.ndarray, dimensions: int,
+                       anchor_tag: int = 0, verbose: bool = False, _cur_weights: np.ndarray = np.asarray([]))\
+            -> np.ndarray:
         """
         Sweeps the weights with the current chi2 algorithm evaluated on the given map
 
         Args:
-            sg1 (Graph): the first subgraph for weight comparison
-            sg2 (Graph): the second subgraph for weight comparison
+            graph (Graph): the graph for weight comparison
+            ground_truth_tags (ndarray): An array of SE3Quats, the poses of the ground truth
             sweep (ndarray): a 1D array containing the values to sweep over
             dimensions (int): the number of dimensions to sweep over (2 or 12)
+            anchor_tag (int): the tag to base the translation off of
             verbose (bool): whether to print the chi2 values
             _cur_weights (ndarray): the weights that are already set (do not set manually!)
         """
         if dimensions == 1:
-            chi2s = np.asarray([])
+            metrics = np.asarray([])
             for weight in sweep:
                 full_weights = np.append(_cur_weights, weight)
                 if verbose:
                     print(f'{full_weights.tolist()}: ', end='')
-                chi2s = np.append(chi2s, self._get_chi2_weight_optimization(full_weights, sg1, sg2, verbose))
-            return chi2s
+                metric = self._get_ground_truth_weight_optimization(full_weights, graph, ground_truth_tags, anchor_tag)
+                if verbose:
+                    print(metric)
+                metrics = np.append(metrics, metric)
+            return metrics
         else:
-            chi2s = np.asarray([])
+            metrics = np.asarray([])
             first_run = True
             for weight in sweep:
                 if first_run:
-                    chi2s = self._sweep_weights(sg1, sg2, sweep, dimensions - 1, verbose,
+                    metrics = self._sweep_weights(graph, ground_truth_tags, sweep, dimensions - 1, anchor_tag, verbose,
                                                 np.append(_cur_weights, weight)).reshape(1, -1)
                     first_run = False
                 else:
-                    chi2s = np.concatenate((chi2s, self._sweep_weights(sg1, sg2, sweep, dimensions - 1, verbose,
-                                                                       np.append(_cur_weights, weight)).reshape(1, -1)))
-            return chi2s
+                    metrics = np.concatenate((metrics, self._sweep_weights(graph, ground_truth_tags, sweep, dimensions-1,
+                                                                           anchor_tag, verbose,
+                                                                           np.append(_cur_weights, weight))
+                                              .reshape(1, -1)))
+            return metrics
 
     def _get_ground_truth_weight_optimization(self, weights: np.ndarray, graph: Graph, ground_truth_tags: np.ndarray,
-                                              verbose: bool = True) -> float:
+                                              anchor_tag: int = 0, verbose: bool = False) -> float:
         actual_weights = {'dummy': np.array([-1, 1e2, -1])}
         if len(weights) == 2:
             actual_weights['odometry'] = np.array([weights[0]] * 6)
             actual_weights['tag'] = np.array([weights[1]] * 6)
             actual_weights['tag_sba'] = np.array([weights[1]] * 2)
+        elif len(weights) == 8:
+            actual_weights['odometry'] = np.array(weights[:6])
+            actual_weights['tag'] = np.array(weights[6:] * 3)  # len of 8 should mean sba, so tag just needs to exist
+            actual_weights['tag_sba'] = np.array(weights[6:])
         elif len(weights) == 12:
             actual_weights['odometry'] = np.array(weights[:6])
             actual_weights['tag'] = np.array(weights[6:])
             actual_weights['tag_sba'] = np.array(weights[6:8])
+        elif len(weights) == 14:
+            actual_weights['odometry'] = np.array(weights[:6])
+            actual_weights['tag'] = np.array(weights[6:12])
+            actual_weights['tag_sba'] = np.array(weights[12:])
         else:
-            raise Exception('Given weights must be either length of 2 or 12')
+            raise Exception('Given weights must be of length 2, 8, 12, or 14')
         self._weights_dict['variable'] = actual_weights
         chi2, vertices = self._get_optimized_graph_info(graph, weights_key='variable')
         optimized_tag_verts = np.zeros((len(vertices), 7))
@@ -509,8 +529,10 @@ class GraphManager:
             estimate = vertex.estimate
             optimized_tag_verts[vertex.meta_data['tag_id']] = \
                 (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
-        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, verbose=verbose)
-        print(metric)
+        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, anchor_tag=anchor_tag,
+                                                  verbose=verbose)
+        if verbose:
+            print(metric)
         return metric
 
     def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
@@ -827,7 +849,7 @@ class GraphManager:
         if visualize:
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                           original_tag_verts, occam_room_tags, graph_plot_title)
-            #GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
+            GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
@@ -1003,7 +1025,7 @@ class GraphManager:
         plt.gcf().set_dpi(300)
         if isinstance(plot_title, str):
             plt.title(plot_title, wrap=True)
-        #plt.show()
+        plt.show()
 
     @staticmethod
     def axis_equal(ax):

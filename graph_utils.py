@@ -204,11 +204,12 @@ def locations_from_transforms(locations):
     return locations
 
 
-def plot_chi2s(sweep: np.ndarray, chi2s: np.ndarray):
+def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_scale: bool = False):
+    to_plot = np.log(metrics) if log_scale else metrics
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    surf = ax.plot_surface(sweep, sweep.reshape(-1, 1), np.log(chi2s), cmap=cm.get_cmap('viridis'))
+    surf = ax.plot_surface(sweep, sweep.reshape(-1, 1), to_plot, cmap=cm.get_cmap('viridis'))
     ax.set_xlabel('Odometry Weights')
     ax.set_ylabel('April Tag Weights')
-    ax.set_zlabel('Chi^2 (log scale)')
+    ax.set_zlabel('Metric')
     fig.colorbar(surf)
     plt.show()

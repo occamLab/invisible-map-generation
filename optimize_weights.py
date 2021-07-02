@@ -59,12 +59,15 @@ if __name__ == "__main__":
             with open('sweep_results.json', 'r') as results_file:
                 dct = json.loads(results_file.read())
                 sweep_range = np.asarray(dct['sweep_range'])
-                chi2s = np.asarray(dct['results'])
+                metrics = np.asarray(dct['metrics'])
                 if args.v:
                     for i1, w1 in enumerate(sweep_range):
                         for i2, w2 in enumerate(sweep_range):
-                            print(f'[{w1}, {w2}]: {chi2s[i1, i2]}')
-                graph_utils.plot_chi2s(sweep_range, chi2s)
+                            print(f'[{w1}, {w2}]: {metrics[i1, i2]}')
+                    best_metric = metrics.min()
+                    best_weights = [sweep_range[i[0]] for i in np.where(metrics == best_metric)]
+                    print(f'\nBEST METRIC: {best_weights}: {best_metric}')
+                graph_utils.plot_metrics(sweep_range, metrics)
         else:
             bounds = (-10, 10)
             step = 0.5
@@ -74,11 +77,11 @@ if __name__ == "__main__":
                 bounds = (args.s[0], args.s[1])
                 if len(args.s) > 2:
                     step = args.s[2]
-            chi2s = graph_manager.sweep_weights(map_json_path, True, bounds, step, verbose=args.v, visualize=args.v)
+            metrics = graph_manager.sweep_weights(map_json_path, False, bounds, step, verbose=args.v, visualize=args.v)
             with open('sweep_results.json', 'w') as results_file:
                 dct = {
                     'sweep_range': np.arange(bounds[0], bounds[1] + step, step).tolist(),
-                    'chi2s': chi2s.tolist()
+                    'metrics': metrics.tolist()
                 }
                 json.dump(dct, results_file)
     else:
