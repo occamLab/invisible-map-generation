@@ -161,8 +161,8 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         # good_tag_detections = dct['tag_data']
         good_tag_detections = list(filter(lambda l: len(l) > 0,
                                      [[tag_data for tag_data in tags_from_frame
-                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < .7
-                                       and tag_data['tag_pose'][10] < 0.4] for tags_from_frame in dct['tag_data']]))
+                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
+                                       and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
         tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in good_tag_detections])
 
         if use_sba:
