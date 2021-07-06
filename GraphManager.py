@@ -64,7 +64,7 @@ class GraphManager:
         "sensible_default_weights",
         "trust_odom",
         "trust_tags",
-        "new_option",
+        "genetic_results",
         "comparison_baseline"
     ]
     _weights_dict: Dict[str, Dict[str, np.ndarray]] = {
@@ -86,10 +86,9 @@ class GraphManager:
             'tag': np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
             'dummy': np.array([-1, 1e2, -1]),
         },
-        "new_option": {
+        "genetic_results": {  # only used for SBA - no non-SBA tag weights
             'odometry': np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08]),
             'tag_sba': np.array([9.91, 8.88]),
-            'tag': np.array([8] * 6),
             'dummy': np.array([-1, 1e2, -1]),
         },
         "comparison_baseline": {
@@ -100,7 +99,7 @@ class GraphManager:
         }
     }
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
-                                                      "new_option"]
+                                                      "genetic_results"]
 
     _app_initialize_dict: Dict[str, str] = {
         "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
@@ -279,7 +278,7 @@ class GraphManager:
             visualize (bool): Used as the visualize argument for the _process_map method invocation.
         """
         results = "\n### Results ###\n\n"
-        g1sg, g2sg = self._create_graphs_for_weight_comparison(map_info.map_dct)
+        g1sg, g2sg = self.create_graphs_for_weight_comparison(map_info.map_dct)
 
         missing_vertex_count = 0
         for graph1_sg_vert in g1sg.get_tag_verts():
@@ -375,9 +374,9 @@ class GraphManager:
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
         graph = as_graph.as_graph(map_dct)
-        # sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
-        model = ga(function=lambda X: self._get_ground_truth_weight_optimization(X, graph, occam_room_tags, verbose),
-                   dimension=12, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 12),
+        # sg1, sg2 = self.create_graphs_for_weight_comparison(map_dct)
+        model = ga(function=lambda X: self.get_ground_truth_from_graph(X, graph, occam_room_tags, verbose),
+                   dimension=8, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 8),
                    algorithm_parameters={'max_num_iteration': 2000,
                                          'population_size': 50,
                                          'mutation_probability': 0.1,
@@ -407,7 +406,7 @@ class GraphManager:
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
-        #sg1, sg2 = self._create_graphs_for_weight_comparison(map_dct)
+        #sg1, sg2 = self.create_graphs_for_weight_comparison(map_dct)
         graph = as_graph.as_graph(map_dct)
         sweep = np.arange(bounds[0], bounds[1] + step, step)
         dimensions = 2 if two_d else 8
@@ -421,20 +420,66 @@ class GraphManager:
             print(f'\nBEST METRIC: {best_weights}: {best_metric}')
         return metrics
 
-    # -- Private Methods --
-    def _map_info_from_path(self, map_json_path: str) -> MapInfo:
-        map_json_abs_path = os.path.join(self._cache_path, map_json_path)
-        with open(map_json_abs_path, "r") as json_string_file:
-            json_string = json_string_file.read()
-            json_string_file.close()
+    def get_optimized_graph_info(self, graph: Graph, weights: Union[str, Dict[str, np.ndarray], None] = None,
+                                 verbose: bool = False) -> Tuple[float, Dict[int, Vertex]]:
+        """
+        Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
+        """
 
-        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
-            os.path.sep)) + 1:])
-        map_dct = json.loads(json_string)
-        map_name = self._read_cache_directory(os.path.basename(map_json))
-        return GraphManager.MapInfo(map_name, map_name, map_dct)
+        # Load in new weights and update graph
+        if isinstance(weights, dict):
+            graph.weights = weights
+        else:
+            graph.weights = GraphManager._weights_dict[weights if isinstance(weights, str)
+                                                       else self._selected_weights]
+        graph.update_edges()
+        graph.generate_unoptimized_graph()
 
-    def _create_graphs_for_weight_comparison(self, dct: Dict) -> Tuple[Graph, Graph]:
+        # Run optimization
+        optimizer = graph.graph_to_optimizer()
+        optimizer.initialize_optimization()
+        optimizer.optimize(256)
+
+        # Find info
+        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose)
+        tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
+                                    graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
+                        for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
+        return chi2, tag_vertices
+
+    def get_chi2_from_subgraphs(self, weights: np.ndarray, sg1: Graph, sg2: Graph,
+                                comparison_weights: Union[int, str, Dict[str, np.ndarray]] = 'comparison_baseline',
+                                verbose: bool = False) -> float:
+        self._weights_dict['variable'] = graph_utils.weight_dict_from_array(weights)
+        chi2, vertices = self.get_optimized_graph_info(sg1, weights='variable')
+        for uid, vertex in vertices.items():
+            if sg2.vertices.__contains__(uid):
+                sg2.vertices[uid].estimate = vertex.estimate
+        return self.get_optimized_graph_info(sg2, weights=self.ordered_weights_dict_keys[comparison_weights] if
+                                             isinstance(comparison_weights, int) else comparison_weights,
+                                             verbose=verbose)[0]
+
+    def get_ground_truth_from_graph(self, weights: Union[str, Dict[str, np.ndarray], np.ndarray], graph: Graph,
+                                    ground_truth_tags: np.ndarray, verbose: bool = False) -> float:
+        if isinstance(weights, str):
+            weight_name = weights
+        else:
+            weight_name = 'variable'
+            self._weights_dict[weight_name] = weights if isinstance(weights, dict) else\
+                graph_utils.weight_dict_from_array(weights)
+        _, vertices = self.get_optimized_graph_info(graph, weights=weight_name)
+        optimized_tag_verts = np.zeros((len(vertices), 7))
+        for vertex in vertices.values():
+            estimate = vertex.estimate
+            optimized_tag_verts[vertex.meta_data['tag_id']] = \
+                (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
+        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags,
+                                                  verbose=verbose)
+        if verbose:
+            print(metric)
+        return metric
+
+    def create_graphs_for_weight_comparison(self, dct: Dict) -> Tuple[Graph, Graph]:
         """
         Creates then splits a graph in half, as required for weight comparison
 
@@ -460,9 +505,21 @@ class GraphManager:
 
         return g1sg, g2sg
 
+    # -- Private Methods --
+    def _map_info_from_path(self, map_json_path: str) -> MapInfo:
+        map_json_abs_path = os.path.join(self._cache_path, map_json_path)
+        with open(map_json_abs_path, "r") as json_string_file:
+            json_string = json_string_file.read()
+            json_string_file.close()
+
+        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
+            os.path.sep)) + 1:])
+        map_dct = json.loads(json_string)
+        map_name = self._read_cache_directory(os.path.basename(map_json))
+        return GraphManager.MapInfo(map_name, map_name, map_dct)
+
     def _sweep_weights(self, graph: Graph, ground_truth_tags: np.ndarray, sweep: np.ndarray, dimensions: int,
-                       anchor_tag: int = 0, verbose: bool = False, _cur_weights: np.ndarray = np.asarray([]))\
-            -> np.ndarray:
+                       verbose: bool = False, _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
         """
         Sweeps the weights with the current chi2 algorithm evaluated on the given map
 
@@ -471,7 +528,6 @@ class GraphManager:
             ground_truth_tags (ndarray): An array of SE3Quats, the poses of the ground truth
             sweep (ndarray): a 1D array containing the values to sweep over
             dimensions (int): the number of dimensions to sweep over (2 or 12)
-            anchor_tag (int): the tag to base the translation off of
             verbose (bool): whether to print the chi2 values
             _cur_weights (ndarray): the weights that are already set (do not set manually!)
         """
@@ -481,7 +537,7 @@ class GraphManager:
                 full_weights = np.append(_cur_weights, weight)
                 if verbose:
                     print(f'{full_weights.tolist()}: ', end='')
-                metric = self._get_ground_truth_weight_optimization(full_weights, graph, ground_truth_tags, anchor_tag)
+                metric = self.get_ground_truth_from_graph(full_weights, graph, ground_truth_tags)
                 if verbose:
                     print(metric)
                 metrics = np.append(metrics, metric)
@@ -491,66 +547,14 @@ class GraphManager:
             first_run = True
             for weight in sweep:
                 if first_run:
-                    metrics = self._sweep_weights(graph, ground_truth_tags, sweep, dimensions - 1, anchor_tag, verbose,
+                    metrics = self._sweep_weights(graph, ground_truth_tags, sweep, dimensions - 1, verbose,
                                                 np.append(_cur_weights, weight)).reshape(1, -1)
                     first_run = False
                 else:
                     metrics = np.concatenate((metrics, self._sweep_weights(graph, ground_truth_tags, sweep, dimensions-1,
-                                                                           anchor_tag, verbose,
-                                                                           np.append(_cur_weights, weight))
+                                                                           verbose, np.append(_cur_weights, weight))
                                               .reshape(1, -1)))
             return metrics
-
-    def _get_ground_truth_weight_optimization(self, weights: np.ndarray, graph: Graph, ground_truth_tags: np.ndarray,
-                                              anchor_tag: int = 0, verbose: bool = False) -> float:
-        actual_weights = {'dummy': np.array([-1, 1e2, -1])}
-        if len(weights) == 2:
-            actual_weights['odometry'] = np.array([weights[0]] * 6)
-            actual_weights['tag'] = np.array([weights[1]] * 6)
-            actual_weights['tag_sba'] = np.array([weights[1]] * 2)
-        elif len(weights) == 8:
-            actual_weights['odometry'] = np.array(weights[:6])
-            actual_weights['tag'] = np.array(weights[6:] * 3)  # len of 8 should mean sba, so tag just needs to exist
-            actual_weights['tag_sba'] = np.array(weights[6:])
-        elif len(weights) == 12:
-            actual_weights['odometry'] = np.array(weights[:6])
-            actual_weights['tag'] = np.array(weights[6:])
-            actual_weights['tag_sba'] = np.array(weights[6:8])
-        elif len(weights) == 14:
-            actual_weights['odometry'] = np.array(weights[:6])
-            actual_weights['tag'] = np.array(weights[6:12])
-            actual_weights['tag_sba'] = np.array(weights[12:])
-        else:
-            raise Exception('Given weights must be of length 2, 8, 12, or 14')
-        self._weights_dict['variable'] = actual_weights
-        chi2, vertices = self._get_optimized_graph_info(graph, weights_key='variable')
-        optimized_tag_verts = np.zeros((len(vertices), 7))
-        for vertex in vertices.values():
-            estimate = vertex.estimate
-            optimized_tag_verts[vertex.meta_data['tag_id']] = \
-                (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
-        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags, anchor_tag=anchor_tag,
-                                                  verbose=verbose)
-        if verbose:
-            print(metric)
-        return metric
-
-    def _get_chi2_weight_optimization(self, weights: np.ndarray, sg1: Graph, sg2: Graph, verbose: bool = True) -> float:
-        actual_weights = {'dummy': np.array([-1, 1e2, -1])}
-        if len(weights) == 2:
-            actual_weights['odometry'] = np.array([weights[0]] * 6)
-            actual_weights['tag'] = np.array([weights[1]] * 6)
-        elif len(weights) == 12:
-            actual_weights['odometry'] = np.array(weights[:6])
-            actual_weights['tag'] = np.array(weights[6:])
-        else:
-            raise Exception('Given weights must be either length of 2 or 12')
-        self._weights_dict['variable'] = actual_weights
-        chi2, vertices = self._get_optimized_graph_info(sg1, weights_key='variable')
-        for uid, vertex in vertices.items():
-            if sg2.vertices.__contains__(uid):
-                sg2.vertices[uid].estimate = vertex.estimate
-        return self._get_optimized_graph_info(sg2, weights_key='comparison_baseline', verbose=verbose)[0]
 
     def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
         """Acquires a map from the specified blob and caches it.
@@ -750,30 +754,6 @@ class GraphManager:
             for map_name, map_json in m.data.items():
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
-    def _get_optimized_graph_info(self, graph: Graph, weights_key: Union[str, None] = None, verbose: bool = False)\
-            -> Tuple[float, Dict[int, Vertex]]:
-        """
-        Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
-        """
-
-        # Load in new weights and update graph
-        graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str)
-                                                   else self._selected_weights]
-        graph.update_edges()
-        graph.generate_unoptimized_graph()
-
-        # Run optimization
-        optimizer = graph.graph_to_optimizer()
-        optimizer.initialize_optimization()
-        optimizer.optimize(256)
-
-        # Find info
-        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose)
-        tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
-                                    graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
-                        for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
-        return chi2, tag_vertices
-
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
                         Union[None, str] = None, graph_plot_title: Union[str, None] = None, chi2_plot_title: \
                         Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray],
@@ -894,8 +874,8 @@ class GraphManager:
         plt.show()
 
     @staticmethod
-    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, anchor_tag: int = 0,
-                            verbose: bool = False):
+    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False)\
+            -> float:
         """
         Generates a metric to compare the accuracy of a map with the ground truth.
 
@@ -913,33 +893,19 @@ class GraphManager:
         Returns:
             A float representing the average difference in tag positions (translation only) in meters.
         """
-        anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-
-        ground_truth_tags_transforms = {}
-        optimized_tags_transforms = {}
-
-        for index, tag in enumerate(optimized_tag_verts):
-            optimized_tags_transforms[index] = (anchor_tag_se3quat.inverse() * SE3Quat(tag)).to_vector()
-        for index, tag in enumerate(ground_truth_tags):
-            ground_truth_tags_transforms[index] = (ground_truth_tags[anchor_tag].inverse() * tag).to_vector()
-
-        translation_sum = 0
-
-        for index in optimized_tags_transforms.keys():
-            difference = optimized_tags_transforms[index] - ground_truth_tags_transforms[index]
-            translation_difference = np.linalg.norm(difference[:3])
-            translation_sum += translation_difference
-            quaternion_difference = 2 * (np.arccos(optimized_tags_transforms[index][-1]) -
-                                         np.arccos(ground_truth_tags_transforms[index][-1]))
-            if verbose:
-                print(f"--------------- Tag {index} ---------------")
-                print(f"Optimized: {optimized_tags_transforms[index]}")
-                print(f"Ground Truth: {ground_truth_tags_transforms[index]}")
-                print(f"Difference: {difference}")
-                print(f"Translation Diff: {np.linalg.norm(difference[:3])} meters")
-                print(f"Quaternion Diff: {quaternion_difference * (180 / np.pi)} degrees")
-
-        return translation_sum / len(optimized_tags_transforms)
+        num_tags = optimized_tag_verts.shape[0]
+        sum_trans_diffs = np.zeros((num_tags,))
+        for anchor_tag in range(num_tags):
+            anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
+            to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
+            world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])[:, :3]
+            sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
+        avg_trans_diffs = sum_trans_diffs / num_tags
+        avg = np.mean(avg_trans_diffs)
+        if verbose:
+            print(f'Ground truth metric is {avg}')
+        # noinspection PyTypeChecker
+        return avg
 
     @staticmethod
     def plot_optimization_result(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
@@ -981,7 +947,7 @@ class GraphManager:
             to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
             world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
 
-            print(f"\nAverage translation difference: {GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags, anchor_tag, True)}\n")
+            print(f"\nAverage translation difference: {GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags, True)}\n")
 
             plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                      'o', c='k', label=f'Actual Tags')

@@ -60,7 +60,7 @@ def make_parser():
              " 0-'sensible_default_weights',"
              " 1-'trust_odom',"
              " 2-'trust_tags',"
-             " 3-'new_option',"
+             " 3-'genetic_results',"
              " 4-'comparison_baseline'.",
         default=0,
         choices={0, 1, 2, 3, 4}

@@ -213,3 +213,27 @@ def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_scale: bool = False
     ax.set_zlabel('Metric')
     fig.colorbar(surf)
     plt.show()
+
+
+def weight_dict_from_array(array: Union[np.ndarray, List[int]]) -> Dict[str, np.ndarray]:
+    weights = {'dummy': np.array([-1, 1e2, -1])}
+    length = array.size if isinstance(array, np.ndarray) else len(array)
+    if length == 2:
+        weights['odometry'] = np.array([array[0]] * 6)
+        weights['tag'] = np.array([array[1]] * 6)
+        weights['tag_sba'] = np.array([array[1]] * 2)
+    elif length == 8:
+        weights['odometry'] = np.array(array[:6])
+        weights['tag'] = np.array(array[6:] * 3)  # len of 8 should mean sba, so tag just needs to exist
+        weights['tag_sba'] = np.array(array[6:])
+    elif length == 12:
+        weights['odometry'] = np.array(array[:6])
+        weights['tag'] = np.array(array[6:])
+        weights['tag_sba'] = np.array(array[6:8])
+    elif length == 14:
+        weights['odometry'] = np.array(array[:6])
+        weights['tag'] = np.array(array[6:12])
+        weights['tag_sba'] = np.array(array[12:])
+    else:
+        raise Exception('Given weights must be of length 2, 8, 12, or 14')
+    return weights
