@@ -19,6 +19,10 @@ camera_to_odom_transform = np.array([
     [0, 0, 0, 1]
 ])
 
+default_dummy_weights = np.array([-1, 1e2, -1])
+
+assumed_focal_length = 1464
+
 # The ground truth tags for the 6-17-21 OCCAM Room
 s = np.sin(np.pi / 4)
 c = np.cos(np.pi / 4)
@@ -30,6 +34,7 @@ occam_room_tags = np.asarray([SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]),
                               SE3Quat([104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
                               SE3Quat([-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, 0, c, 0, s]),
                               SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, c, 0, s])])
+
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False) -> \
         Dict[str, Union[List, np.ndarray]]:
@@ -236,4 +241,51 @@ def weight_dict_from_array(array: Union[np.ndarray, List[int]]) -> Dict[str, np.
         weights['tag_sba'] = np.array(array[12:])
     else:
         raise Exception('Given weights must be of length 2, 8, 12, or 14')
-    return weights
+    weights['odom_tag_ratio'] = 1
+    return normalize_weights(weights)
+
+
+def normalize_weights(weights: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """
+    Normalizes the weights so that the resultant tag and odom weights in g2o will have a magnitude of 1, in ratio of
+    weights['odom_tag_ratio'].
+
+    Args:
+        weights (dict): a dict mapping weight types to weight values, the set of weights to normalize.
+    Returns:
+        A new dict of weights where each value is normalized as said above, keeping dummy weights constant
+    """
+    odom_tag_ratio = weights.get('odom_tag_ratio', 1)
+    odom_scale = 1 / (1 + 1 / odom_tag_ratio ** 2) ** 0.5
+    tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5 / assumed_focal_length
+    normal_weights = {}
+    for weight_type, weight in weights.items():
+        if weight_type == 'dummy':
+            normal_weights[weight_type] = weight
+            continue
+        scale = odom_scale if weight_type == 'odometry' else tag_scale
+        normal_weights[weight_type] = -(np.log(scale) - weight - np.log(np.linalg.norm(np.exp(-weight))))
+    normal_weights['odom_tag_ratio'] = odom_tag_ratio
+    return normal_weights
+
+
+def weights_from_ratio(odom_tag_ratio: float) -> Dict[str, np.ndarray]:
+    """
+    Constructs a set of weights given a certain odom to tag ratio, where the ratio between any two weights within one
+    set of weights is one.
+
+    Args:
+        odom_tag_ratio (float): the ratio between odometry scale and tag scale (how important a 1 m change in odom is
+            compared to a 1 p change in tags)
+
+    Returns:
+        a set of normalized weights with the given odom to tag ratio
+    """
+    weights = {
+        'odometry': np.ones(6),
+        'tag_sba': np.ones(2),
+        'tag': np.ones(6),
+        'dummy': default_dummy_weights,
+        'odom_tag_ratio': odom_tag_ratio
+    }
+    return normalize_weights(weights)

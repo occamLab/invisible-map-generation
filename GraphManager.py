@@ -65,41 +65,43 @@ class GraphManager:
         "trust_odom",
         "trust_tags",
         "genetic_results",
+        "best_sweep",
         "comparison_baseline"
     ]
     _weights_dict: Dict[str, Dict[str, np.ndarray]] = {
-        "sensible_default_weights": {
+        "sensible_default_weights": graph_utils.normalize_weights({
             'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
             'tag_sba': np.array([18, 18]),
             'tag': np.array([18, 18, 0, 0, 0, 0]),
             'dummy': np.array([-1, 1e2, -1]),
-        },
-        "trust_odom": {
+        }),
+        "trust_odom": graph_utils.normalize_weights({
             'odometry': np.array([-3., -3., -3., -3., -3., -3.]),
             'tag_sba': np.array([10.6, 10.6]),
             'tag': np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
-            'dummy': np.array([-1, 1e2, -1]),
-        },
-        "trust_tags": {
+            'dummy': graph_utils.default_dummy_weights,
+        }),
+        "trust_tags": graph_utils.normalize_weights({
             'odometry': np.array([10, 10, 10, 10, 10, 10]),
             'tag_sba': np.array([-10.6, -10.6]),
             'tag': np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
-            'dummy': np.array([-1, 1e2, -1]),
-        },
-        "genetic_results": {  # only used for SBA - no non-SBA tag weights
+            'dummy': graph_utils.default_dummy_weights,
+        }),
+        "genetic_results": graph_utils.normalize_weights({  # only used for SBA - no non-SBA tag weights
             'odometry': np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08]),
             'tag_sba': np.array([9.91, 8.88]),
-            'dummy': np.array([-1, 1e2, -1]),
-        },
-        "comparison_baseline": {
+            'dummy': graph_utils.default_dummy_weights,
+        }),
+        "best_sweep": graph_utils.weights_from_ratio(np.exp(9.9)),
+        "comparison_baseline": graph_utils.normalize_weights({
             'odometry': np.ones(6),
             'tag_sba': np.ones(2),
             'tag': np.ones(6),
-            'dummy': np.ones(3),
-        }
+            'dummy': graph_utils.default_dummy_weights,
+        })
     }
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
-                                                      "genetic_results"]
+                                                      "genetic_results", "best_sweep"]
 
     _app_initialize_dict: Dict[str, str] = {
         "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
@@ -433,7 +435,6 @@ class GraphManager:
             graph.weights = GraphManager._weights_dict[weights if isinstance(weights, str)
                                                        else self._selected_weights]
         graph.update_edges()
-        graph.generate_unoptimized_graph()
 
         # Run optimization
         optimizer = graph.graph_to_optimizer()

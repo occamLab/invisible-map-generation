@@ -61,9 +61,10 @@ def make_parser():
              " 1-'trust_odom',"
              " 2-'trust_tags',"
              " 3-'genetic_results',"
-             " 4-'comparison_baseline'.",
+             " 4-'best_sweep'."
+             " 5-'comparison_baseline',",
         default=0,
-        choices={0, 1, 2, 3, 4}
+        choices={0, 1, 2, 3, 4, 5}
     )
     p.add_argument(
         "-f",

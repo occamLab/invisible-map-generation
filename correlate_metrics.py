@@ -3,7 +3,6 @@ Find the correlation between two metrics for weight optimization
 """
 import argparse
 from firebase_admin import credentials
-from g2o import SE3Quat
 import json
 from matplotlib import pyplot as plt
 import numpy as np
@@ -82,7 +81,7 @@ def main():
             for weight_name in chi2s:
                 chi2s[weight_name].append(gm.get_chi2_from_subgraphs(base_weights, sg1, sg2, weight_name))
 
-            print(f'Odom: {base_weights[0]}, Tag: {base_weights[1]} gives chi2s of:')
+            print(f'Odom: {base_weights[0]:.2f}, Tag: {base_weights[1]:.2f} gives chi2s of:')
             for weight_name in chi2s:
                 print(f'\t{weight_name}: {chi2s[weight_name][-1]}')
             print(f'\tand a ground truth metric of {gt_metrics[run]}\n')
@@ -94,8 +93,6 @@ def main():
                 'chi2s': chi2s,
                 'gt_metrics': gt_metrics
             }, file)
-        print(np.array(gt_metrics).shape)
-        print(np.array([chi2s[w] for w in chi2s]).shape)
 
     corr = stats.spearmanr(np.vstack((np.array(gt_metrics), np.array([chi2s[w] for w in chi2s]))), axis=1)
     print(f'The correlation between gt metrics and chi2 is:')

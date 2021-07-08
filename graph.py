@@ -97,6 +97,51 @@ class Graph:
                 else:
                     self._verts_to_edges[vertex_uid] = {edge_uid, }
 
+    def get_chi2_by_edge_type(self, graph: g2o.SparseOptimizer, verbose: bool = True) -> Dict[str, Dict[str, float]]:
+        """
+        Iterates through the edges and calculates the chi2 of each, sorting them into categories based on the end vertex
+
+        Args:
+            graph: a g2o.SparseOptimizer object
+            verbose (bool): Boolean for whether or not to print the chi2 values
+
+        Returns:
+            A dict mapping 'odometry', 'tag', and 'dummy' to the chi2s corresponding to that edge type
+        """
+        chi2s = {
+            'odometry': {
+                'sum': 0.0,
+                'edges': 0
+            },
+            'tag': {
+                'sum': 0.0,
+                'edges': 0
+            },
+            'dummy': {
+                'sum': 0.0,
+                'edges': 0
+            },
+        }
+        for edge in graph.edges():
+            end_mode = self.vertices[self.edges[edge.id()].enduid].mode
+            if end_mode == VertexType.ODOMETRY:
+                chi2s['odometry']['sum'] += Graph.get_chi2_of_edge(edge)
+                chi2s['odometry']['edges'] += 1
+            elif end_mode == VertexType.TAG or end_mode == VertexType.TAGPOINT:
+                chi2s['tag']['sum'] += Graph.get_chi2_of_edge(edge)
+                chi2s['tag']['edges'] += 1
+            elif end_mode == VertexType.DUMMY:
+                chi2s['dummy']['sum'] += Graph.get_chi2_of_edge(edge)
+                chi2s['dummy']['edges'] += 1
+            start_mode = self.vertices[self.edges[edge.id()].startuid].mode
+            if start_mode != VertexType.ODOMETRY:
+                raise Exception(f'Original is not odometry. Edge type: {type(edge)}. Start: {start_mode}. End: {end_mode}')
+        for edge_type in chi2s:
+            chi2s[edge_type]['average'] = chi2s[edge_type]['sum'] / chi2s[edge_type]['edges']
+        if verbose:
+            print(chi2s)
+        return chi2s
+
     @staticmethod
     def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
         """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.
@@ -261,6 +306,7 @@ class Graph:
                         edge.set_vertex(j, optimizer.vertex(k))
                         edge.set_measurement(pose_to_se3quat(self.edges[i].measurement))
                         edge.set_information(self.edges[i].information)
+                        edge.set_id(i)
                     cpp_bool_ret_val_check &= optimizer.add_edge(edge)
                     self.our_edges_to_g2o_edges[i] = edge
                 else:
@@ -278,6 +324,7 @@ class Graph:
                         edge.set_vertex(2, optimizer.vertex(self.edges[i].enduid))
                         edge.set_information(self.edges[i].information)
                         edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
+                        edge.set_id(i)
                         cpp_bool_ret_val_check &= edge.set_parameter_id(0, cam_idx)
                         if self.use_huber:
                             cpp_bool_ret_val_check &= edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
