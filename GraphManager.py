@@ -829,7 +829,7 @@ class GraphManager:
 
         if visualize:
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                                          original_tag_verts, occam_room_tags, graph_plot_title)
+                                          original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
@@ -913,7 +913,8 @@ class GraphManager:
                                  tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
                                  original_tag_verts: Union[None, np.ndarray] = None,
                                  ground_truth_tags: Union[None, np.ndarray] = None,
-                                 plot_title: Union[str, None] = None) -> None:
+                                 plot_title: Union[str, None] = None,
+                                 is_sba: bool = False) -> None:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
@@ -928,16 +929,18 @@ class GraphManager:
         plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
 
         if original_tag_verts is not None:
-            for i, tag_vertex in enumerate(original_tag_verts):
-                original_tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse())
-                                                  .inverse().to_vector(), tag_vertex[-1])
+            if is_sba:
+                for i, tag_vertex in enumerate(original_tag_verts):
+                    original_tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse())
+                                                      .inverse().to_vector(), tag_vertex[-1])
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                      label="Tag Vertices Original")
 
         # Fix the 1 meter offset on the tag anchors
-        for i, tag_vertex in enumerate(tag_verts):
-            tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse()
-                                     .to_vector(), tag_vertex[-1])
+        if is_sba:
+            for i, tag_vertex in enumerate(tag_verts):
+                tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse()
+                                         .to_vector(), tag_vertex[-1])
 
         if ground_truth_tags is not None:
             tag_list = tag_verts.tolist()
