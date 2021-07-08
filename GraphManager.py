@@ -448,10 +448,20 @@ class GraphManager:
                         for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
         return chi2, tag_vertices
 
-    def get_chi2_from_subgraphs(self, weights: np.ndarray, sg1: Graph, sg2: Graph,
+    def get_chi2_from_subgraphs(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
+                                sg1: Graph, sg2: Graph,
                                 comparison_weights: Union[int, str, Dict[str, np.ndarray]] = 'comparison_baseline',
                                 verbose: bool = False) -> float:
-        self._weights_dict['variable'] = graph_utils.weight_dict_from_array(weights)
+        if isinstance(weights, int):
+            self._weights_dict['variable'] = self._weights_dict[self.ordered_weights_dict_keys[weights]]
+        elif isinstance(weights, float):
+            self._weights_dict['variable'] = graph_utils.weights_from_ratio(weights)
+        elif isinstance(weights, str):
+            self._weights_dict['variable'] = self._weights_dict[weights]
+        elif isinstance(weights, np.ndarray):
+            self._weights_dict['variable'] = graph_utils.weight_dict_from_array(weights)
+        else:
+            self._weights_dict['variable'] = weights
         chi2, vertices = self.get_optimized_graph_info(sg1, weights='variable')
         for uid, vertex in vertices.items():
             if sg2.vertices.__contains__(uid):

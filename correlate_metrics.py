@@ -9,6 +9,7 @@ import numpy as np
 import os
 from scipy import stats
 
+import graph_utils
 from as_graph import as_graph
 from GraphManager import GraphManager
 from graph_utils import occam_room_tags
@@ -39,15 +40,11 @@ def main():
     if args.l:
         with open('correlation_results.json', 'r') as results_file:
             dct = json.loads(results_file.read())
-        odom_sweep = np.array(dct['odometry'])
-        tag_sweep = np.array(dct['tag'])
-        sweep = np.vstack((odom_sweep, tag_sweep)).transpose()
+        sweep = np.array(dct['odom_tag_ratio'])
         gt_metrics = dct['gt_metrics']
         chi2s = dct['chi2s']
     else:
-        odom_sweep = np.arange(-10, 10, 0.1)
-        tag_sweep = -odom_sweep  # for 2-D data, it is symmetrical across y=-x
-        sweep = np.vstack((odom_sweep, tag_sweep)).transpose()
+        sweep = np.exp(np.arange(-10, 10.1, 0.1))
         total_runs = sweep.shape[0]
 
         cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
@@ -69,27 +66,19 @@ def main():
             'comparison_baseline': []
         }
         for run in range(total_runs):
-            base_weights = sweep[run]
-            weights = {
-                'odometry': np.array([base_weights[0]] * 6),
-                'tag_sba': np.array([base_weights[1]] * 2),
-                'tag': np.array([base_weights[1]] * 6),
-                'dummy': np.array([-1, 1e2, -1])
-            }
-
+            weights = graph_utils.weights_from_ratio(sweep[run])
             gt_metrics[run] = gm.get_ground_truth_from_graph(weights, graph, occam_room_tags)
             for weight_name in chi2s:
-                chi2s[weight_name].append(gm.get_chi2_from_subgraphs(base_weights, sg1, sg2, weight_name))
+                chi2s[weight_name].append(gm.get_chi2_from_subgraphs(weights, sg1, sg2, weight_name))
 
-            print(f'Odom: {base_weights[0]:.2f}, Tag: {base_weights[1]:.2f} gives chi2s of:')
+            print(f'An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:')
             for weight_name in chi2s:
                 print(f'\t{weight_name}: {chi2s[weight_name][-1]}')
             print(f'\tand a ground truth metric of {gt_metrics[run]}\n')
 
         with open('correlation_results.json', 'w') as file:
             json.dump({
-                'odometry': odom_sweep.tolist(),
-                'tag': tag_sweep.tolist(),
+                'odom_tag_ratio': sweep.tolist(),
                 'chi2s': chi2s,
                 'gt_metrics': gt_metrics
             }, file)
@@ -98,18 +87,17 @@ def main():
     print(f'The correlation between gt metrics and chi2 is:')
     print(corr[0])
 
-    plt.plot(odom_sweep, np.array(gt_metrics), '-ob')
-    plt.xlabel('Odometry weights')
+    plt.plot(np.log(sweep), np.array(gt_metrics), '-ob')
+    plt.xlabel('log(odom/tag)')
     plt.ylabel('Ground Truth Translation Metric (m)')
-    plt.title('Ground truth metric by odometry weights')
+    plt.title('Ground truth metric')
     plt.show()
 
     plotted_weights = 'trust_tags'
-    plt.plot(odom_sweep, np.log(np.array(chi2s[plotted_weights])), '-ob')
-    plt.xlabel('Odometry weights')
-    plt.ylabel('Chi2')
-    #plt.ylim((-500, 4000))
-    plt.title(f'Chi2 by odometry weights based on {plotted_weights}')
+    plt.plot(np.log(sweep), np.log(np.array(chi2s[plotted_weights])), '-ob')
+    plt.xlabel('log(odom/tag)')
+    plt.ylabel('log(Chi2)')
+    plt.title(f'Chi2 based on {plotted_weights}')
     plt.show()
 
 
