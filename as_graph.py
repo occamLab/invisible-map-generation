@@ -167,6 +167,7 @@ def as_graph(dct, fixed_vertices: Union[graph.VertexType, Tuple[graph.VertexType
         #                              [[tag_data for tag_data in tags_from_frame
         #                                if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
         #                                and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
+
         tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in good_tag_detections])
 
         if use_sba:
@@ -236,6 +237,19 @@ def as_graph(dct, fixed_vertices: Union[graph.VertexType, Tuple[graph.VertexType
         tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
         tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(tag_frame, [])
         tag_vertex_id_and_index_by_frame_id[tag_frame].append((tag_vertex_id, tag_index))
+
+    # Possible filtering method for outliers in raw data?
+    # last_tag = tag_vertex_id_and_index_by_frame_id[min(tag_vertex_id_and_index_by_frame_id.keys())][0][0]
+    # tag_detections = []
+    # for frame_id in sorted(tag_vertex_id_and_index_by_frame_id):
+    #     if tag_vertex_id_and_index_by_frame_id[frame_id][0][0] == last_tag:
+    #         tag_detections.append(np.asarray(
+    #             tag_edge_measurements[tag_vertex_id_and_index_by_frame_id[frame_id][0][1]]))
+    #     else:
+    #         average_quaternion = np.mean(tag_detections, axis=0)
+    #         deviation_quaternion = np.std(tag_detections, axis=0)
+    #         last_tag = tag_vertex_id_and_index_by_frame_id[frame_id][0][0]
+    #         tag_detections = []
 
     waypoint_names = [location_data['name'] for location_data in dct['location_data']]
     unique_waypoint_names = np.unique(waypoint_names)

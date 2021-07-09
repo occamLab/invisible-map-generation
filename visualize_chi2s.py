@@ -15,7 +15,7 @@ from as_graph import as_graph
 from graph import Graph, VertexType
 
 CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)),".cache","unprocessed_maps","myTestFolder")
-MAP_JSON = "1448048273429586-17-21 MAC 3 Loops.json"
+MAP_JSON = "279953291259OCCAM Room Lidar Aligned.json"
 
 
 def make_parser():
@@ -118,6 +118,9 @@ def main():
     plot_title = 'Chi2 Metric by Edge Type' if args.m else 'Resulting Chi^2 of Optimized Graph by Edge Type'
     plt.title(plot_title)
     plt.legend()
+
+    plt.plot(np.log(sweep[int(sweep.shape[0]/2):]), np.exp(-sweep[int(sweep.shape[0]/2):]), '-b')
+
     plt.show()
 
     plt.plot(np.log(sweep), )

@@ -219,7 +219,7 @@ class GraphManager:
             return
 
         self._resolve_cache_dir()
-        matching_maps = glob.glob(os.path.join(self._cache_path, pattern), recursive=True)
+        matching_maps = glob.glob(os.path.join(self._cache_path, '**/unprocessed_maps/**/'+pattern), recursive=True)
 
         if len(matching_maps) == 0:
             print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
