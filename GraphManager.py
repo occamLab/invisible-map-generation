@@ -883,11 +883,7 @@ class GraphManager:
 
         if visualize:
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-<<<<<<< HEAD
-                                          original_tag_verts, None, graph_plot_title)
-=======
                                           original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
->>>>>>> 3dba2b792fcb3b3a483d4a0f583bce3710e6feec
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
