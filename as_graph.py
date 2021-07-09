@@ -1,7 +1,7 @@
 import itertools
 from collections import defaultdict
 from enum import Enum
-from typing import Union
+from typing import Union, Tuple
 
 import numpy as np
 from g2o import SE3Quat, Quaternion
@@ -109,7 +109,8 @@ def make_sba_tag_arrays():
     return true_3d_points, true_3d_tag_center
 
 
-def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA):
+def as_graph(dct, fixed_vertices: Union[graph.VertexType, Tuple[graph.VertexType]] = (),
+             prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA) -> graph.Graph:
     """Convert a dictionary decoded from JSON into a graph.
 
     This function was created by combining the as_graph functions from convert_json.py and convert_json_sba.py. Because
@@ -119,8 +120,8 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
 
     Args:
         dct (dict): The dictionary to convert to a graph.
-        fix_tag_vertices (bool): Passed as the `fixed` keyword argument to the Vertex constructor when constructing
-         vertices labeled as Tag vertices.
+        fixed_vertices (tuple): Determines which vertex types to set to fixed. Dummy and Tagpoints are always fixed
+            regardless of their presence in the tuple.
         prescaling_opt (PrescalingOptEnum): Selects which logical branches to use. If it is equal to
         `PrescalingOptEnum.USE_SBA`,  then sparse bundle adjustment is used; otherwise, the the outcome only differs
          between the remaining enum values by how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum
@@ -145,6 +146,9 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     previous_pose_matrix = None
     initialize_with_averages = None
 
+    if isinstance(fixed_vertices, graph.VertexType):
+        fixed_vertices = (fixed_vertices,)
+
     # Pull out this equality from the enum (this equality is checked many times)
     use_sba = prescaling_opt == PrescalingOptEnum.USE_SBA
 
@@ -158,11 +162,11 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
     odom_vertex_estimates = matrix2measurement(pose_matrices, invert=use_sba)
 
     if 'tag_data' in dct and len(dct['tag_data']) > 0:
-        # good_tag_detections = dct['tag_data']
-        good_tag_detections = list(filter(lambda l: len(l) > 0,
-                                     [[tag_data for tag_data in tags_from_frame
-                                       if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
-                                       and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
+        good_tag_detections = dct['tag_data']
+        # good_tag_detections = list(filter(lambda l: len(l) > 0,
+        #                              [[tag_data for tag_data in tags_from_frame
+        #                                if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
+        #                                and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
         tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in good_tag_detections])
 
         if use_sba:
@@ -280,7 +284,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
         vertices[current_odom_vertex_uid] = graph.Vertex(
             mode=graph.VertexType.ODOMETRY,
             estimate=odom_vertex_estimates[i],
-            fixed=not first_odom_processed,
+            fixed=not first_odom_processed or graph.VertexType.ODOMETRY in fixed_vertices,
             meta_data={'pose_id': odom_frame})
         first_odom_processed = True
         vertex_counter += 1
@@ -298,7 +302,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
                     vertices[tag_vertex_id] = graph.Vertex(
                         mode=graph.VertexType.TAG,
                         estimate=current_tag_transform_estimate.to_vector(),
-                        fixed=fix_tag_vertices,
+                        fixed=graph.VertexType.TAG in fixed_vertices,
                         meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
 
                     for idx, true_point_3d in enumerate(true_3d_points):
@@ -362,7 +366,7 @@ def as_graph(dct, fix_tag_vertices: bool = False, prescaling_opt: PrescalingOptE
                 vertices[waypoint_vertex_id] = graph.Vertex(
                     mode=graph.VertexType.WAYPOINT,
                     estimate=estimate_arg,
-                    fixed=False,
+                    fixed=graph.VertexType.WAYPOINT in fixed_vertices,
                     meta_data={'name': waypoint_name_by_vertex_id[waypoint_vertex_id]})
                 counted_waypoint_vertex_ids.add(waypoint_vertex_id)
 

@@ -55,7 +55,7 @@ def main():
             json_string_file.close()
         map_dct = json.loads(json_string)
         graph = as_graph(map_dct)
-        sg1, sg2 = gm.create_graphs_for_weight_comparison(map_dct)
+        sg1, sg2 = gm.create_graphs_for_chi2_comparison(map_dct)
 
         gt_metrics = [0.0] * total_runs
         chi2s = {

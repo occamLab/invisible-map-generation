@@ -568,10 +568,10 @@ class Graph:
         # Find tags and edges connecting to the found vertices
         for edgeuid in self.edges:
             edge = self.edges[edgeuid]
-            if self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in vertices:
+            if self.vertices[edge.startuid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.enduid in vertices:
                 edges[edgeuid] = edge
                 vertices[edge.startuid] = self.vertices[edge.startuid]
-            if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in vertices:
+            if self.vertices[edge.enduid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.startuid in vertices:
                 edges[edgeuid] = edge
                 vertices[edge.enduid] = self.vertices[edge.enduid]
 
