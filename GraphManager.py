@@ -8,6 +8,7 @@ Author: Duncan Mazza
 
 from __future__ import annotations
 
+import copy
 import glob
 import json
 import os
@@ -20,7 +21,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from firebase_admin import db
 from firebase_admin import storage
-from g2o import Quaternion, SE3Quat
+from g2o import Quaternion, SE3Quat, SparseOptimizer
 from geneticalgorithm import geneticalgorithm as ga
 from varname import nameof
 
@@ -183,7 +184,8 @@ class GraphManager:
         print("Finished listening to Firebase")
 
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False,
-                     new_pso: Union[None, int] = None, new_weights_specifier: Union[None, int] = None) -> None:
+                     new_pso: Union[None, int] = None, new_weights_specifier: Union[None, int] = None,
+                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = ()) -> None:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         The _resolve_cache_dir method is first called, then the glob package is used to find matching files.
@@ -205,6 +207,7 @@ class GraphManager:
              the corresponding _pso instance attribute).
             new_weights_specifier: If not none, then it overrides what was specified by the constructor's
              weights_specifier argument (and changes the corresponding _selected_weights instance attribute).
+            fixed_vertices: Parameter to pass to as_graph
         """
         if new_pso is not None:
             self._pso = as_graph.PrescalingOptEnum.get_by_value(new_pso)
@@ -234,8 +237,7 @@ class GraphManager:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self.compare_weights(map_info, visualize)
             else:
-                graph = as_graph.as_graph(map_info.map_dct, fix_tag_vertices=False,
-                                          prescaling_opt=self._pso)
+                graph = as_graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
 
                 graph_plot_title = None
                 chi2_plot_title = None
@@ -280,7 +282,7 @@ class GraphManager:
             visualize (bool): Used as the visualize argument for the _process_map method invocation.
         """
         results = "\n### Results ###\n\n"
-        g1sg, g2sg = self.create_graphs_for_weight_comparison(map_info.map_dct)
+        g1sg, g2sg = self.create_graphs_for_chi2_comparison(map_info.map_dct)
 
         missing_vertex_count = 0
         for graph1_sg_vert in g1sg.get_tag_verts():
@@ -376,7 +378,7 @@ class GraphManager:
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
         graph = as_graph.as_graph(map_dct)
-        # sg1, sg2 = self.create_graphs_for_weight_comparison(map_dct)
+        # sg1, sg2 = self.create_graphs_for_chi2_comparison(map_dct)
         model = ga(function=lambda X: self.get_ground_truth_from_graph(X, graph, occam_room_tags, verbose),
                    dimension=8, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 8),
                    algorithm_parameters={'max_num_iteration': 2000,
@@ -408,7 +410,7 @@ class GraphManager:
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
-        #sg1, sg2 = self.create_graphs_for_weight_comparison(map_dct)
+        #sg1, sg2 = self.create_graphs_for_chi2_comparison(map_dct)
         graph = as_graph.as_graph(map_dct)
         sweep = np.arange(bounds[0], bounds[1] + step, step)
         dimensions = 2 if two_d else 8
@@ -422,43 +424,52 @@ class GraphManager:
             print(f'\nBEST METRIC: {best_weights}: {best_metric}')
         return metrics
 
-    def get_optimized_graph_info(self, graph: Graph, weights: Union[str, Dict[str, np.ndarray], None] = None,
-                                 verbose: bool = False) -> Tuple[float, Dict[int, Vertex]]:
+    def get_optimized_graph_info(self, graph: Graph, weights: Union[int, float, str, Dict[str, np.ndarray], np.ndarray,
+                                                                    None] = None, verbose: bool = False,
+                                 vertex_types: List[VertexType] = [VertexType.TAG]) -> Tuple[float, Dict[int, Vertex]]:
         """
         Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
         """
 
         # Load in new weights and update graph
-        if isinstance(weights, dict):
-            graph.weights = weights
-        else:
-            graph.weights = GraphManager._weights_dict[weights if isinstance(weights, str)
-                                                       else self._selected_weights]
-        graph.update_edges()
-
-        # Run optimization
-        optimizer = graph.graph_to_optimizer()
-        optimizer.initialize_optimization()
-        optimizer.optimize(256)
+        optimizer = self.get_optimizer(graph, weights)
 
         # Find info
         chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose)
-        tag_vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
-                                    graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
-                        for uid in optimizer.vertices() if graph.vertices[uid].mode == VertexType.TAG}
-        return chi2, tag_vertices
+        vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
+                                graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
+                    for uid in optimizer.vertices() if vertex_types is None or graph.vertices[uid].mode in vertex_types}
+        return chi2, vertices
 
-    def get_chi2_from_subgraphs(self, weights: np.ndarray, sg1: Graph, sg2: Graph,
+    def get_chi2_from_subgraphs(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
+                                subgraphs: Union[Tuple[Graph, Graph], Graph],
                                 comparison_weights: Union[int, str, Dict[str, np.ndarray]] = 'comparison_baseline',
                                 verbose: bool = False) -> float:
-        self._weights_dict['variable'] = graph_utils.weight_dict_from_array(weights)
-        chi2, vertices = self.get_optimized_graph_info(sg1, weights='variable')
+        if isinstance(subgraphs, Graph):
+            subgraphs = self.create_graphs_for_chi2_comparison(subgraphs)
+        else:
+            self._weights_dict['variable'] = self._weights_to_dict(weights)
+        _, vertices = self.get_optimized_graph_info(subgraphs[0], weights='variable', verbose=verbose)
         for uid, vertex in vertices.items():
-            if sg2.vertices.__contains__(uid):
-                sg2.vertices[uid].estimate = vertex.estimate
-        return self.get_optimized_graph_info(sg2, weights=self.ordered_weights_dict_keys[comparison_weights] if
+            if subgraphs[1].vertices.__contains__(uid):
+                subgraphs[1].vertices[uid].estimate = vertex.estimate
+        return self.get_optimized_graph_info(subgraphs[1], weights=self.ordered_weights_dict_keys[comparison_weights] if
                                              isinstance(comparison_weights, int) else comparison_weights,
                                              verbose=verbose)[0]
+
+    def get_chi2_by_edge_from_subgraphs(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
+                                        subgraphs: Union[Tuple[Graph, Graph], Dict],
+                                        comparison_weights: Union[int, str, Dict[str, np.ndarray]]
+                                        = 'comparison_baseline', verbose: bool = False) -> Dict[str, Dict[str, float]]:
+        if isinstance(subgraphs, Dict):
+            subgraphs = self.create_graphs_for_chi2_comparison(subgraphs)
+        self._weights_dict['variable'] = self._weights_to_dict(weights)
+        _, vertices = self.get_optimized_graph_info(subgraphs[0], weights='variable', verbose=verbose)
+        for uid, vertex in vertices.items():
+            if subgraphs[1].vertices.__contains__(uid):
+                subgraphs[1].vertices[uid].estimate = vertex.estimate
+
+        return subgraphs[1].get_chi2_by_edge_type(self.get_optimizer(subgraphs[1], comparison_weights), verbose=verbose)
 
     def get_ground_truth_from_graph(self, weights: Union[str, Dict[str, np.ndarray], np.ndarray], graph: Graph,
                                     ground_truth_tags: np.ndarray, verbose: bool = False) -> float:
@@ -480,7 +491,7 @@ class GraphManager:
             print(metric)
         return metric
 
-    def create_graphs_for_weight_comparison(self, dct: Dict) -> Tuple[Graph, Graph]:
+    def create_graphs_for_chi2_comparison(self, graph: Dict) -> Tuple[Graph, Graph]:
         """
         Creates then splits a graph in half, as required for weight comparison
 
@@ -489,24 +500,67 @@ class GraphManager:
         second does not.
 
         Args:
-            dct (Dict): A dictionary containing the unprocessed data to create the graph
+            graph (Dict): A dictionary containing the unprocessed data to create the graph
 
         Returns:
             A tuple of 2 graphs, an even split of graph, as described above
         """
-        graph1 = as_graph.as_graph(dct, fix_tag_vertices=False, prescaling_opt=self._pso)
-        graph2 = as_graph.as_graph(dct, fix_tag_vertices=True, prescaling_opt=self._pso)
+        graph1 = as_graph.as_graph(graph, prescaling_opt=self._pso)
+        graph2 = as_graph.as_graph(graph, fixed_vertices=VertexType.TAG, prescaling_opt=self._pso)
+        dummy_nodes = [0, 0]
+        for vertex in graph1.vertices.values():
+            if vertex.mode == VertexType.DUMMY:
+                dummy_nodes[0] += 1
+        for vertex in graph2.vertices.values():
+            if vertex.mode == VertexType.DUMMY:
+                dummy_nodes[1] += 1
+        print(f'Dummy nodes: {dummy_nodes}')
         ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
         start_uid = graph1.edges[ordered_odom_edges[0]].startuid
         middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid
         middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
         end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
+
+        print(f'start: {start_uid} mid_lower: {middle_uid_lower} mid_upper: {middle_uid_upper} end: {end_uid} total: {len(graph1.vertices)}')
+
         g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
         g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
 
         return g1sg, g2sg
 
+    def get_optimizer(self, graph: Graph, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None])\
+            -> SparseOptimizer:
+        """
+        Returns the optimized g20.SparseOptimizer for the given graph with the given weights, or the graph's default
+        weights if no weights are given.
+        """
+        if weights is not None:
+            graph.weights = self._weights_to_dict(weights)
+            graph.update_edges()
+
+        optimizer = graph.graph_to_optimizer()
+        optimizer.initialize_optimization()
+        optimizer.optimize(1024)
+        return optimizer
+
     # -- Private Methods --
+    def _weights_to_dict(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None]):
+        """
+        Converts each representation of weights to a weight dictionary
+        """
+        if isinstance(weights, int):
+            return self._weights_dict[self.ordered_weights_dict_keys[weights]]
+        elif isinstance(weights, float):
+            return graph_utils.weights_from_ratio(weights)
+        elif isinstance(weights, str):
+            return self._weights_dict[weights]
+        elif isinstance(weights, np.ndarray):
+            return graph_utils.weight_dict_from_array(weights)
+        elif isinstance(weights, dict):
+            return weights
+        else:
+            return self._selected_weights
+
     def _map_info_from_path(self, map_json_path: str) -> MapInfo:
         map_json_abs_path = os.path.join(self._cache_path, map_json_path)
         with open(map_json_abs_path, "r") as json_string_file:
@@ -829,13 +883,16 @@ class GraphManager:
 
         if visualize:
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
+<<<<<<< HEAD
+                                          original_tag_verts, None, graph_plot_title)
+=======
                                           original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
+>>>>>>> 3dba2b792fcb3b3a483d4a0f583bce3710e6feec
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
     # -- Static Methods --
-
     @staticmethod
     def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
         locations_chi2_viz_tags = []

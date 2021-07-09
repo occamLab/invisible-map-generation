@@ -21,6 +21,7 @@ import os
 
 from firebase_admin import credentials
 
+import graph
 from GraphManager import GraphManager
 
 
@@ -89,6 +90,17 @@ def make_parser():
         action="store_true",
         help="Visualize plots"
     )
+    p.add_argument(
+        '--fix',
+        type=int,
+        nargs='*',
+        default=[],
+        help='What vertex types to fix during optimization. Dummy and Tagpoints are always fixed. Otherwise,'
+             ' 0-Odometry,'
+             ' 1-Tag,'
+             ' 2-Waypoint.',
+        choices={0, 1, 2}
+    )
     return p
 
 
@@ -108,5 +120,13 @@ if __name__ == "__main__":
         graph_manager.firebase_listen()
 
     map_pattern = args.p if args.p else ""
+    fixed_tags = set()
+    for tag_type in args.fix:
+        if tag_type == 0:
+            fixed_tags.add(graph.VertexType.ODOMETRY)
+        elif tag_type == 1:
+            fixed_tags.add(graph.VertexType.TAG)
+        elif tag_type == 2:
+            fixed_tags.add(graph.VertexType.WAYPOINT)
     graph_manager.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c, new_pso=args.pso,
-                               new_weights_specifier=args.w)
+                               new_weights_specifier=args.w, fixed_vertices=tuple(fixed_tags))
