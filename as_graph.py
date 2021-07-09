@@ -353,7 +353,7 @@ def as_graph(dct, fixed_vertices: Union[graph.VertexType, Tuple[graph.VertexType
                         mode=graph.VertexType.TAG,
                         estimate=matrix2measurement(pose_matrices[i].dot(
                             tag_edge_measurements_matrix[tag_index])),
-                        fixed=fix_tag_vertices,
+                        fixed=graph.VertexType.TAG in fixed_vertices,
                         meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
                     counted_tag_vertex_ids.add(tag_vertex_id)
                 edges[edge_counter] = graph.Edge(
