@@ -58,34 +58,37 @@ def main():
         sg1, sg2 = gm.create_graphs_for_chi2_comparison(map_dct)
 
         gt_metrics = [0.0] * total_runs
+        optimized_chi2s = [0.0] * total_runs
         chi2s = {
-            'sensible_default_weights': [],
-            'trust_odom': [],
-            'trust_tags': [],
-            'genetic_results': [],
             'comparison_baseline': []
         }
         for run in range(total_runs):
             weights = graph_utils.weights_from_ratio(sweep[run])
+            print('gt')
             gt_metrics[run] = gm.get_ground_truth_from_graph(weights, graph, occam_room_tags)
+            print('optimized chi2')
+            optimized_chi2s[run] = gm.get_optimized_graph_info(graph, weights)[0]
             for weight_name in chi2s:
-                chi2s[weight_name].append(gm.get_chi2_from_subgraphs(weights, sg1, sg2, weight_name))
+                print(weight_name)
+                chi2s[weight_name].append(gm.get_chi2_from_subgraphs(weights, (sg1, sg2), weight_name))
 
             print(f'An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:')
             for weight_name in chi2s:
-                print(f'\t{weight_name}: {chi2s[weight_name][-1]}')
-            print(f'\tand a ground truth metric of {gt_metrics[run]}\n')
+                print(f'\t{weight_name}: {chi2s[weight_name][-1]},')
+            print(f'\ta ground truth metric of {gt_metrics[run]}')
+            print(f'\tand an optimized chi2 of {optimized_chi2s[run]}.\n')
 
         with open('correlation_results.json', 'w') as file:
             json.dump({
                 'odom_tag_ratio': sweep.tolist(),
                 'chi2s': chi2s,
-                'gt_metrics': gt_metrics
+                'gt_metrics': gt_metrics,
+                'optimized_chi2s': optimized_chi2s,
             }, file)
 
     corr = stats.spearmanr(np.vstack((np.array(gt_metrics), np.array([chi2s[w] for w in chi2s]))), axis=1)
-    print(f'The correlation between gt metrics and chi2 is:')
-    print(corr[0])
+    print(f'The correlation between gt metrics and chi2 metrics are is:')
+    print(corr)
 
     plt.plot(np.log(sweep), np.array(gt_metrics), '-ob')
     plt.xlabel('log(odom/tag)')
@@ -93,7 +96,7 @@ def main():
     plt.title('Ground truth metric')
     plt.show()
 
-    plotted_weights = 'trust_tags'
+    plotted_weights = 'comparison_baseline'
     plt.plot(np.log(sweep), np.log(np.array(chi2s[plotted_weights])), '-ob')
     plt.xlabel('log(odom/tag)')
     plt.ylabel('log(Chi2)')
