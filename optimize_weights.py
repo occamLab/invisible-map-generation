@@ -67,20 +67,21 @@ if __name__ == "__main__":
                     best_metric = metrics.min()
                     best_weights = [sweep_range[i[0]] for i in np.where(metrics == best_metric)]
                     print(f'\nBEST METRIC: {best_weights}: {best_metric}')
-                graph_utils.plot_metrics(sweep_range, metrics)
+                graph_utils.plot_metrics(sweep_range, metrics, True, True)
         else:
             bounds = (-10, 10)
-            step = 0.5
+            step = 0.2
             if len(args.s) == 1:
                 bounds = (-args.s[0], args.s[0])
             elif len(args.s) > 1:
                 bounds = (args.s[0], args.s[1])
                 if len(args.s) > 2:
                     step = args.s[2]
-            metrics = graph_manager.sweep_weights(map_json_path, False, bounds, step, verbose=args.v, visualize=args.v)
+            sweep = np.exp(np.arange(bounds[0], bounds[1], step))
+            metrics = graph_manager.sweep_weights(map_json_path, sweep=sweep, verbose=args.v, visualize=args.v)
             with open('sweep_results.json', 'w') as results_file:
                 dct = {
-                    'sweep_range': np.arange(bounds[0], bounds[1] + step, step).tolist(),
+                    'sweep_range': sweep.tolist(),
                     'metrics': metrics.tolist()
                 }
                 json.dump(dct, results_file)

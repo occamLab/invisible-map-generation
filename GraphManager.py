@@ -38,7 +38,7 @@ class GraphManager:
 
     Class Attributes:
         _weights_dict (Dict[str, np.ndarray]): Maps descriptive names of weight vectors to the corresponding weight
-         vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation 
+         vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation
          seem to be pretty over optimistic, hence the large correction here) for the orientation
         _app_initialize_dict (Dict[str, str]): Used for initializing the app attribute
         _unprocessed_listen_to (str): Simultaneously specifies database reference to listen to in the firebase_listen
@@ -392,14 +392,14 @@ class GraphManager:
         model.run()
         return model.report
 
-    def sweep_weights(self, map_json_path: str, two_d: bool = True, bounds: Tuple[float, float] = (-10., 10.),
-                      step: float = 0.5, verbose: bool = False, visualize: bool = True) -> np.ndarray:
+    def sweep_weights(self, map_json_path: str, dimensions: int = 2, sweep: np.ndarray = np.arange(-10, 10, 0.2),
+                      verbose: bool = False, visualize: bool = True) -> np.ndarray:
         """
         Sweeps a set of weights, returning the resulting chi2 values from each
 
         Args:
             map_json_path (str): the path to the json containing the map data to optimize on
-            two_d (bool): whether to assume all weights for a certain edge are the same
+            dimensions (int): the number of dimensions to sweep across
             bounds (tuple): the lower and upper limits of which to sweep, inclusive
             step (float): the step size to use between sweeps
             verbose (bool): whether to print out the chi2 values
@@ -410,14 +410,12 @@ class GraphManager:
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
         map_dct = self._map_info_from_path(map_json_path).map_dct
-        #sg1, sg2 = self.create_graphs_for_chi2_comparison(map_dct)
+        subgraphs = self.create_graphs_for_chi2_comparison(map_dct)
         graph = as_graph.as_graph(map_dct)
-        sweep = np.arange(bounds[0], bounds[1] + step, step)
-        dimensions = 2 if two_d else 8
-        metrics = self._sweep_weights(graph, occam_room_tags, sweep, dimensions, verbose=verbose)
+        metrics = self._sweep_weights(graph, sweep, dimensions, subgraphs, verbose=verbose)
 
-        if two_d and visualize:
-            graph_utils.plot_metrics(sweep, metrics)
+        if dimensions == 2 and visualize:
+            graph_utils.plot_metrics(sweep, metrics, log_sweep=True, log_metric=True)
         if verbose:
             best_metric = metrics.min()
             best_weights = [sweep[i[0]] for i in np.where(metrics == best_metric)]
@@ -573,28 +571,46 @@ class GraphManager:
         map_name = self._read_cache_directory(os.path.basename(map_json))
         return GraphManager.MapInfo(map_name, map_name, map_dct)
 
-    def _sweep_weights(self, graph: Graph, ground_truth_tags: np.ndarray, sweep: np.ndarray, dimensions: int,
-                       verbose: bool = False, _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
+    def _sweep_weights(self, graph: Graph, sweep: np.ndarray, dimensions: int,
+                       metric_info: Union[np.ndarray, Tuple[Graph, Graph], None] = None, verbose: bool = False,
+                       _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
         """
         Sweeps the weights with the current chi2 algorithm evaluated on the given map
 
         Args:
             graph (Graph): the graph for weight comparison
-            ground_truth_tags (ndarray): An array of SE3Quats, the poses of the ground truth
+            metric_info: Information for the metric calculation.
+                ndarray: an array of SE3Quats representing the actual tag poses
+                (Graph, Graph): the subgraphs for calculating Duncan's metric
+                None: use the chi2 of the optimized graph
             sweep (ndarray): a 1D array containing the values to sweep over
             dimensions (int): the number of dimensions to sweep over (2 or 12)
             verbose (bool): whether to print the chi2 values
             _cur_weights (ndarray): the weights that are already set (do not set manually!)
         """
         if dimensions == 1:
+            def get_metric(w: np.ndarray, g: graph):
+                return 0
+
+            if metric_info is None:
+                def get_metric(w: np.ndarray, g: graph):
+                    return self.get_optimized_graph_info(g, w)[0]
+            elif isinstance(metric_info, tuple):
+                def get_metric(w: np.ndarray, g: graph):
+                    return self.get_chi2_from_subgraphs(w, metric_info)
+            elif isinstance(metric_info, np.ndarray):
+                def get_metric(w: np.ndarray, g: graph):
+                    return self.get_ground_truth_from_graph(w, g, metric_info)
+
             metrics = np.asarray([])
             for weight in sweep:
                 full_weights = np.append(_cur_weights, weight)
+                try:
+                    metric = get_metric(full_weights, graph)
+                except ValueError:
+                    metric = -1
                 if verbose:
-                    print(f'{full_weights.tolist()}: ', end='')
-                metric = self.get_ground_truth_from_graph(full_weights, graph, ground_truth_tags)
-                if verbose:
-                    print(metric)
+                    print(f'{full_weights.tolist()}: {metric}')
                 metrics = np.append(metrics, metric)
             return metrics
         else:
@@ -602,11 +618,11 @@ class GraphManager:
             first_run = True
             for weight in sweep:
                 if first_run:
-                    metrics = self._sweep_weights(graph, ground_truth_tags, sweep, dimensions - 1, verbose,
+                    metrics = self._sweep_weights(graph, sweep, dimensions - 1, metric_info, verbose,
                                                 np.append(_cur_weights, weight)).reshape(1, -1)
                     first_run = False
                 else:
-                    metrics = np.concatenate((metrics, self._sweep_weights(graph, ground_truth_tags, sweep, dimensions-1,
+                    metrics = np.concatenate((metrics, self._sweep_weights(graph, sweep, dimensions - 1, metric_info,
                                                                            verbose, np.append(_cur_weights, weight))
                                               .reshape(1, -1)))
             return metrics
@@ -810,10 +826,10 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-            Union[None, str] = None, remove_chi2_outliers: bool = True, graph_plot_title: Union[str, None] =
-                        None, chi2_plot_title: Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray,
-                                                                                 Tuple[List[Dict], np.ndarray],
-                                                                                 float, np.ndarray, np.ndarray]:
+                        Union[None, str] = None, remove_chi2_outliers: bool = True, graph_plot_title: Union[str, None] =
+                        None, chi2_plot_title:  Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray,
+                                                                                  Tuple[List[Dict], np.ndarray],
+                                                                                  float, np.ndarray, np.ndarray]:
         """Optimizes the input graph
 
         Arguments:
@@ -846,7 +862,7 @@ class GraphManager:
             filtered_graph = copy.deepcopy(graph)
 
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-        self._selected_weights]
+                                                   self._selected_weights]
 
         # Load these weights into the graph
         graph.update_edges()
@@ -907,13 +923,11 @@ class GraphManager:
             std_chi2 = chi2s.std()
             min_chi2 = mean_chi2 - 1 * std_chi2
             max_chi2 = mean_chi2 + 1 * std_chi2
-            print(
-                f'mean: {mean_chi2}, std: {std_chi2}, min: {min_chi2}, max: {max_chi2}, total min: {chi2s.min()}, total_max: {chi2s.max()}')
+            print(f'mean: {mean_chi2}, std: {std_chi2}, min: {min_chi2}, max: {max_chi2}, total min: {chi2s.min()}, total_max: {chi2s.max()}')
 
             for edge_id, chi2 in chi2_by_edge.items():
                 if chi2 < min_chi2 or chi2 > max_chi2:
-                    print(
-                        f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag {graph.vertices[graph.edges[edge_id].enduid].meta_data["tag_id"]}')
+                    print(f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag {graph.vertices[graph.edges[edge_id].enduid].meta_data["tag_id"]}')
                     filtered_graph.remove_edge(edge_id)
 
             return self._optimize_graph(filtered_graph, tune_weights, visualize, weights_key, False,
