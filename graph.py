@@ -142,6 +142,15 @@ class Graph:
             print(chi2s)
         return chi2s
 
+    def remove_edge(self, edge_id: int):
+        """
+        Removes the specified edge from this graph
+        """
+        edge = self.edges[edge_id]
+        self._verts_to_edges[edge.startuid].remove(edge_id)
+        self._verts_to_edges[edge.enduid].remove(edge_id)
+        del self.edges[edge_id]
+
     @staticmethod
     def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
         """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.

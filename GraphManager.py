@@ -810,9 +810,10 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-                        Union[None, str] = None, graph_plot_title: Union[str, None] = None, chi2_plot_title: \
-                        Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray],
-                                                          float, np.ndarray, np.ndarray]:
+            Union[None, str] = None, remove_chi2_outliers: bool = True, graph_plot_title: Union[str, None] =
+                        None, chi2_plot_title: Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray,
+                                                                                 Tuple[List[Dict], np.ndarray],
+                                                                                 float, np.ndarray, np.ndarray]:
         """Optimizes the input graph
 
         Arguments:
@@ -841,8 +842,11 @@ class GraphManager:
             - A numpy array where each element corresponds to the number of visible tag vertices from the corresponding
               odometry vertices.
         """
+        if remove_chi2_outliers:
+            filtered_graph = copy.deepcopy(graph)
+
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-                                                   self._selected_weights]
+        self._selected_weights]
 
         # Load these weights into the graph
         graph.update_edges()
@@ -885,6 +889,35 @@ class GraphManager:
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                           original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
+
+        if remove_chi2_outliers:
+            chi2_by_edge = {}
+            chi2s = []
+            for edge in graph.optimized_graph.edges():
+                end_mode = graph.vertices[graph.edges[edge.id()].enduid].mode
+                start_mode = graph.vertices[graph.edges[edge.id()].startuid].mode
+                if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (VertexType.TAG,
+                                                                                       VertexType.TAGPOINT):
+                    chi2 = Graph.get_chi2_of_edge(edge)
+                    chi2_by_edge[edge.id()] = chi2
+                    chi2s.append(chi2)
+
+            chi2s = np.array(chi2s)
+            mean_chi2 = chi2s.mean()
+            std_chi2 = chi2s.std()
+            min_chi2 = mean_chi2 - 1 * std_chi2
+            max_chi2 = mean_chi2 + 1 * std_chi2
+            print(
+                f'mean: {mean_chi2}, std: {std_chi2}, min: {min_chi2}, max: {max_chi2}, total min: {chi2s.min()}, total_max: {chi2s.max()}')
+
+            for edge_id, chi2 in chi2_by_edge.items():
+                if chi2 < min_chi2 or chi2 > max_chi2:
+                    print(
+                        f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag {graph.vertices[graph.edges[edge_id].enduid].meta_data["tag_id"]}')
+                    filtered_graph.remove_edge(edge_id)
+
+            return self._optimize_graph(filtered_graph, tune_weights, visualize, weights_key, False,
+                                        f'{graph_plot_title} (Filtered)', f'{chi2_plot_title} (Filtered)')
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
