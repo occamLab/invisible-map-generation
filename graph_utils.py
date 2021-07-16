@@ -211,8 +211,9 @@ def locations_from_transforms(locations):
 
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
     filtered_metrics = metrics > -1
-    sweep_plot = np.log(sweep[filtered_metrics]) if log_sweep else sweep[filtered_metrics]
-    to_plot = np.log(metrics[filtered_metrics]) if log_metric else metrics[filtered_metrics]
+    sweep_plot = np.log(sweep) if log_sweep else sweep
+    x_sweep = np.array([sweep_plot.tolist()] * sweep_plot.size)
+    to_plot = np.log(metrics) if log_metric else metrics
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     surf = ax.plot_surface(sweep_plot, sweep_plot.reshape(-1, 1), to_plot, cmap=cm.get_cmap('viridis'))
     ax.set_xlabel('Pose:Orientation')
@@ -238,14 +239,14 @@ def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, n
     has_ratio = length % 2 == 1
     if length == 1:  # ratio
         weights['odom_tag_ratio'] = array[0]
-    elif length == 2: # tag pose/tag-sba x, ratio
-        weights['tag'] = np.array([array[0]] * 3)
-        weights['tag_sba'] = np.array([array[0]])
+    elif length == 2: # tag pose:rot/tag-sba x:y, ratio
+        weights['tag'] = np.array([array[0]] * 3 + [1] * 3)
+        weights['tag_sba'] = np.array([array[0], 1])
         weights['odom_tag_ratio'] = array[1]
-    elif length == 3: # odom pose, tag pose/tag-sba x, ratio
-        weights['odometry'] = np.array([array[0]] * 3)
-        weights['tag'] = np.array([array[1]] * 3)
-        weights['tag_sba'] = np.array([array[1]])
+    elif length == 3: # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
+        weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
+        weights['tag'] = np.array([array[1]] * 3 + [1] * 3)
+        weights['tag_sba'] = np.array([array[1], 1])
         weights['odom_tag_ratio'] = array[2]
     elif half_len == 2: # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
         weights['odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
