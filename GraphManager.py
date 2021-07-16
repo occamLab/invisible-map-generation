@@ -93,7 +93,7 @@ class GraphManager:
             'tag_sba': np.array([9.91, 8.88]),
             'dummy': graph_utils.default_dummy_weights,
         }),
-        "best_sweep": graph_utils.weights_from_ratio(np.exp(9.9)),
+        "best_sweep": graph_utils.weight_dict_from_array(np.exp(np.array([0.6, 3.6]))),
         "comparison_baseline": graph_utils.normalize_weights({
             'odometry': np.ones(6),
             'tag_sba': np.ones(2),
@@ -826,10 +826,9 @@ class GraphManager:
                 self._firebase_get_unprocessed_map(map_name, map_json)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-                        Union[None, str] = None, remove_chi2_outliers: bool = True, graph_plot_title: Union[str, None] =
-                        None, chi2_plot_title:  Union[str, None] = None) -> Tuple[np.ndarray, np.ndarray,
-                                                                                  Tuple[List[Dict], np.ndarray],
-                                                                                  float, np.ndarray, np.ndarray]:
+                        Union[None, str] = None, num_chi2_filters: int = 0, graph_plot_title: Union[str, None] =
+                        None, chi2_plot_title:  Union[str, None] = None, _filters_remaining: int = -1)\
+            -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
         """Optimizes the input graph
 
         Arguments:
@@ -858,7 +857,9 @@ class GraphManager:
             - A numpy array where each element corresponds to the number of visible tag vertices from the corresponding
               odometry vertices.
         """
-        if remove_chi2_outliers:
+        if _filters_remaining == -1:
+            _filters_remaining = num_chi2_filters
+        if _filters_remaining > 0:
             filtered_graph = copy.deepcopy(graph)
 
         graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
@@ -906,7 +907,7 @@ class GraphManager:
                                           original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
-        if remove_chi2_outliers:
+        if _filters_remaining > 0:
             chi2_by_edge = {}
             chi2s = []
             for edge in graph.optimized_graph.edges():
@@ -930,8 +931,16 @@ class GraphManager:
                     print(f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag {graph.vertices[graph.edges[edge_id].enduid].meta_data["tag_id"]}')
                     filtered_graph.remove_edge(edge_id)
 
-            return self._optimize_graph(filtered_graph, tune_weights, visualize, weights_key, False,
-                                        f'{graph_plot_title} (Filtered)', f'{chi2_plot_title} (Filtered)')
+            num_filters = num_chi2_filters - _filters_remaining
+            filtered_title = f'(Filtered x{num_filters + 1})'
+            graph_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(graph_plot_title)
+            chi2_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(chi2_plot_title)
+            new_graph_title = None if graph_plot_title is None else f'{graph_plot_title[:graph_title_end]} {filtered_title}'
+            new_chi2_title = None if chi2_plot_title is None else f'{chi2_plot_title[:chi2_title_end]} {filtered_title}'
+            return self._optimize_graph(filtered_graph, tune_weights=tune_weights, visualize=visualize,
+                                        weights_key=weights_key, num_chi2_filters=num_chi2_filters,
+                                        graph_plot_title=new_graph_title, chi2_plot_title=new_chi2_title,
+                                        _filters_remaining=_filters_remaining - 1)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
