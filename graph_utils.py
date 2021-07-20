@@ -315,3 +315,6 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
         scale = odom_scale if weight_type == 'odometry' else tag_scale
         normal_weights[weight_type] = -(np.log(scale) - weight - np.log(weight_mag))
     return normal_weights
+
+def weights_from_ratio(ratio: float) -> Dict[str, np.ndarray]:
+    return weight_dict_from_array(np.array([ratio]))
