@@ -274,7 +274,7 @@ def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, n
     return normalize_weights(weights)
 
 
-def normalize_weights(weights: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> Dict[str, np.ndarray]:
     """
     Normalizes the weights so that the resultant tag and odom weights in g2o will have a magnitude of 1, in ratio of
     weights['odom_tag_ratio'].
@@ -285,12 +285,15 @@ def normalize_weights(weights: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
 
     Args:
         weights (dict): a dict mapping weight types to weight values, the set of weights to normalize.
+        is_sba (bool): whether SBA is being used - if so, will scale tags so odom and tags are approx. the same units
     Returns:
         A new dict of weights where each value is normalized as said above, keeping dummy weights constant
     """
     odom_tag_ratio = weights.get('odom_tag_ratio', 1)
     odom_scale = 1 / (1 + 1 / odom_tag_ratio ** 2) ** 0.5
-    tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5 / assumed_focal_length
+    tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5
+    if is_sba:
+        tag_scale = tag_scale / assumed_focal_length
     normal_weights = {
         'dummy': weights['dummy'],
         'odom_tag_ratio': odom_tag_ratio

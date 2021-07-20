@@ -71,3 +71,9 @@ class Edge:
         self.information_prescaling = information_prescaling
         self.camera_intrinsics = camera_intrinsics
         self.measurement = measurement
+
+    def get_start_vertex_type(self, vertices: Dict[int, Vertex]) -> VertexType:
+        return vertices[self.startuid].mode
+
+    def get_end_vertex_type(self, vertices: Dict[int, Vertex]) -> VertexType:
+        return vertices[self.enduid].mode

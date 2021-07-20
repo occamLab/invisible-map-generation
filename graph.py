@@ -12,6 +12,7 @@ import numpy as np
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
+import graph_utils
 from expectation_maximization.maximization_model import maxweights
 from graph_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
     measurement_to_matrix
@@ -52,12 +53,14 @@ class Graph:
         self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
         self.original_vertices = copy.deepcopy(vertices)
         self.huber_delta: bool = copy.deepcopy(huber_delta)
-        self.weights: Dict[str, np.ndarray] = copy.deepcopy(weights)
         self.gravity_axis: str = copy.deepcopy(gravity_axis)
         self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
         self.damping_status: bool = damping_status
         self.use_huber: bool = use_huber
 
+        self._weights: Dict[str, np.ndarray] = {}
+        self.set_weights(copy.deepcopy(weights))
+        
         self._verts_to_edges: Dict[int, Set[int]] = {}
         self._generate_verts_to_edges_mapping()
         self._basis_matrices: Dict[int, np.ndarray] = {}
@@ -141,15 +144,6 @@ class Graph:
         if verbose:
             print(chi2s)
         return chi2s
-
-    def remove_edge(self, edge_id: int):
-        """
-        Removes the specified edge from this graph
-        """
-        edge = self.edges[edge_id]
-        self._verts_to_edges[edge.startuid].remove(edge_id)
-        self._verts_to_edges[edge.enduid].remove(edge_id)
-        del self.edges[edge_id]
 
     @staticmethod
     def check_optimized_edges(graph: g2o.SparseOptimizer, verbose: bool = True) -> float:
@@ -404,6 +398,15 @@ class Graph:
         # Delete vertex
         self._verts_to_edges.__delitem__(vertex_uid)
         self.vertices.__delitem__(vertex_uid)
+    
+    def remove_edge(self, edge_id: int):
+        """
+        Removes the specified edge from this graph
+        """
+        edge = self.edges[edge_id]
+        self._verts_to_edges[edge.startuid].remove(edge_id)
+        self._verts_to_edges[edge.enduid].remove(edge_id)
+        del self.edges[edge_id]
 
     # -- Utility methods --
 
@@ -420,17 +423,17 @@ class Graph:
             end_mode = self.vertices[edge.enduid].mode
             if start_mode == VertexType.ODOMETRY:
                 if end_mode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(np.exp(-self.weights['odometry']))
+                    self.edges[uid].information = np.diag(np.exp(-self._weights['odometry']))
                 elif end_mode == VertexType.TAG:
                     if self.is_sparse_bundle_adjustment:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights['tag_sba']))
+                        self.edges[uid].information = np.diag(np.exp(-self._weights['tag_sba']))
                     else:
-                        self.edges[uid].information = np.diag(np.exp(-self.weights['tag']))
+                        self.edges[uid].information = np.diag(np.exp(-self._weights['tag']))
                 elif end_mode == VertexType.DUMMY:
                     # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
                     #  to work though)
                     basis = self._basis_matrices[uid][3:6, 3:6]
-                    cov = np.diag(np.exp(-self.weights['dummy']))
+                    cov = np.diag(np.exp(-self._weights['dummy']))
                     information = basis.dot(cov).dot(basis.T)
                     template = np.zeros([6, 6])
 
@@ -527,7 +530,24 @@ class Graph:
             poses.append(np.concatenate([translation, rotation]))
         return np.array(poses)
 
-    # -- Getters --
+    # -- Getters & Setters --
+    
+    def set_weights(self, weights: Dict[str, np.ndarray], scale_by_edge_amount: bool = True):
+        if scale_by_edge_amount:
+            odom_edges = 0
+            tag_edges = 0
+            for edge_id, edge in self.edges.items():
+                if edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
+                    odom_edges += 1
+                elif edge.get_end_vertex_type(self.vertices) in (VertexType.TAG, VertexType.TAGPOINT):
+                    tag_edges += 1
+            weights['odom_tag_ratio'] = weights.get('odom_tag_ratio', 1) * tag_edges / odom_edges
+            self._weights = graph_utils.normalize_weights(weights, is_sba=self.is_sparse_bundle_adjustment)
+        else:
+            self._weights = weights
+
+    def get_weights(self):
+        return self._weights
 
     def get_tags_all_position_estimate(self) -> np.ndarray:
         """Returns an array position estimates for every edge that connects an odometry vertex to a tag vertex.
@@ -589,7 +609,7 @@ class Graph:
                 vertices[vert_id] = vert
 
         ret_graph = Graph(vertices, edges,
-                          weights=self.weights,
+                          weights=self._weights,
                           gravity_axis=self.gravity_axis,
                           is_sparse_bundle_adjustment=self.is_sparse_bundle_adjustment,
                           use_huber=self.use_huber,
@@ -657,7 +677,7 @@ class Graph:
 
     # -- Expectation maximization-related methods  --
 
-    def expectation_maximization_once(self) -> None:
+    def expectation_maximization_once(self) -> Dict[str, np.ndarray]:
         """Run one cycle of expectation maximization.
 
         It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
@@ -668,7 +688,7 @@ class Graph:
         self.optimize_graph()
         self.update_vertices()
         self.generate_maximization_params()
-        self.tune_weights()
+        return self.tune_weights()
 
     def expectation_maximization(self, maxiter=10, tol=1) -> int:
         """Run many iterations of expectation maximization.
@@ -680,13 +700,14 @@ class Graph:
         Returns:
             Number of iterations ran
         """
-        previous_weights = self.weights
+        previous_weights = self._weights
         i = 0
         while i < maxiter:
             self.expectation_maximization_once()
-            new_weights = self.weights
-            if np.linalg.norm(new_weights - previous_weights) < tol:
-                return i
+            new_weights = self._weights
+            for weight_type in new_weights:
+                if np.linalg.norm(new_weights[weight_type] - previous_weights[weight_type]) < tol:
+                    return i
             previous_weights = new_weights
             i += 1
         return i
@@ -739,9 +760,9 @@ class Graph:
     def tune_weights(self):
         """Tune the weights to maximize the likelihood of the errors found between the unoptimized and optimized graphs.
         """
-        results = maxweights(self.observations, self.errors, self.weights)
+        results = maxweights(self.observations, self.errors, self._weights)
         self.maximization_success = results.success
-        self.weights = results.x
+        self._weights = graph_utils.weight_dict_from_array(results.x)
         self.maximization_results = results
         self.update_edges()
-        return results
+        return self._weights

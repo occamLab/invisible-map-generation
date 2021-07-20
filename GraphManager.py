@@ -533,7 +533,7 @@ class GraphManager:
         weights if no weights are given.
         """
         if weights is not None:
-            graph.weights = self._weights_to_dict(weights)
+            graph.set_weights(self._weights_to_dict(weights))
             graph.update_edges()
 
         optimizer = graph.graph_to_optimizer()
@@ -862,8 +862,8 @@ class GraphManager:
         if _filters_remaining > 0:
             filtered_graph = copy.deepcopy(graph)
 
-        graph.weights = GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-                                                   self._selected_weights]
+        graph.set_weights(GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
+                                                     self._selected_weights])
 
         # Load these weights into the graph
         graph.update_edges()
@@ -878,8 +878,7 @@ class GraphManager:
             if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map["tags"]
 
         if tune_weights:
-            graph.expectation_maximization_once()
-            print("tuned weights", graph.weights)
+            print(f'Tuned weights: {graph.expectation_maximization_once()}')
 
         opt_chi2 = graph.optimize_graph()
 
