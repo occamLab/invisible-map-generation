@@ -4,11 +4,11 @@ from enum import Enum
 from typing import Union, Tuple
 
 import numpy as np
-from g2o import SE3Quat, Quaternion
+from g2o import SE3Quat
 from scipy.spatial.transform import Rotation as Rot
 
 import graph
-from graph_utils import camera_to_odom_transform
+from graph_utils import camera_to_odom_transform, se3_quat_average
 
 
 def pose2diffs(poses):
@@ -49,31 +49,6 @@ def matrix2measurement(pose, invert=False):
     if invert:
         ret_val = np.vstack(list(map(lambda measurement: SE3Quat(measurement).inverse().to_vector(), ret_val)))
     return ret_val
-
-
-def se3_quat_average(transforms):
-    """TODO: documentation
-    """
-    translation_average = sum([t.translation() / len(transforms) for t in transforms])
-    epsilons = np.ones(len(transforms), )
-    converged = False
-    quat_average = None
-    while not converged:
-        quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) \
-                       * epsilons[idx] for idx, t in enumerate(transforms))
-        quat_average = quat_sum / np.linalg.norm(quat_sum)
-        same_epsilon = [np.linalg.norm(epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
-                                                                 t.orientation().z(), t.orientation().w()]) - \
-                                       quat_average) for idx, t in enumerate(transforms)]
-        swap_epsilon = [np.linalg.norm(-epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
-                                                                  t.orientation().z(), t.orientation().w()]) - \
-                                       quat_average) for idx, t in enumerate(transforms)]
-
-        change_mask = np.greater(same_epsilon, swap_epsilon)
-        epsilons[change_mask] = -epsilons[change_mask]
-        converged = not np.any(change_mask)
-    average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
-    return SE3Quat(average_as_quat, translation_average)
 
 
 class PrescalingOptEnum(Enum):

@@ -1,13 +1,15 @@
 """Some helpful functions for visualizing and analyzing graphs.
 """
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Tuple, Any
 
 import g2o
 from matplotlib import pyplot as plt
 from matplotlib import cm
 import numpy as np
-from g2o import SE3Quat, EdgeProjectPSI2UV
+from g2o import SE3Quat, EdgeProjectPSI2UV, Quaternion
 from scipy.spatial.transform import Rotation as Rot
+import shapely.geometry
+from shapely.geometry import LineString
 
 from graph_vertex_edge_classes import VertexType
 
@@ -34,6 +36,31 @@ occam_room_tags = np.asarray([SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]),
                               SE3Quat([104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]),
                               SE3Quat([-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, 0, c, 0, s]),
                               SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, c, 0, s])])
+
+
+def se3_quat_average(transforms):
+    """TODO: documentation
+    """
+    translation_average = sum([t.translation() / len(transforms) for t in transforms])
+    epsilons = np.ones(len(transforms), )
+    converged = False
+    quat_average = None
+    while not converged:
+        quat_sum = sum(np.array([t.orientation().x(), t.orientation().y(), t.orientation().z(), t.orientation().w()]) \
+                       * epsilons[idx] for idx, t in enumerate(transforms))
+        quat_average = quat_sum / np.linalg.norm(quat_sum)
+        same_epsilon = [np.linalg.norm(epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
+                                                                 t.orientation().z(), t.orientation().w()]) - \
+                                       quat_average) for idx, t in enumerate(transforms)]
+        swap_epsilon = [np.linalg.norm(-epsilons[idx] * np.array([t.orientation().x(), t.orientation().y(),
+                                                                  t.orientation().z(), t.orientation().w()]) - \
+                                       quat_average) for idx, t in enumerate(transforms)]
+
+        change_mask = np.greater(same_epsilon, swap_epsilon)
+        epsilons[change_mask] = -epsilons[change_mask]
+        converged = not np.any(change_mask)
+    average_as_quat = Quaternion(quat_average[3], quat_average[0], quat_average[1], quat_average[2])
+    return SE3Quat(average_as_quat, translation_average)
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False) -> \
@@ -316,5 +343,60 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
         normal_weights[weight_type] = -(np.log(scale) - weight - np.log(weight_mag))
     return normal_weights
 
+
 def weights_from_ratio(ratio: float) -> Dict[str, np.ndarray]:
+    """
+    Returns a weight dict with the given ratio between odom and tag weights
+    """
     return weight_dict_from_array(np.array([ratio]))
+
+
+def get_intersections(vertices: np.ndarray, vertex_ids: Union[List[int], None] = None)\
+        -> Tuple[List[List[int]], List[Dict[str, Any]]]:
+    nvertices = vertices.shape[0]
+    if vertex_ids is None:
+        vertex_ids = list(range(nvertices))
+    neighbors = [[vertex_ids[1]]] + [[vertex_ids[i - 1], vertex_ids[i + 1]] for i in range(1, nvertices - 1)]\
+                + [[vertex_ids[-2]]]
+    curr_id = max(vertex_ids) + 1
+    intersections = []
+
+    for id1 in range(1, nvertices):
+        for id2 in range(1, id1 - 1):
+            line1_yval = (vertices[id1 - 1][1] + vertices[id1][1]) / 2
+            line2_yval = (vertices[id2 - 1][1] + vertices[id2][1]) / 2
+            if abs(line1_yval - line2_yval) > 1:
+                continue
+
+            line1 = LineString([(vertices[id1 - 1][0], vertices[id1 - 1][2]),
+                                (vertices[id1][0], vertices[id1][2])])
+            line2 = LineString([(vertices[id2 - 1][0], vertices[id2 - 1][2]),
+                                (vertices[id2][0], vertices[id2][2])])
+
+            intersect_pt = line1.intersection(line2)
+            average = se3_quat_average([SE3Quat(vertices[id1 - 1]), SE3Quat(vertices[id1]),
+                                        SE3Quat(vertices[id2 - 1]), SE3Quat(vertices[id2])]).to_vector()
+            if str(intersect_pt) != "LINESTRING EMPTY" and isinstance(intersect_pt, shapely.geometry.point.Point):
+                print(f'Intersection at {intersect_pt}, between {id1} and {id2}')
+                intersections.append({
+                    'translation': {
+                        'x': intersect_pt.x,
+                        'y': average[1],
+                        'z': intersect_pt.y
+                    },
+                    'rotation': {
+                        'x': average[3],
+                        'y': average[4],
+                        'z': average[5],
+                        'w': average[6]
+                    },
+                    'poseId': curr_id,
+                    'neighbors': [id1 - 1, id1, id2 - 1, id2]
+                })
+                neighbors[id1 - 1][-1] = curr_id
+                neighbors[id1][0] = curr_id
+                neighbors[id2 - 1][-1] = curr_id
+                neighbors[id2][0] = curr_id
+                curr_id += 1
+
+    return neighbors, intersections

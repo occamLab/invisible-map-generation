@@ -253,8 +253,8 @@ class GraphManager:
                                          graph_plot_title=graph_plot_title,
                                          chi2_plot_title=chi2_plot_title)
                 processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations, adj_chi2,
-                                                                          visible_tags_count)
+                                                                          waypoint_locations, adj_chi2_arr=adj_chi2,
+                                                                          visible_tags_count=visible_tags_count)
                 print("Processed map: {}".format(map_info.map_name))
                 if upload:
                     self._upload(map_info, processed_map_json)
@@ -322,8 +322,9 @@ class GraphManager:
                                                                graph_plot_title=g1sg_plot_title,
                                                                chi2_plot_title=g1sg_chi2_plot_title)
             processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locs, g1sg_odom_locs,
-                                                                        g1sg_waypoint_locs, g1sg_odom_adj_chi2,
-                                                                        g1sg_visible_tags_count)
+                                                                        g1sg_waypoint_locs,
+                                                                        adj_chi2_arr=g1sg_odom_adj_chi2,
+                                                                        visible_tags_count=g1sg_visible_tags_count)
             del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
 
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
@@ -351,8 +352,9 @@ class GraphManager:
                                                                weights_key=None, graph_plot_title=g2sg_plot_title,
                                                                chi2_plot_title=g2sg_chi2_plot_title)
             processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
-                                                                        g2sg_waypoint_locs, g2sg_odom_adj_chi2,
-                                                                        g2sg_visible_tags_count)
+                                                                        g2sg_waypoint_locs,
+                                                                        adj_chi2_arr=g2sg_odom_adj_chi2,
+                                                                        visible_tags_count=g2sg_visible_tags_count)
             del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
 
             self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
@@ -1130,10 +1132,11 @@ class GraphManager:
                 np.unique(all_tags[:, -1])}
 
     @staticmethod
-    def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray, waypoint_locations: Tuple[
-        List[Dict], np.ndarray], adj_chi2_arr: Union[None, np.ndarray] = None,
+    def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray,
+                                waypoint_locations: Tuple[List[Dict], np.ndarray], calculate_intersections: bool = True,
+                                adj_chi2_arr: Union[None, np.ndarray] = None,
                                 visible_tags_count: Union[None, np.ndarray] = None) -> str:
-        if (visible_tags_count is None) ^ (visible_tags_count is None):
+        if (visible_tags_count is None) ^ (adj_chi2_arr is None):
             print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
 
         tag_vertex_map = map(
@@ -1148,7 +1151,7 @@ class GraphManager:
         )
 
         if adj_chi2_arr is None:
-            odom_vertex_map = map(
+            odom_vertex_map = list(map(
                 lambda curr_odom: {
                     "translation": {"x": curr_odom[0], "y": curr_odom[1],
                                     "z": curr_odom[2]},
@@ -1158,11 +1161,11 @@ class GraphManager:
                                  "w": curr_odom[6]},
                     "poseId": int(curr_odom[8]),
                 }, odom_locations
-            )
+            ))
         else:
             odom_locations_with_chi2_and_viz_tags = np.concatenate([odom_locations, adj_chi2_arr, visible_tags_count],
                                                                    axis=1)
-            odom_vertex_map = map(
+            odom_vertex_map = list(map(
                 lambda curr_odom: {
                     "translation": {"x": curr_odom[0], "y": curr_odom[1],
                                     "z": curr_odom[2]},
@@ -1174,7 +1177,15 @@ class GraphManager:
                     "adjChi2": curr_odom[9],
                     "vizTags": curr_odom[10]
                 }, odom_locations_with_chi2_and_viz_tags
-            )
+            ))
+
+        if calculate_intersections:
+            neighbors, intersections = graph_utils.get_intersections(odom_locations[:, :7])
+            for index, neighbor in enumerate(neighbors):
+                odom_vertex_map[index]['neighbors'] = neighbor
+            for intersection in intersections:
+                odom_vertex_map.append(intersection)
+
         waypoint_vertex_map = map(
             lambda idx: {
                 "translation": {"x": waypoint_locations[1][idx][0],
@@ -1188,7 +1199,7 @@ class GraphManager:
             }, range(len(waypoint_locations[0]))
         )
         return json.dumps({"tag_vertices": list(tag_vertex_map),
-                           "odometry_vertices": list(odom_vertex_map),
+                           "odometry_vertices": odom_vertex_map,
                            "waypoints_vertices": list(waypoint_vertex_map)}, indent=2)
 
 
