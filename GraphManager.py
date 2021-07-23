@@ -123,10 +123,11 @@ class GraphManager:
              map relative to parent_folder
             map_dct (dict): String of json containing graph
         """
-        def __init__(self, map_name: str, map_json: str, map_dct: Dict = None):
+        def __init__(self, map_name: str, map_json: str, map_dct: Dict = None, uid: str = None):
             self.map_name: str = str(map_name)
             self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
             self.map_json: str = str(map_json)
+            self.uid = uid
 
     def __init__(self, weights_specifier: int, firebase_creds: firebase_admin.credentials.Certificate,
                  pso: int = 0):
@@ -146,7 +147,7 @@ class GraphManager:
             GraphManager._initialized_app = True
 
         self._bucket = storage.bucket(app=GraphManager._app)
-        self._db_ref = db.reference("/" + GraphManager._unprocessed_listen_to)
+        self._db_ref = db.reference(f'/{GraphManager._unprocessed_listen_to}')
 
         self._pso = as_graph.PrescalingOptEnum.get_by_value(pso)
         self._selected_weights: str = GraphManager.ordered_weights_dict_keys[weights_specifier]
@@ -225,12 +226,16 @@ class GraphManager:
             print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
             return
 
+        already_processed = set()
         for map_json_abs_path in matching_maps:
             if os.path.isdir(map_json_abs_path):
                 continue  # Ignore directories
+            map_info = self._map_info_from_path(map_json_abs_path)
+            if map_info.map_name in already_processed:
+                continue
+            already_processed.add(map_info.map_name)
 
             print("\n---- Attempting to process map {} ----".format(map_json_abs_path))
-            map_info = self._map_info_from_path(map_json_abs_path)
 
             if compare:
                 if upload:
@@ -571,7 +576,11 @@ class GraphManager:
             os.path.sep)) + 1:])
         map_dct = json.loads(json_string)
         map_name = self._read_cache_directory(os.path.basename(map_json))
-        return GraphManager.MapInfo(map_name, map_name, map_dct)
+
+        last_folder = map_json_path.split('/')[-2]
+        if last_folder == GraphManager._unprocessed_listen_to:
+            return GraphManager.MapInfo(map_name, map_name, map_dct)
+        return GraphManager.MapInfo(map_name, map_name, map_dct, last_folder)
 
     def _sweep_weights(self, graph: Graph, sweep: np.ndarray, dimensions: int,
                        metric_info: Union[np.ndarray, Tuple[Graph, Graph], None] = None, verbose: bool = False,
@@ -629,7 +638,7 @@ class GraphManager:
                                               .reshape(1, -1)))
             return metrics
 
-    def _firebase_get_unprocessed_map(self, map_name: str, map_json: str) -> bool:
+    def _firebase_get_unprocessed_map(self, map_name: str, map_json: str, uid: str = None) -> bool:
         """Acquires a map from the specified blob and caches it.
 
         A diagnostic message is printed if the map_json blob name was not found by Firebase.
@@ -650,7 +659,7 @@ class GraphManager:
         self._listen_kill_timer.start()
         self._timer_mutex.release()
 
-        map_info = GraphManager.MapInfo(map_name, map_json, None)
+        map_info = GraphManager.MapInfo(map_name, map_json, None, uid=uid)
         json_blob = self._bucket.get_blob(map_info.map_json)
         if json_blob is not None:
             json_data = json_blob.download_as_bytes()
@@ -672,12 +681,15 @@ class GraphManager:
             json_string (str): Json string of the map to upload
         """
         processed_map_filename = os.path.basename(map_info.map_json)[:-5] + "_processed.json"
-        processed_map_full_path = GraphManager._processed_upload_to + "/" + processed_map_filename
+        processed_map_full_path = f'{GraphManager._processed_upload_to}/{processed_map_filename}'
         print("Attempting to upload {} to the bucket blob {}".format(map_info.map_name, processed_map_full_path))
         processed_map_blob = self._bucket.blob(processed_map_full_path)
         processed_map_blob.upload_from_string(json_string)
         print("Successfully uploaded map data for {}".format(map_info.map_name))
-        db.reference("maps").child(map_info.map_name).child("map_file").set(processed_map_full_path)
+        ref = db.reference("maps")
+        if map_info.uid is not None:
+            ref = ref.child(map_info.uid)
+        ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
         print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
             map_info.map_name))
 
@@ -825,7 +837,11 @@ class GraphManager:
         elif type(m.data) == dict:
             # This will be a dictionary of all the data that is there initially
             for map_name, map_json in m.data.items():
-                self._firebase_get_unprocessed_map(map_name, map_json)
+                if isinstance(map_json, str):
+                    self._firebase_get_unprocessed_map(map_name, map_json)
+                elif isinstance(map_json, dict):
+                    for nested_name, nested_json in map_json.items():
+                        self._firebase_get_unprocessed_map(nested_name, nested_json, uid=map_name)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
                         Union[None, str] = None, num_chi2_filters: int = 0, graph_plot_title: Union[str, None] =
