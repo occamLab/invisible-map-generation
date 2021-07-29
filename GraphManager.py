@@ -93,7 +93,7 @@ class GraphManager:
             'tag_sba': np.array([9.91, 8.88]),
             'dummy': graph_utils.default_dummy_weights,
         }),
-        "best_sweep": graph_utils.weight_dict_from_array(np.exp(np.array([0.6, 3.6]))),
+        "best_sweep": graph_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
         "comparison_baseline": graph_utils.normalize_weights({
             'odometry': np.ones(6),
             'tag_sba': np.ones(2),
@@ -419,7 +419,7 @@ class GraphManager:
         map_dct = self._map_info_from_path(map_json_path).map_dct
         subgraphs = self.create_graphs_for_chi2_comparison(map_dct)
         graph = as_graph.as_graph(map_dct)
-        metrics = self._sweep_weights(graph, sweep, dimensions, subgraphs, verbose=verbose)
+        metrics = self._sweep_weights(graph, sweep, dimensions, None, verbose=verbose)
 
         if dimensions == 2 and visualize:
             graph_utils.plot_metrics(sweep, metrics, log_sweep=True, log_metric=True)
@@ -844,7 +844,7 @@ class GraphManager:
                         self._firebase_get_unprocessed_map(nested_name, nested_json, uid=map_name)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-                        Union[None, str] = None, num_chi2_filters: int = 0, graph_plot_title: Union[str, None] =
+                        Union[None, str] = None, num_chi2_filters: int = -1, graph_plot_title: Union[str, None] =
                         None, chi2_plot_title:  Union[str, None] = None, _filters_remaining: int = -1)\
             -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
         """Optimizes the input graph
@@ -877,7 +877,7 @@ class GraphManager:
         """
         if _filters_remaining == -1:
             _filters_remaining = num_chi2_filters
-        if _filters_remaining > 0:
+        if _filters_remaining != 0:
             filtered_graph = copy.deepcopy(graph)
 
         graph.set_weights(GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
@@ -899,6 +899,9 @@ class GraphManager:
             print(f'Tuned weights: {graph.expectation_maximization_once()}')
 
         opt_chi2 = graph.optimize_graph()
+        if num_chi2_filters == -1:
+            num_chi2_filters = 1 if opt_chi2 >= 1 else 0
+            _filters_remaining = num_chi2_filters
 
         # Change vertex estimates based off the optimized graph
         graph.update_vertices()
