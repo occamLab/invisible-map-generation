@@ -38,6 +38,24 @@ occam_room_tags = np.asarray([SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]),
                               SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, c, 0, s])])
 
 
+class MapInfo:
+    """Container for identifying information for a graph (useful for caching process)
+
+    Attributes:
+        map_name (str): Specifies the child of the "maps" database reference to upload the optimized
+         graph to; also passed as the map_name argument to the _cache_map method
+        map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
+         map relative to parent_folder
+        map_dct (dict): String of json containing graph
+    """
+
+    def __init__(self, map_name: str, map_json: str, map_dct: Dict = None, uid: str = None):
+        self.map_name: str = str(map_name)
+        self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
+        self.map_json: str = str(map_json)
+        self.uid = uid
+
+
 def se3_quat_average(transforms):
     """TODO: documentation
     """
