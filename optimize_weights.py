@@ -12,8 +12,8 @@ import os
 import graph_utils
 from GraphManager import GraphManager
 
-CACHE_DIRECTORY = os.path.join("unprocessed_maps", "myTestFolder")
-MAP_JSON = "2900094388220836-17-21 OCCAM Room.json"
+CACHE_DIRECTORY = os.path.join("unprocessed_maps", "rawMapData")
+MAP_JSON = "127027593745666Partial MAC Multiple Plane Detection 7-19-21.json"
 
 
 def make_parser():
@@ -72,7 +72,7 @@ if __name__ == "__main__":
                     graph_utils.plot_metrics(sweep_range, reprocessed_metrics, True, True)
         else:
             bounds = (-10, 10)
-            step = 0.2
+            step = 0.5
             if len(args.s) == 1:
                 bounds = (-args.s[0], args.s[0])
             elif len(args.s) > 1:

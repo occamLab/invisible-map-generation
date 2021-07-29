@@ -284,7 +284,8 @@ def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, n
     has_ratio = length % 2 == 1
     if length == 1:  # ratio
         weights['odom_tag_ratio'] = array[0]
-    elif length == 2: # tag pose:rot/tag-sba x:y, ratio
+    elif length == 2: # tag/odom pose:rot/tag-sba x:y, ratio
+        weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
         weights['tag'] = np.array([array[0]] * 3 + [1] * 3)
         weights['tag_sba'] = np.array([array[0], 1])
         weights['odom_tag_ratio'] = array[1]
@@ -334,7 +335,7 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
     Returns:
         A new dict of weights where each value is normalized as said above, keeping dummy weights constant
     """
-    odom_tag_ratio = weights.get('odom_tag_ratio', 1)
+    odom_tag_ratio = max(0.00001, weights.get('odom_tag_ratio', 1))  # Put lower limit to prevent rounding causing division by 0
     odom_scale = 1 / (1 + 1 / odom_tag_ratio ** 2) ** 0.5
     tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5
     if is_sba:
