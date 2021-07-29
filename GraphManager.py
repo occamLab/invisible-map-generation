@@ -30,6 +30,7 @@ import graph_utils
 from graph_utils import occam_room_tags, MapInfo
 from graph import Graph
 from graph_vertex_edge_classes import Vertex, VertexType
+from firebase_manager import FirebaseManager
 
 
 class GraphManager:
@@ -104,32 +105,7 @@ class GraphManager:
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
                                                       "genetic_results", "best_sweep"]
 
-    _app_initialize_dict: Dict[str, str] = {
-        "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
-        "storageBucket": "invisible-map.appspot.com"
-    }
-    _initialized_app: bool = False
-
-    _unprocessed_listen_to: str = "unprocessed_maps"
-    _processed_upload_to: str = "TestProcessed"
-
-    class MapInfo:
-        """Container for identifying information for a graph (useful for caching process)
-
-        Attributes:
-            map_name (str): Specifies the child of the "maps" database reference to upload the optimized
-             graph to; also passed as the map_name argument to the _cache_map method
-            map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
-             map relative to parent_folder
-            map_dct (dict): String of json containing graph
-        """
-        def __init__(self, map_name: str, map_json: str, map_dct: Dict = None, uid: str = None):
-            self.map_name: str = str(map_name)
-            self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
-            self.map_json: str = str(map_json)
-            self.uid = uid
-
-    def __init__(self, weights_specifier: int, firebase_creds: firebase_admin.credentials.Certificate,
+    def __init__(self, weights_specifier: int, firebase_manager: FirebaseManager,
                  pso: int = 0):
         """Initializes GraphManager instance (only populates instance attributes)
 
@@ -142,47 +118,10 @@ class GraphManager:
              pso (int): Integer corresponding to the enum value in as_graph.PrescalingOptEnum which selects the
               type of prescaling weights used in non-SBA optimizations
         """
-        if not GraphManager._initialized_app:
-            GraphManager._app = firebase_admin.initialize_app(firebase_creds, GraphManager._app_initialize_dict)
-            GraphManager._initialized_app = True
-
-        self._bucket = storage.bucket(app=GraphManager._app)
-        self._db_ref = db.reference(f'/{GraphManager._unprocessed_listen_to}')
 
         self._pso = as_graph.PrescalingOptEnum.get_by_value(pso)
         self._selected_weights: str = GraphManager.ordered_weights_dict_keys[weights_specifier]
-        self._cache_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), ".cache")
-
-        # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
-        self._listen_kill_timer: Timer = Timer(0, lambda x: x)
-        self._firebase_listen_sem: Semaphore = Semaphore()
-        self._timer_mutex: Semaphore = Semaphore()
-        self._firebase_listen_max_wait: int = 0
-
-    def firebase_listen_in_thread(self):
-        self._db_ref.listen(self._df_listen_callback)
-
-    def firebase_listen(self, max_wait: int = 3) -> None:
-        """Invokes the listen method of the _db_ref attribute and provides the _df_listen_callback method as the
-        callback function argument.
-
-        This function is multi-threaded: the database listening happens in a new thread, and the parent thread blocks on
-        its child"s completion.
-
-        Args:
-            max_wait: The maximum amount of time in seconds to wait after receiving a response before terminating the
-                      database listening and un-blocking the parent thread.
-        """
-        self._firebase_listen_max_wait = max_wait
-        self._firebase_listen_sem = Semaphore(0)
-        self._timer_mutex = Semaphore(1)
-        self._listen_kill_timer = Timer(self._firebase_listen_max_wait, self._firebase_listen_sem.release)
-        self._listen_kill_timer.start()
-        thread_obj = Thread(target=self.firebase_listen_in_thread)
-        thread_obj.start()
-        self._firebase_listen_sem.acquire()
-        thread_obj.join()
-        print("Finished listening to Firebase")
+        self._firebase_manager = firebase_manager
 
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False,
                      new_pso: Union[None, int] = None, new_weights_specifier: Union[None, int] = None,
@@ -220,10 +159,12 @@ class GraphManager:
             return
 
         self._resolve_cache_dir()
-        matching_maps = glob.glob(os.path.join(self._cache_path, '**/unprocessed_maps/**/'+pattern), recursive=True)
+        matching_maps = glob.glob(os.path.join(self._firebase_manager.cache_path, '**/unprocessed_maps/**/'+pattern),
+                                  recursive=True)
 
         if len(matching_maps) == 0:
-            print("No maps matching pattern {} in recursive search of {}".format(pattern, self._cache_path))
+            print("No maps matching pattern {} in recursive search of {}".format(pattern,
+                                                                                 self._firebase_manager.cache_path))
             return
 
         already_processed = set()
@@ -242,30 +183,21 @@ class GraphManager:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self.compare_weights(map_info, visualize)
             else:
-                graph = as_graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
-
                 graph_plot_title = None
                 chi2_plot_title = None
                 if visualize:
                     graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
                     chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
+                processed_map_json = self.get_json_from_map_info(map_info, fixed_vertices=fixed_vertices,
+                                                                 visualize=visualize, graph_plot_title=graph_plot_title,
+                                                                 chi2_plot_title=chi2_plot_title)
 
-                tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
-                    self._optimize_graph(graph,
-                                         tune_weights=False,
-                                         visualize=visualize,
-                                         weights_key=None,
-                                         graph_plot_title=graph_plot_title,
-                                         chi2_plot_title=chi2_plot_title)
-                processed_map_json = GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                                          waypoint_locations, adj_chi2_arr=adj_chi2,
-                                                                          visible_tags_count=visible_tags_count)
                 print("Processed map: {}".format(map_info.map_name))
                 if upload:
                     self._upload(map_info, processed_map_json)
                     print("Uploaded processed map: {}".format(map_info.map_name))
 
-                self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json)
+                self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json)
 
     def compare_weights(self, map_info: MapInfo, visualize=True) -> None:
         """Invocation results in the weights comparison routine.
@@ -332,7 +264,7 @@ class GraphManager:
                                                                         visible_tags_count=g1sg_visible_tags_count)
             del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
 
-            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_1,
+            self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json_1,
                             "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
             del processed_map_json_1  # No longer needed
 
@@ -362,7 +294,7 @@ class GraphManager:
                                                                         visible_tags_count=g2sg_visible_tags_count)
             del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
 
-            self._cache_map(GraphManager._processed_upload_to, map_info, processed_map_json_2,
+            self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json_2,
                             "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
             del processed_map_json_2  # No longer needed
 
@@ -548,6 +480,21 @@ class GraphManager:
         optimizer.optimize(1024)
         return optimizer
 
+    def get_json_from_map_info(self, map_info: MapInfo,
+                               fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
+                               visualize: bool = False, graph_plot_title: str = None, chi2_plot_title: str = None):
+        graph = as_graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
+        tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
+            self._optimize_graph(graph,
+                                 tune_weights=False,
+                                 visualize=visualize,
+                                 weights_key=None,
+                                 graph_plot_title=graph_plot_title,
+                                 chi2_plot_title=chi2_plot_title)
+        return GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
+                                                    waypoint_locations, adj_chi2_arr=adj_chi2,
+                                                    visible_tags_count=visible_tags_count)
+
     # -- Private Methods --
     def _weights_to_dict(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None]):
         """
@@ -567,18 +514,18 @@ class GraphManager:
             return self._selected_weights
 
     def _map_info_from_path(self, map_json_path: str) -> MapInfo:
-        map_json_abs_path = os.path.join(self._cache_path, map_json_path)
+        map_json_abs_path = os.path.join(self._firebase_manager.cache_path, map_json_path)
         with open(map_json_abs_path, "r") as json_string_file:
             json_string = json_string_file.read()
             json_string_file.close()
 
-        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._cache_path.split(
+        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._firebase_manager.cache_path.split(
             os.path.sep)) + 1:])
         map_dct = json.loads(json_string)
         map_name = self._read_cache_directory(os.path.basename(map_json))
 
         last_folder = map_json_path.split('/')[-2]
-        if last_folder == GraphManager._unprocessed_listen_to:
+        if last_folder == self._firebase_manager.unprocessed_listen_to:
             return MapInfo(map_name, map_name, map_dct)
         return MapInfo(map_name, map_name, map_dct, last_folder)
 
@@ -638,38 +585,6 @@ class GraphManager:
                                               .reshape(1, -1)))
             return metrics
 
-    def _firebase_get_unprocessed_map(self, map_name: str, map_json: str, uid: str = None) -> bool:
-        """Acquires a map from the specified blob and caches it.
-
-        A diagnostic message is printed if the map_json blob name was not found by Firebase.
-
-        Args:
-            map_name (str): Value passed as the map_name argument to the _cache_map method; the value of map_name is
-             ultimately used for uploading a map to firebase by specifying the child of the 'maps' database reference.
-            map_json (str): Value passed as the blob_name argument to the get_blob method of the _bucket
-             attribute.
-
-        Returns:
-            True if the map was successfully acquired and cached, and false if the map was not found by Firebase
-        """
-        # Reset the timer
-        self._timer_mutex.acquire()
-        self._listen_kill_timer.cancel()
-        self._listen_kill_timer = Timer(self._firebase_listen_max_wait, self._firebase_listen_sem.release)
-        self._listen_kill_timer.start()
-        self._timer_mutex.release()
-
-        map_info = MapInfo(map_name, map_json, None, uid=uid)
-        json_blob = self._bucket.get_blob(map_info.map_json)
-        if json_blob is not None:
-            json_data = json_blob.download_as_bytes()
-            json_string = json.loads(json_data)
-            self._cache_map(GraphManager._unprocessed_listen_to, map_info, json.dumps(json_string, indent=2))
-            return True
-        else:
-            print("Map '{}' was missing".format(map_info.map_name))
-            return False
-
     def _upload(self, map_info: MapInfo, json_string: str) -> None:
         """Uploads the map json string into the Firebase bucket under the path
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
@@ -681,9 +596,9 @@ class GraphManager:
             json_string (str): Json string of the map to upload
         """
         processed_map_filename = os.path.basename(map_info.map_json)[:-5] + "_processed.json"
-        processed_map_full_path = f'{GraphManager._processed_upload_to}/{processed_map_filename}'
+        processed_map_full_path = f'{self._firebase_manager.processed_upload_to}/{processed_map_filename}'
         print("Attempting to upload {} to the bucket blob {}".format(map_info.map_name, processed_map_full_path))
-        processed_map_blob = self._bucket.blob(processed_map_full_path)
+        processed_map_blob = self._firebase_manager._bucket.blob(processed_map_full_path)
         processed_map_blob.upload_from_string(json_string)
         print("Successfully uploaded map data for {}".format(map_info.map_name))
         ref = db.reference("maps")
@@ -704,7 +619,7 @@ class GraphManager:
             key (str): Key to store value in
             value (str): Value to store under key
         """
-        directory_json_path = os.path.join(self._cache_path, "directory.json")
+        directory_json_path = os.path.join(self._firebase_manager.cache_path, "directory.json")
         with open(directory_json_path, "r") as directory_file_read:
             directory_json = json.loads(directory_file_read.read())
             directory_file_read.close()
@@ -726,7 +641,7 @@ class GraphManager:
         Returns:
             Value associated with the key
         """
-        with open(os.path.join(self._cache_path, "directory.json"), "r") as directory_file:
+        with open(os.path.join(self._firebase_manager.cache_path, "directory.json"), "r") as directory_file:
             directory_json = json.loads(directory_file.read())
             directory_file.close()
             return directory_json[key]
@@ -764,7 +679,7 @@ class GraphManager:
 
         if not self._resolve_cache_dir():
             raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
-                                     .format(self._cache_path))
+                                     .format(self._firebase_manager.cache_path))
 
         file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
         map_json_to_use = str(map_info.map_json)
@@ -776,13 +691,14 @@ class GraphManager:
             else:
                 map_json_to_use = map_json_to_use[:-5] + file_suffix_str + ".json"
 
-        cached_file_path = os.path.join(self._cache_path, parent_folder, map_json_to_use)
+        cached_file_path = os.path.join(self._firebase_manager.cache_path, parent_folder, map_json_to_use)
         try:
             cache_to = os.path.join(parent_folder, map_json_to_use)
             cache_to_split = cache_to.split(os.path.sep)
             cache_to_split_idx = 0
             while cache_to_split_idx < len(cache_to_split) - 1:
-                dir_to_check = os.path.join(self._cache_path, os.path.sep.join(cache_to_split[:cache_to_split_idx + 1]))
+                dir_to_check = os.path.join(self._firebase_manager.cache_path, os.path.sep.join(
+                    cache_to_split[:cache_to_split_idx + 1]))
                 if not os.path.exists(dir_to_check):
                     os.mkdir(dir_to_check)
                 cache_to_split_idx += 1
@@ -809,17 +725,18 @@ class GraphManager:
         Returns:
             True if no exceptions were caught and False otherwise
         """
-        if not os.path.exists(self._cache_path):
+        if not os.path.exists(self._firebase_manager.cache_path):
             try:
-                os.mkdir(self._cache_path)
+                os.mkdir(self._firebase_manager.cache_path)
             except Exception as ex:
-                print("Could not create a cache directory at {} due to error: {}".format(self._cache_path, ex))
+                print("Could not create a cache directory at {} due to error: {}".format(
+                    self._firebase_manager.cache_path, ex))
                 return False
 
-        directory_path = os.path.join(self._cache_path, "directory.json")
+        directory_path = os.path.join(self._firebase_manager.cache_path, "directory.json")
         if not os.path.exists(directory_path):
             try:
-                with open(os.path.join(self._cache_path, "directory.json"), "w") as directory_file:
+                with open(os.path.join(self._firebase_manager.cache_path, "directory.json"), "w") as directory_file:
                     directory_file.write(json.dumps({}))
                     directory_file.close()
                 return True
@@ -827,21 +744,6 @@ class GraphManager:
                 print("Could not create {} file due to error: {}".format(directory_path, ex))
         else:
             return True
-
-    def _df_listen_callback(self, m) -> None:
-        """Callback function used in the firebase_listen method.
-        """
-        if type(m.data) == str:
-            # A single new map just got added
-            self._firebase_get_unprocessed_map(m.path.lstrip("/"), m.data)
-        elif type(m.data) == dict:
-            # This will be a dictionary of all the data that is there initially
-            for map_name, map_json in m.data.items():
-                if isinstance(map_json, str):
-                    self._firebase_get_unprocessed_map(map_name, map_json)
-                elif isinstance(map_json, dict):
-                    for nested_name, nested_json in map_json.items():
-                        self._firebase_get_unprocessed_map(nested_name, nested_json, uid=map_name)
 
     def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
                         Union[None, str] = None, num_chi2_filters: int = -1, graph_plot_title: Union[str, None] =

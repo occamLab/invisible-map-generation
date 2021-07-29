@@ -23,6 +23,7 @@ from firebase_admin import credentials
 
 import graph
 from GraphManager import GraphManager
+from firebase_manager import FirebaseManager
 
 
 def make_parser():
@@ -104,6 +105,10 @@ def make_parser():
     return p
 
 
+def download_maps(event):
+    firebase.get_map_from_event(event)
+
+
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
@@ -114,10 +119,11 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_manager = GraphManager(args.w, cred, pso=args.pso)
+    firebase = FirebaseManager(cred, max_wait=5, download_only=True)
+    graph_manager = GraphManager(args.w, firebase, pso=args.pso)
 
     if args.f:
-        graph_manager.firebase_listen()
+        firebase.set_listener(download_maps)
 
     map_pattern = args.p if args.p else ""
     fixed_tags = set()
