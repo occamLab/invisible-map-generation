@@ -846,7 +846,6 @@ class GraphManager:
             std_chi2 = chi2s.std()
             min_chi2 = mean_chi2 - 1 * std_chi2
             max_chi2 = mean_chi2 + 1 * std_chi2
-            print(f'mean: {mean_chi2}, std: {std_chi2}, min: {min_chi2}, max: {max_chi2}, total min: {chi2s.min()}, total_max: {chi2s.max()}')
 
             for edge_id, chi2 in chi2_by_edge.items():
                 if chi2 < min_chi2 or chi2 > max_chi2:
@@ -854,15 +853,19 @@ class GraphManager:
                     filtered_graph.remove_edge(edge_id)
 
             num_filters = num_chi2_filters - _filters_remaining
-            filtered_title = f'(Filtered x{num_filters + 1})'
-            graph_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(graph_plot_title)
-            chi2_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(chi2_plot_title)
-            new_graph_title = None if graph_plot_title is None else f'{graph_plot_title[:graph_title_end]} {filtered_title}'
-            new_chi2_title = None if chi2_plot_title is None else f'{chi2_plot_title[:chi2_title_end]} {filtered_title}'
-            return self._optimize_graph(filtered_graph, tune_weights=tune_weights, visualize=visualize,
-                                        weights_key=weights_key, num_chi2_filters=num_chi2_filters,
-                                        graph_plot_title=new_graph_title, chi2_plot_title=new_chi2_title,
-                                        _filters_remaining=_filters_remaining - 1)
+            if visualize:
+                filtered_title = f'(Filtered x{num_filters + 1})'
+                graph_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(graph_plot_title)
+                chi2_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(chi2_plot_title)
+                new_graph_title = None if graph_plot_title is None else f'{graph_plot_title[:graph_title_end]} {filtered_title}'
+                new_chi2_title = None if chi2_plot_title is None else f'{chi2_plot_title[:chi2_title_end]} {filtered_title}'
+                return self._optimize_graph(filtered_graph, tune_weights=tune_weights, visualize=visualize,
+                                            weights_key=weights_key, num_chi2_filters=num_chi2_filters,
+                                            graph_plot_title=new_graph_title, chi2_plot_title=new_chi2_title,
+                                            _filters_remaining=_filters_remaining - 1)
+            else:
+                return self._optimize_graph(filtered_graph, tune_weights=tune_weights, weights_key=weights_key,
+                                            num_chi2_filters=num_chi2_filters, _filters_remaining=_filters_remaining-1)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
