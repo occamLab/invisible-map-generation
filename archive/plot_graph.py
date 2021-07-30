@@ -7,8 +7,7 @@ import pickle
 import sys
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
-from graph_utils import optimizer_to_map
+from map_processing.graph_utils import optimizer_to_map
 
 
 if len(sys.argv) < 2:
