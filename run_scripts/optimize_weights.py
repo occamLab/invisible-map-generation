@@ -10,7 +10,7 @@ from firebase_admin import credentials
 import os
 
 from map_processing import graph_utils
-from map_processing.GraphManager import GraphManager
+from map_processing.graph_manager import GraphManager
 
 CACHE_DIRECTORY = os.path.join("unprocessed_maps", "rawMapData")
 MAP_JSON = "127027593745666Partial MAC Multiple Plane Detection 7-19-21.json"

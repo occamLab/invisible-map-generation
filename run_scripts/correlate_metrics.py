@@ -11,7 +11,7 @@ from scipy import stats
 
 from map_processing import graph_utils
 from map_processing.as_graph import as_graph
-from map_processing.GraphManager import GraphManager
+from map_processing.graph_manager import GraphManager
 from map_processing.graph_utils import occam_room_tags
 
 CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache", "unprocessed_maps", "myTestFolder")

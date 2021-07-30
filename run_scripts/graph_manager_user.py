@@ -22,7 +22,7 @@ import os
 from firebase_admin import credentials
 
 from map_processing import graph
-from map_processing.GraphManager import GraphManager
+from map_processing.graph_manager import GraphManager
 from map_processing.firebase_manager import FirebaseManager
 
 

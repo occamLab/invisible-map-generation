@@ -1,5 +1,5 @@
 from map_processing.firebase_manager import FirebaseManager
-from map_processing.GraphManager import GraphManager
+from map_processing.graph_manager import GraphManager
 
 from firebase_admin import credentials
 import os

@@ -9,7 +9,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 
-from map_processing.GraphManager import GraphManager
+from map_processing.graph_manager import GraphManager
 from map_processing.as_graph import as_graph
 from map_processing.graph import Graph
 
