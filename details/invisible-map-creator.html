@@ -13,12 +13,101 @@
         <h1>Invisible Map Creator</h1>
         <h2>On this page</h2>
         <ul>
-            <li></li>
+            <li><a href="#code-structure">Code Structure: In the Files</a></li>
+            <ul>
+                <li><a href="#state-machine">State Machine</a></li>
+                <li><a href="#views">Views</a></li>
+            </ul>
+            <li><a href="#how-it-works">How it Works</a></li>
         </ul>
         <p>
-            Invisible Map Creator is the iOS app used to create maps of spaces set up with AprilTags. In brief,
-            the app works by tracking phone position and uses the camera to detect tags and calculate their
-            positions
+            Invisible Map Creator is the iOS app used to create maps of spaces set up with AprilTags.
+            An important note is that the app works best with a LiDAR enabled phone (currently just the iPhone 12
+            Pro and Pro Max). In general, the more recent the iPhone, the better (non-pro iPhone 12 also works pretty
+            well). In brief, the app works by tracking phone position, using the camera to detect tags and calculate their
+            positions, and then connecting these two types of data into a graph and optimizing it to create the final
+            map. The most recent code is in the lidar-mesh branch of the <a href="https://github.com/occamLab/InvisibleMap">
+            InvisibleMap repository on Github</a>.
+        </p>
+        <h2 id="code-structure">Code Structure: In the Files</h2>
+        <p>
+            As described on the <a href="../code/code-structure.html">Code Structure page</a>,
+            InvisibleMapCreator2 is a restructuring and redesign of the original
+            InvisibleMapCreator app. Marion and Avery describe the code structure in
+            <a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing"
+            target="_blank">their write-up of their work</a> and also
+            link to more detailed resources to understand the architecture. In summary, the app utilizes a 
+            composable finite state machine, which tracks the different UIs (views) of the app as <b>states</b>.
+            The state machine responds to <b>events</b> which are usually triggered by some user input or action,
+            and can <b>transition</b> between states or emit a <b>command</b> in response to an events. The commands
+            are used to communicate with the main functional components of the app (such as gathering data points).
+            The map creator uploads the map's raw data to Firebase to be processed by the backend.
+        </p>
+        <p>
+            The <b>AppDelegate</b> is the root object of the app. It calls on the files in the Authentication directory
+            to handle Apple ID sign in and anonymous authentication if the user declines Apple ID sign in. Currently,
+            the Invisible Map relies on the user signing in to Map Creator with Apple ID in order for it to be able
+            to find the maps the user has created (anonymous authenticaiton creates a different ID for different
+            apps). 
+        </p>
+        <h3 id="state-machine">State Machine</h4>
+        <p>
+            The state machine consists of StateType, AppState, AppController, and MapRecorder. <b>StateType</b> is the protocal
+            that provides the basic structure for the AppState class. <b>AppState</b> stores the different states (UI views)
+            that the app can be in (Ex: main screen, recording a map, viewing locations, etc.), the events that can
+            happen (Ex: a new recording is requested, a new AR frame is available to be processed, adding a new
+            location is reqeusted, etc.), and what commands can be fired as a result of events (Ex: record data, 
+            detect tags, pin location, etc.). The <b>handleEvent()</b> function translates the current app state and one or
+            more events into one or more commands to be fired. The response to events can also be transitioning
+            between app states in addition to or instead of commands.
+        </p>
+        <p>
+            <b>AppController</b> is the main class that processes the commands emmitted when events occur and calls functions
+            in the app. The AppController.swift file also contains protocals for other controllers that dictate
+            what functions they need. The <b>processCommands()</b> function translates commands emmitted by AppState into
+            functions in various other files, including MapRecorder and some of the views. The proccessing functions
+            in the extension to AppController are called when things happen while the app is used, such as when
+            certain buttons are pressed, and send events to AppState's handleEvent() to get commands to then send
+            to processCommands(). AppController contains an object named <b>shared</b>, which is a shared instance of
+            the AppController that is referenced throughout all the app files. AppController has an instance of
+            MapRecorder, ARViewController, and RecordViewController.
+        </p>
+        <p>
+            <b>MapRecorder</b> contains the bulk of the backend processing for Invisible Map Creator, which is mainly
+            taking image frames from the phone and detecting tags in them, finding their position, saving the position
+            along with the phone odometry data, and uploading the raw data at the end of making a map. 
+        </p>
+        <h3 id="views">Views</h4>
+        <p>
+            <b>ContentView</b> dictates the main screen when the app is first opened and loads in maps from Firebase. Currently,
+            the maps that are loaded are the ones that you created while signed in to your Apple ID. In the future,
+            you will be able to edit your created maps (change location names, map name, map picture).
+        </p>
+        <p>
+            <b>EditMapView</b> is currently empty, and is the view that will be transitioned to when editing map details
+            as mentioned in the previous paragraph.
+        </p>
+        <p>
+           <b>RecordMapView</b> is the view that displays while recording a map and contains all the buttons and options
+            available while recording. It includes instruction text that transitions based on user actions.
+        </p>
+        <p>
+            <b>ARView</b> handles everything to do with ARKit. Its role is described in more detail below in the
+            <a href="#how-it-works">How it Works</a> section of this page. It handles any AR visualizations and
+            also any data collection that involves the AR scene (mainly raycasting, described below).
+        </p>
+        <p>
+            The <b>Record Map Subviews</b> directory contains a collection of subviews for the different components that
+            appear in the RecordMapView (e.g. add location button).
+        </p>
+
+        <h2 id="how-it-works">How it Works</h2>
+        <p>
+            After starting a recording, as you walk around, the app records odometry data (position and orientation)
+            10 times every second. MapRecorder processes each frame, sent from ARView, and checks for tags using
+            the TagFinder C++ code in Invisible Map. How the TagFinder code works exactly is not important to
+            developing on Map Creator. The important information is that the TagFinder returns the transform
+            to the tag relative to the camera coordinate frame. 
         </p>
     </body>
 </html>
