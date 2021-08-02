@@ -21,10 +21,16 @@
                     <li><a href="concepts/g2o-intro.html">The Solution: Introduction to G2O</a></li>
                     <li><a href="concepts/eval-intro.html">Map Evaluation</a></li>
                 </ul>
-            <li>Code Details</li>
+            <li>Overall Code</li>
                 <ul>
                     <li><a href="code/code-structure.html">Structure of the Code</a></li>
                     <li><a href="code/data-structure.html">Structure of the Data</a></li>
+                </ul>
+            <li>Component Details</li>
+                <ul>
+                    <li><a href="details/invisible-map-creator.html">Invisible Map Creator</a></li>
+                    <li><a href="details/invisible-map-generation.html">Invisible Map Generation</a></li>
+                    <li><a href="detials/invisible-map.html">Invisible Map</a></li>
                 </ul>
         </ul>
 
@@ -36,6 +42,7 @@
         <h2>On this page</h2>
         <ul>
             <li><a href="#intro">Project Introduction</a></li>
+            <li><a href="#todo">TODOs</a></li>
             <li><a href="#links">Key Terms and Further Exploration</a></li>
         </ul>
 
@@ -60,6 +67,81 @@
             and is where the user can choose one and begin navigating a space with it. More details about the 
             structure are on <a href="code/code-structure.html">the code structure page</a>.
         </p>
+        <h2 id="todo">TODOs</h2>
+        <h3>Invisible Map Creator</h3>
+        <ul>
+            <li>Organize maps and make them accessible</li>
+                <ul>
+                    <li>
+                        Public maps: add the ability to make maps that are available to all users and can be
+                        searched for
+                    </li>
+                    <li>
+                        Shareable private maps: add the ability to make maps that can be shared to certain users
+                        via link, code, etc.
+                    </li>
+                </ul>
+            <li>Edit maps</li>
+                <ul>
+                    <li>Delete maps</li>
+                    <li>Edit map name & key location names</li>
+                    <li>Add custom picture icon</li>
+                </ul>
+            <li>App features</li>
+                <ul>
+                    <li>Pause map recording</li>
+                    <li>Add new recording to a previously created map</li>
+                </ul>
+            <li>Floor detection</li>
+                <ul>
+                    <li>Connect odometry nodes connected by floor (not just intersections)</li>
+                    <li>Notify mapper of hallways that have not been travelled yet</li>
+                    <li>See <a href="https://docs.google.com/document/d/1gvNzIJJtUXwnBH0q3DORxmr
+                        1emweEZUK3XUDZM4-B08/edit?usp=sharing">Plan To Add Common Floor Detection</a>, idea 2</li>
+                </ul>
+        </ul>
+        <h3>Invisible Map Generation</h3>
+        <ul>
+            <li>Fix map names to not include numbers</li>
+                <ul>
+                    <li>Probably include more metadata to differentiate maps</li>
+                </ul>
+            <li>Continue finding metrics to evaluate optimized map quality</li>
+                <ul>
+                    <li>Consider ways of obtaining ground truth data</li>
+                </ul>
+        </ul>
+        <h3>Invisible Map</h3>
+        <ul>
+            <li>Improve map navigation</li>
+                <ul>
+                    <li>
+                        Add keypoints at turns (like Clew: fit lines to the path rather than going between each
+                        odometry point.
+                    </li>
+                    <li>Add Clew-style navigation: verbal feedback in addition to audio and haptics</li>
+                    <li>
+                        Investigate using the automatic localization that Clew anchor points sometimes use to start
+                        navigation rather than needing to scan a tag
+                    </li>
+                </ul>
+            <li>App features</li>
+                <ul>
+                    <li>Customization of directions, sounds, haptics, etc.</li>
+                    <li>Voice notes (navigation context is important)</li>
+                    <li>Use GPS positioning to identify public maps in the area</li>
+                </ul>
+        </ul>
+        <h3>User Design</h3>
+        <ul>
+            <li>Helping BVI people find tags</li>
+            <li>Obstacle detections - possibly combine with voice notes</li>
+                <ul>
+                    <li>Make sure to give context for any detours</li>
+                </ul>
+            <li>Tutorials for both apps</li>
+        </ul>
+
         <h2 id="links">Key Terms and Further Exploration</h2>
         <ul>
             <li><a href="https://developer.apple.com/augmented-reality/" target="_blank">ARKit</a></li>

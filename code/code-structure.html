@@ -18,6 +18,11 @@
             <li><a href="#map-viewer">Invisible Map</a></li>
         </ul>
         <p>
+            This page contains a very broad look at the parts of the code for Invisible Map. For more detailed
+            descriptions of the ins and outs of the code, look at the pages linked under the Details category on the
+            <a href="../index.html">home page</a>. 
+        </p>
+        <p>
             Currently, the code consists of three main parts: the front-end map creation (Invisible Map Creator),
             the back-end map processing, and the front-end map viewing (Invisible Map). The code for the front-end
             parts are in the <a href="https://github.com/occamLab/InvisibleMap">InvisibleMap repository on
@@ -26,18 +31,20 @@
         </p>
         <p>
             <b>An important usage note:</b> as of 6/17/2021, maps generated using the code in the master branches of
-            the invisible map repositories are not compatible with the code in the floor-detection branches of the
-            repositories and vice versa. The map data was restrucured, thus most maps uploaded to Firebase after this 
-            date only work with the newest code.
+            the invisible map repositories are not compatible with the code in the floor-detection and lidar-mesh
+            branches of the repositories and vice versa. The map data was restrucured, thus most maps uploaded to
+            Firebase after this date only work with the newest code.
         </p>
         <h2 id="map-creator">Invisible Map Creator</h2>
         <p>
             InvisibleMapCreator is an iOS app written in Swift and using
             <a href="https://developer.apple.com/xcode/swiftui/" target="_blank">SwiftUI</a> and ARKit.
-            The most recent version of the map creator is in the InvisibleMapCreator2 folder of the master branch
+            The most recent version of the map creator is in the InvisibleMapCreator2 folder of the lidar-mesh branch
             of the InvisibleMap repository. The floor-detection branch of this repository also contains an updated
             version of the structure of the data collected and includes gathering extra data about the planes
-            detected by ARKit.
+            detected by ARKit. The most recent code is in the lidar-mesh branch, which contains new UI elements and
+            also uses planes detected by ARKit (especially on phones with LiDAR sensors) to more accurately position
+            tags.
         </p>
         <p>
             InvisibleMapCreator2 is a restructuring and redesign of the original
@@ -50,7 +57,7 @@
             <b>transition</b> between states or emit a <b>command</b> in response to an events. The commands are 
             used to communicate with the main functional components of the app (such as gathering data points).
             The map creator uploads the data to <a href="https://firebase.google.com/" target="_blank">
-            Firebase</a>, which hosts the Invisible Map's data.
+            Firebase</a>, which hosts Invisible Map's data.
         </p>
         <p>
             The InvisibleMapCreator detects AprilTags as the user walks and also allows the user to save locations
@@ -59,7 +66,7 @@
         <h2 id="back-end">Map Processing (Optimization)</h2>
         <p>
             The back-end map processing code is written in Python and must be run from a Linux machine.
-            The most recent version of the processing code is in the duncan-work-branch branch of the
+            The most recent version of the processing code is in the floor-detection branch of the
             invisible-map-generation repository. The README contains instructions on installing and running
             the code and its dependencies. The back-end imports the raw map data from Firebase, runs it through
             the G2O algorithm to optimize the map (phone positions and tag positions), and uploads the optimized map
