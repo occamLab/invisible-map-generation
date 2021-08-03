@@ -27,11 +27,19 @@
         <h2 id="raw-data">Raw Map Data</h2>
         <p>
             <b>
-                Note about this data structure: As of 6/17/2021, this structure is only implemented in the
+                Note as of 6/17/2021: This structure is only implemented in the
                 floor-detection branch of the InvisibleMap repository, and can only be read by the code in
                 the floor-detection branch of invisible-map-generation. Older maps will not work with
                 the floor-detection back-end code and newer maps will not work with the current master branch
                 back-end code.
+            </b>
+        </p>
+        <p>
+            <b>
+                Note as of 8/3/2021: The code that collects plane data has been commented out due to memory issues
+                during map creation. Maps located in the Firebase invisible-map-sandbox database have empty structures
+                where planes are involved in the data. The commented out code that updates plane data is in
+                ARView.swift in InvisibleMapCreator2 (lines 81-88).
             </b>
         </p>
         <p>

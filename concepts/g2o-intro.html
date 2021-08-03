@@ -17,8 +17,13 @@
         <ul>
             <li><a href="#definitions">Definitions</a></li>
             <li><a href="#math">The Math</a></li>
-            <li><a href="#in-invis-map">G2O in Invisible Map</a></li>
+            <li><a href="#sba">Sparse Bundle Adjustment (SBA)</a></li>
         </ul>
+        <p>
+            This page introduces G2O on the conceptual level. To learn about how it is implemented in
+            Invisible Map, visit <a href="../details/invisible-map-generation.html">the page on Invisible Map 
+            Generation</a> (the backend processing code).
+        </p>
         <p>
             G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf"
             target="_blank">an algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty
@@ -134,9 +139,32 @@
             to get \(X^*\) and we are done.
         </p>
 
-        <h2 id="in-invis-map">G2O in Invisible Map</h2>
+        <h2 id="sba">Sparse Bundle Adjustment (SBA)</h2>
         <p>
-            
+            Sparse Bundle Adjustment (SBA) is an add-on to G2O to make it a little more accurate in the case of 
+            detecting things like April Tags with a camera. The camera does not actually find the center of the 
+            tag; it finds the four corners of the tag, storing them as separate detections. In a normal 
+            implementation of G2O, this is represented as four different vertices and four different edges. These 
+            four vertices, while representing pretty much the same thing, are only connected indirectly, through the
+            odometry nodes. Theoretically, this should not matter, but small changes in the tag (curved surfaces, 
+            slightly too big or too small, etc.) can cause the optimizer to move these corners independently, 
+            resulting in a very skewed tag in the final map.
+        </p>
+        <p>
+            SBA attempts to fix this by creating an extra node in the “middle” of the other four. The odometry node 
+            connects to this, then this node connects to the four corner nodes. These nodes are set as fixed relative 
+            to the main tag node, so the optimizer can only move the center of the tag, not each corner independently.
+            Most of this is abstracted away in a special type of Edge in SparseOptimizer, and by storing only the 
+            position of the center node in our Graph. The only notable change is that this position is stored as an
+            x-y position on the phone screen, in pixels, instead of a pose, in meters and radians.
+        </p>
+        <p>
+            With the switch to mapping with primarily LIDAR phones, SBA is not needed. With LIDAR phones, when we 
+            detect a tag, we shoot a ray in that direction. If it intersects a vertical plane (which it should, 
+            since it is mounted on a wall!), we store the transformation to this intersection instead of the 
+            transformation to the tag. This pose will be on the wall, in the same orientation of the wall. While 
+            this is much more accurate because of LIDAR, it also means it is harder to convert that pose back to 
+            pixels, as is needed for SBA. Therefore, we have largely abandoned SBA, at least for the time being.
         </p>
 
         <footer id="notes-footer">

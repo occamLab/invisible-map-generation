@@ -13,7 +13,154 @@
         <h1>Invisible Map Generation</h1>
         <h2>On this page</h2>
         <ul>
-            <li></li>
+            <li><a href="#overview">Overview</a></li>
+            <li><a href="#graph">Graph</a></li>
+                <ul>
+                    <li><a href="#vertex">Vertex</a></li>
+                    <li><a href="#edge">Edge</a></li>
+                    <li><a href="#other-attributes">Other Attributes</a></li>
+                    <li><a href="#methods">Methods</a></li>
+                        <ul>
+                            <li><a href="#update-graph">Update Graph</a></li>
+                            <li><a href="#chi-squared-eval">Chi Squared and Evaluation</a></li>
+                            <li><a href="#optimization">Optimization</a></li>
+                        </ul>
+                </ul>
+            <li><a href="#as-graph">As Graph</a></li>
+            <li><a href="#graph-manager">Graph Manager</a></li>
+                <ul>
+                    <li><a href="#weight-eval">Weight Evaluation and Comparison</a>"</li>
+                    <li><a href="#optimize-graph">Optimize Graph</a></li>
+                </ul>
+            <li><a href="#scripts">Scripts</a></li>
+                <ul>
+                    <li><a href="#process-graphs">Process Graphs</a></li>
+                    <li><a href="#graph-manager-user">Graph Manager User</a></li>
+                    <li><a href="#optimize-weights">Optimize Weights</a></li>
+                    <li><a href="#correlate-metrics">Correlate Metrics</a></li>
+                    <li><a href="#visualize-chi2s">Visualize Chi2s</a></li>
+                </ul>
         </ul>
+
+        <h2 id="overview">Overview</h2>
+        <p>
+            The backend is the halfway point between Invisible Map Creator and Invisible Map. It will pull the
+            unprocessed maps from Firebase, optimize it, identify any new connections to be made, then give it 
+            back to firebase with the new data. It is written primarily in Python, with some supporting C code that 
+            should be abstracted away for the most part. The whole thing is run on a server that Paul has access to, 
+            which will run a script (process_graphs) whenever it detects a new map from Firebase. The pipeline is as 
+            follows:
+        </p>
+        <ol>
+            <li>FirebaseManager is notified of an update to Firebase, and downloads the map before handing it off to GraphManager</li>
+            <li>as_graph converts the raw JSON to a Graph object</li>
+            <li>This Graph can then convert itself to a SparseOptimizer, directly from the g2o library</li>
+            <li>GraphManager handles the optimization through the SparseOptimizer, pulling the new odometry and tag poses from the optimizer</li>
+            <li>graph_utils detects any intersections, giving the new list of neighbors to GraphManager</li>
+            <li>GraphManager compiles the new poses and neighbors into a dict</li>
+            <li>That dict is given to FirebaseManager to reupload so InvisibleMap can see it</li>
+        </ol>
+        <p>Additionally, there are a few extra scripts for us to run manually:</p>
+        <ol>
+            <li>graph_manager_user: manually download and process maps</li>
+            <li>correlate_metrics: determines the correlation between different metrics of ranking weights</li>
+            <li>optimize_weights: either runs a genetic algorithm or a sweep to determine the best set of weights to use</li>
+            <li>visualize_chi2: helps to see where error from chi2s are coming from</li>
+        </ol>
+
+        <h2 id="graph">Graph</h2>
+        <p>
+            Graph is the main data structure the backend uses to contain any and all information about the map the 
+            user made. For the most part, it contains a list of type Vertex and a list of type Edge, along with a 
+            ton of functions for optimization, converting to a SparseOptimizer, and some utility functions to aid 
+            certain metrics.
+        </p>
+        <h3 id="vertex">Vertex</h3>
+        <p>
+            Vertex is a very basic wrapper class to represent a single vertex of a Graph. It has four attributes:
+        </p>
+        <ul>
+            <li><b>mode</b>: the type of Vertex this is, represented as a VertexType enum. Either:</li>
+                <ul>
+                    <li>Odometry: representing a phone position</li>
+                    <li>Tag: representing the center of a tag</li>
+                    <li>Tag Point: representing the corner of a tag (for SBA)</li>
+                    <li>Dummy: representing a dummy node (see the As Graph section)</li>
+                    <li>Waypoint: representing a user-saved location</li>
+                </ul>
+            <li>
+                <b>estimate</b>: a 7x1 ndarray, the estimated pose of this vertex with respect to the origin of Invisible 
+                Map Creator’s AR Session. This will update as the optimization runs, and as such can represent 
+                either the optimized or unoptimized estimate.
+            </li>
+            <li><b>fixed</b>: a boolean, whether the estimate of this Vertex is allowed to be changed during optimization</li>
+            <li><b>meta_data</b>: a dict containing any other data this Vertex needs. Will contain</li>
+                <ul>
+                    <li>For Tags and Tag Points, the id of the tag</li>
+                    <li>For Waypoints, the name of the saved location</li>
+                </ul>
+        </ul>
+        <p>
+            In Graph, the vertices are stored in a dict of int to Vertex. Each key is a uid for the Vertex. While 
+            typically assigned in order (i.e. the dict is essentially a list), this is not necessarily the case, so
+            make sure to watch out for this! Also note that these need to be converted to G2O’s own Vertex type 
+            before optimization; typically a VertexSE3Expmap<sup><a href="#footer-1">1</a></sup>.
+        </p>
+        <h3 id="edge">Edge</h3>
+        <p>
+            Edge is another wrapper class for Graph, containing the basic information needed to represent a 
+            connection between two vertices. Its attributes are:
+        </p>
+        <ul>
+            <li><b>startuid</b>: the UID of the first Vertex this edge connects</li>
+            <li><b>enduid</b>: the UID of the last Vertex this edge connects</li>
+            <li><b>measurement</b>: a 7x1 ndarray, the pose of the end Vertex relative to the start Vertex</li>
+            <li><b>information</b>: The omega matrix for G2O - typically a diagonal matrix of the weights</li>
+            <li><b>(Optional) information_prescaling</b>: Values to create a prescaling matrix for information, defaults to 6x1 of ones</li>
+            <li><b>(Optional) corner_ids</b>: For SBA, the uids of the corners of the tag</li>
+            <li><b>(Optional) camera_intrinsics</b>: For SBA, the matrix needed to convert pixels to position in space</li>
+        </ul>
+        <p>
+            Like Vertex, Edges are stored as a dict of int to Edge. In general, we refer to edges as “odometry edges”, 
+            “tag edges”, etc. This refers to the type of node it connects. Because of the way our mapping is set up, 
+            all edges are connected to at least one odometry node. This will always be the start node. Therefore, 
+            “odometry edge” is shorthand for “odometry-to-odometry edge” and “tag edge” is short for “odometry-to-tag 
+            edge”, etc. Note also that these are only our own edge types; when converting to G2O, these need to be 
+            converted to their own edge types. Most of the time, this will be EdgeSE3Expmap<sup><a href="#footer-2">2</a></sup>.
+        </p>
+        <h3 id="other-attributes">Other Attributes</h3>
+        <p>There are a few other items Graph will store. These include:</p>
+        <ul>
+            <li><b>_weights</b>: a dict of weights to give to the optimizer. The dict between 4 and 5 elements:</li>
+                <ul>
+                    <li>odometry: 6x1 ndarray, the weights for odometry edges</li>
+                    <li>tag: 6x1 ndarray, the weights for tag edges without SBA</li>
+                    <li>Does not have to be included for SBA optimization</li>
+                    <li>tag_sba: 2x1 ndarray, the weights for tag edges with SBA</li>
+                    <li>Does not have to be included for non-SBA optimization</li>
+                    <li>dummy: 6x1 array, the weights for dummy edges</li>
+                    <li>odom_tag_ratio: Specifies the ratio between the magnitude of the odometry weights and the 
+                        tag weights. Currently unused in Graph, but see graph_utils.weight_dict_from_array and 
+                        graph_utils.normalize_weights.</li>
+                </ul>
+            <li><b>original_vertices</b>: a dict of uid to Vertex, containing the vertices as they were before optimization</li>
+            <li><b>is_sparse_bundle_adjustment</b>: a boolean, whether to perform SBA during optimization</li>
+            <li><b>_verts_to_edges</b>: a mapping of Vertex UIDs to a Set of Edge UIDs</li>
+            <li><b>gravity_axis</b>: which axis is up/down. Defaulted to ‘y’</li>
+            <li><b>Anything with huber and damping</b>: relating to Huber matrixes, unimportant for now</li>
+            <li><b>errors, observations, and anything with maximization</b>: relating to automatically tuning weights, unimportant for now</li>
+            <li><b>unoptimized_graph</b>: a g2opy.SparseOptimizer, the graph to optimize with G2O</li>
+            <li><b>optimized_graph</b>: a g2opy.SparseOptimizer, the resulting graph from G2O</li>
+        </ul>
+
+        <footer id="notes-footer">
+            <p>
+                <sup id="footer-1">1</sup> Breaking down the name: 1. a Vertex. 2. SE3 - the space in which we operate (3 dimensions, 
+                with rotation). 3. Exp - weights are exponentiated. 4. Map - represents a mapping (i.e. for a graph)
+            </p>
+            <p>
+                <sup id="footer-2">2</sup> Same name breakdown, except for an Edge instead of a Vertex.
+            </p>
+        </footer>
     </body>
 </html>

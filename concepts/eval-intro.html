@@ -10,5 +10,42 @@
     </head>
     <body>
         <a href="../index.html">Home</a>
+        <h2>On this page</h2>
+        <ul>
+            <li><a href="#weight-eval">Weight Evaluation</a></li>
+        </ul>
+        
+        <h2 id="weight-eval">Weight Evaluation</h2>
+        <p>
+            The only issue for all this, at least for us, is the lack of ground truth data. In most applications of
+            SLAM, there is some way to get what the final set of poses “should” be - so when you are choosing weights,
+            you can choose them so that they get as close to ground truth as possible, then apply those same weights
+            for future maps. While we can get measures of ground truth data for tag locations around the lab, this
+            is difficult to get for odometry and nearly impossible to get for larger buildings, like the MAC as a
+            whole, where we would like this code to apply.
+        </p>
+        <p>
+            This caused us to start out with a guess and check method, which did okay. Previously, Duncan Mazza 
+            came up with 
+            <a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">
+                a method to evaluate weights without ground truth data
+            </a>
+            . The idea behind it is similar to 
+            machine learning - split the data into training and testing. Duncan ran the training data through G2O 
+            with the weights to evaluate. He then took the resulting tag locations and copied them to the testing 
+            data, fixing them in place, not allowing G2O to change their pose. He then optimizes the map again, but 
+            with a standardized set of weights. This will “warp” the path to fit the new tag positions. The 
+            assumption is that the more the path has to warp (the higher the resulting error), the worse the 
+            original weights were.
+        </p>
+        <p>
+            However, with some testing, we found that the standard set of weights had a large impact on the results 
+            of how good weights were. More than just changing the scale, altering the standard weights would not 
+            result in the same ranking of evaluation weights. On top of this, there was practically no correlation 
+            to ground truth in the OCCAM room. We fixed this by normalizing the weights; setting the total magnitude
+            of the tag and odometry weights to 1, and defining some ratio between the two. This created a really 
+            high correlation between different set of standard weights, and a positive correlation between this 
+            metric and ground truth (though not particularly high).
+        </p>
     </body>
 </html>

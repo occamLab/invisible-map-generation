@@ -26,8 +26,8 @@
             Pro and Pro Max). In general, the more recent the iPhone, the better (non-pro iPhone 12 also works pretty
             well). In brief, the app works by tracking phone position, using the camera to detect tags and calculate their
             positions, and then connecting these two types of data into a graph and optimizing it to create the final
-            map. The most recent code is in the lidar-mesh branch of the <a href="https://github.com/occamLab/InvisibleMap">
-            InvisibleMap repository on Github</a>.
+            map. The most recent code is in the InvisibleMapCreator2 directory in the lidar-mesh branch of the
+            <a href="https://github.com/occamLab/InvisibleMap"> InvisibleMap repository on Github</a>.
         </p>
         <h2 id="code-structure">Code Structure: In the Files</h2>
         <p>
@@ -104,10 +104,62 @@
         <h2 id="how-it-works">How it Works</h2>
         <p>
             After starting a recording, as you walk around, the app records odometry data (position and orientation)
-            10 times every second. MapRecorder processes each frame, sent from ARView, and checks for tags using
-            the TagFinder C++ code in Invisible Map. How the TagFinder code works exactly is not important to
-            developing on Map Creator. The important information is that the TagFinder returns the transform
-            to the tag relative to the camera coordinate frame. 
+            10 times every second. You can explore the exact data stored during map creation on the
+            <a href="../code/data-structure.html">Data Structure page</a>. MapRecorder processes each frame,
+            sent from ARView, and checks for tags using the TagFinder C++ code in Invisible Map. A robust
+            understanding of how the TagFinder code works is not important to developing on Map Creator. The
+            important information is that the TagFinder returns information about each tag detected in the frame,
+            including the 4x4 transform to the tag relative to the camera
+            coordinate frame. 
+        </p>
+        <p>
+            All of this occurs in MapRecorder, where the main function recordData() is called
+            every time a new ARFrame is recorded. recordData() subsequently calls functions to record odometry pose,
+            tag poses, and plane data. recordTags() then calls getARTags, which calls the TagFinder code to obtain
+            a list of all tags detected in the frame. This function also interfaces with ARView, both directly and 
+            thorugh the state machine, in order to correct the tag position and display the AR tag visualization.
+        </p>
+        <h3>Raycasting</h3>
+        <p>    
+            The correcting tag position mentioned in the previous section is important. In order to take advantage
+            of the capabilities of newer iPhones with LiDAR sensors, a feature was implemented
+            that uses raycasting to force place tags onto flat planes detected by ARKit, rather than relying on the
+            TagFinder's pose estimate. Currently, this is only done on LiDAR enabled devices, but a next step may
+            be to implement it on non-LiDAR devices and assess whether it also makes their detections more accurate.
+        </p>
+        <p>    
+            On a basic level, TagFinder locates the tag by identifying the pixel
+            coordinates of the corners of the tags, and calculates the physical location using the camera's
+            intrinsics. This sometimes is not very accurate for orientation in particular, especially at angles that
+            are mostly straight on, as a difference of a few pixels can be
+            much more significant physically than it seems. ARKit has a built in feature that automatically detects
+            and locates flat planes during an AR session. These flat planes are much more likely to be accurate in
+            terms of orientation than the TagFinder's detections, especially in LiDAR phones. 
+        </p>
+        <p>
+            Raycasting is a function built into ARKit where you can essentially shoot a virtual ray out from a source
+            position in a certain direction. The raycasting function will then return a list of points where the
+            ray struck an object of the types you specify: planes, in the case of Map Creator. This raycasting is
+            done in the raycastTag() function of ARView. The raycast starts at the position of the camera, and is
+            pointed in the direction of the tag center detected by TagFinder. raycastTag() returns the transform of
+            the first raycast result, which is the first point where the raycast strikes a plane. The transform's
+            orientation is the orientation of the plane, and the position is in world frame. MapRecorder's getArTags()
+            function then directly changes the transform of the tag from the one found by TagFinder to the result
+            of the raycast. This forces the tag to lay flat on the detected plane. This does also force the tag to be
+            exactly rotated with the plane, so if a tag were to be flat on the wall but rotated 90 degrees, for example,
+            it would be adjusted to be upright. If a mapper places a tag like this, it will mess up the map navigation later,
+            although it would not mess up the map creation. 
+        </p>
+        <h3>Finishing Map Creation</h3>
+        <p>
+            Along the way, waypoints can be added to the map. These points are just placed relative to the phone
+            position and can be named to indicate key locations. Right now, maps must be created all in one
+            recording. Future plans include adding a pausing feature and adding the ability to save a map and then
+            make another recording to add onto the previous map in a different session. The paths that people can take
+            while navigating the map are entirely dependent on paths that were walked during creation, so if the 
+            mapper misses a set of stairs, those stairs will not appear on the final map, even if the mapper walks
+            across the top and bottom of them. Upon saving the map, all of the data collected is put into a JSON file
+            and uploaded to Firebase for the backend code to download and process.
         </p>
     </body>
 </html>
