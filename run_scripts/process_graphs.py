@@ -13,6 +13,8 @@ graph_manager = GraphManager(weights_specifier=4, firebase_manager=firebase, pso
 
 def on_event(event):
     map_info = firebase.get_map_from_event(event)
+    if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
+        return
     json_str = graph_manager.get_json_from_map_info(map_info)
     firebase.upload(map_info, json_str)
 
