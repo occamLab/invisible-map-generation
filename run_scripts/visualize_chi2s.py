@@ -83,7 +83,7 @@ def main():
             full_chi2s['actual_chi2s'][run] = Graph.check_optimized_edges(optimizer)
             full_chi2s['total_chi2'][run] = sum([run_chi2s[edge]['sum'] for edge in ('odometry', 'tag', 'dummy')])
 
-        with open(file_name, 'w') as file:
+        with open(os.path.join('saved_sweeps', 'chi2_visualization', file_name), 'w') as file:
             json.dump({
                 'odom_tag_ratio': sweep.tolist(),
                 'chi2s': full_chi2s

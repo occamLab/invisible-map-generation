@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     if args.s is not None:
         if args.l:
-            with open('../saved_sweep_results/sweep_results.json', 'r') as results_file:
+            with open('saved_sweeps/weight_sweep/sweep_results.json', 'r') as results_file:
                 dct = json.loads(results_file.read())
                 sweep_range = np.asarray(dct['sweep_range'])
                 metrics = np.asarray(dct['metrics'])
@@ -81,7 +81,7 @@ if __name__ == "__main__":
                     step = args.s[2]
             sweep = np.exp(np.arange(bounds[0], bounds[1], step))
             metrics = graph_manager.sweep_weights(map_json_path, sweep=sweep, verbose=args.v, visualize=False)
-            with open('../saved_sweep_results/sweep_results.json', 'w') as results_file:
+            with open('saved_sweeps/weight_sweep/sweep_results.json', 'w') as results_file:
                 mesh_grid = [sweep.tolist()] * sweep.size
                 dct = {
                     'odom_tag_ratio': mesh_grid,
