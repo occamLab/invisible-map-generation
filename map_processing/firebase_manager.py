@@ -92,6 +92,17 @@ class FirebaseManager:
                 map_info.map_name))
             self._cache_map(self.processed_upload_to, map_info, json_string)
 
+    def download_all_maps(self, _map_info=None, _parent=None, _uid=None):
+        if _map_info is None:
+            _map_info = db.reference('unprocessed_maps').get()
+            _parent = 'unprocessed_maps'
+        for child_key, child_val in _map_info.items():
+            if isinstance(child_val, str):
+                print(f'Downloading {"" if _uid is None else _uid + "/"}{child_key}')
+                self._firebase_get_unprocessed_map(child_key, child_val, uid=_uid)
+            elif isinstance(child_val, dict):
+                self.download_all_maps(_map_info=child_val, _parent=child_key, _uid=child_key if _uid is None else _uid)
+
     def get_map_from_event(self, event) -> MapInfo:
         if type(event.data) == str:
             # A single new map just got added

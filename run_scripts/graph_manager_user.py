@@ -123,7 +123,7 @@ if __name__ == "__main__":
     graph_manager = GraphManager(args.w, firebase, pso=args.pso)
 
     if args.f:
-        firebase.set_listener(download_maps)
+        firebase.download_all_maps()
 
     map_pattern = args.p if args.p else ""
     fixed_tags = set()
