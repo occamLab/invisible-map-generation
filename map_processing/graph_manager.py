@@ -1105,7 +1105,7 @@ class GraphManager:
             ))
 
         if calculate_intersections:
-            neighbors, intersections = graph_utils.get_intersections(odom_locations[:, :7])
+            neighbors, intersections = graph_utils.get_neighbors(odom_locations[:, :7])
             for index, neighbor in enumerate(neighbors):
                 odom_vertex_map[index]['neighbors'] = neighbor
             for intersection in intersections:
