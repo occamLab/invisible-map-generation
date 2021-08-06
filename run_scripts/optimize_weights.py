@@ -11,6 +11,7 @@ import os
 
 from map_processing import graph_utils
 from map_processing.graph_manager import GraphManager
+from map_processing.firebase_manager import FirebaseManager
 
 CACHE_DIRECTORY = os.path.join("unprocessed_maps", "rawMapData")
 MAP_JSON = "127027593745666Partial MAC Multiple Plane Detection 7-19-21.json"
@@ -51,25 +52,29 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    graph_manager = GraphManager(0, cred)
+    firebase = FirebaseManager(cred)
+    graph_manager = GraphManager(0, firebase)
     map_json_path = os.path.join(CACHE_DIRECTORY, MAP_JSON)
 
     if args.s is not None:
         if args.l:
-            with open('../saved_sweep_results/sweep_results.json', 'r') as results_file:
+            with open('saved_sweeps/weight_sweep/sweep_results.json', 'r') as results_file:
                 dct = json.loads(results_file.read())
-                sweep_range = np.asarray(dct['sweep_range'])
+                odom_tag_ratio = np.asarray(dct['odom_tag_ratio'])
+                pose_orientation_ratio = np.asarray(dct['pose_orientation_ratio'])
                 metrics = np.asarray(dct['metrics'])
                 if args.v:
-                    for i1, w1 in enumerate(sweep_range):
-                        for i2, w2 in enumerate(sweep_range):
-                            print(f'[{w1}, {w2}]: {metrics[i1, i2]}')
+                    for i1, w1 in enumerate(odom_tag_ratio):
+                        for i2, w2 in enumerate(w1):
+                            pass # print(f'[{w2}, {pose_orientation_ratio[i1][i2]}]: {metrics[i1, i2]}')
                     filtered_metrics = metrics == -1
                     reprocessed_metrics = metrics + 1e5 * filtered_metrics
                     best_metric = reprocessed_metrics.min()
-                    best_weights = [np.log(sweep_range[i[0]]) for i in np.where(metrics == best_metric)]
-                    print(f'\nBEST METRIC: {best_weights}: {best_metric}')
-                    graph_utils.plot_metrics(sweep_range, reprocessed_metrics, True, True)
+                    indexes = np.where(metrics == best_metric)
+                    best_weights = [np.log(odom_tag_ratio[indexes[0][0], indexes[1][0]]),
+                                    np.log(pose_orientation_ratio[indexes[0][0], indexes[1][0]])]
+                    print(f'\nBEST METRIC: e^{best_weights}: {best_metric}')
+                    graph_utils.plot_metrics(pose_orientation_ratio, reprocessed_metrics, True, True)
         else:
             bounds = (-10, 10)
             step = 0.5
@@ -81,7 +86,7 @@ if __name__ == "__main__":
                     step = args.s[2]
             sweep = np.exp(np.arange(bounds[0], bounds[1], step))
             metrics = graph_manager.sweep_weights(map_json_path, sweep=sweep, verbose=args.v, visualize=False)
-            with open('../saved_sweep_results/sweep_results.json', 'w') as results_file:
+            with open('saved_sweeps/weight_sweep/sweep_results.json', 'w') as results_file:
                 mesh_grid = [sweep.tolist()] * sweep.size
                 dct = {
                     'odom_tag_ratio': mesh_grid,

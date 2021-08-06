@@ -414,8 +414,12 @@ class GraphManager:
             self._weights_dict[weight_name] = weights if isinstance(weights, dict) else\
                 graph_utils.weight_dict_from_array(weights)
         _, vertices = self.get_optimized_graph_info(graph, weights=weight_name)
-        optimized_tag_verts = np.zeros((len(vertices), 7))
-        for vertex in vertices.values():
+        return GraphManager.get_ground_truth_from_optimized_tags(vertices, ground_truth_tags, verbose=verbose)
+
+    def get_ground_truth_from_optimized_tags(self, optimized_tags: Dict[int, Vertex], ground_truth_tags: np.ndarray,
+                                             verbose: bool = False) -> float:
+        optimized_tag_verts = np.zeros((len(optimized_tags), 7))
+        for vertex in optimized_tags.values():
             estimate = vertex.estimate
             optimized_tag_verts[vertex.meta_data['tag_id']] = \
                 (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
@@ -1101,7 +1105,7 @@ class GraphManager:
             ))
 
         if calculate_intersections:
-            neighbors, intersections = graph_utils.get_intersections(odom_locations[:, :7])
+            neighbors, intersections = graph_utils.get_neighbors(odom_locations[:, :7])
             for index, neighbor in enumerate(neighbors):
                 odom_vertex_map[index]['neighbors'] = neighbor
             for intersection in intersections:
