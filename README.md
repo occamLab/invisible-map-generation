@@ -83,7 +83,7 @@ python3 -m run_scripts.process_graphs
 ```
 
 ## TODOS
-- Continue finding ways to evaluate the quality of optimized maps.
+- Continue finding metrics to evaluate optimized map quality.
   - Consider ways of obtaining ground truth data
 - Add more ways to consolidate paths in the map to make navigation more efficient
   - Currently, only direct intersections are handled
