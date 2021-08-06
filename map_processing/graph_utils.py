@@ -258,10 +258,9 @@ def locations_from_transforms(locations):
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
     filtered_metrics = metrics > -1
     sweep_plot = np.log(sweep) if log_sweep else sweep
-    x_sweep = np.array([sweep_plot.tolist()] * sweep_plot.size)
     to_plot = np.log(metrics) if log_metric else metrics
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    surf = ax.plot_surface(sweep_plot, sweep_plot.reshape(-1, 1), to_plot, cmap=cm.get_cmap('viridis'))
+    surf = ax.plot_surface(sweep_plot, sweep_plot.transpose(), to_plot, cmap=cm.get_cmap('viridis'))
     ax.set_xlabel('Pose:Orientation')
     ax.set_ylabel('Odom:Tag')
     ax.set_zlabel('Metric')
