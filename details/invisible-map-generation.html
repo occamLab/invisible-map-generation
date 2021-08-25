@@ -104,7 +104,7 @@
             In Graph, the vertices are stored in a dict of int to Vertex. Each key is a uid for the Vertex. While 
             typically assigned in order (i.e. the dict is essentially a list), this is not necessarily the case, so
             make sure to watch out for this! Also note that these need to be converted to G2O’s own Vertex type 
-            before optimization; typically a VertexSE3Expmap<sup><a href="#footer-1">1</a></sup>.
+            before optimization; typically a VertexSE3Expmap <sup><a href="#footer-1">1</a></sup>.
         </p>
         <h3 id="edge">Edge</h3>
         <p>
@@ -126,7 +126,7 @@
             all edges are connected to at least one odometry node. This will always be the start node. Therefore, 
             “odometry edge” is shorthand for “odometry-to-odometry edge” and “tag edge” is short for “odometry-to-tag 
             edge”, etc. Note also that these are only our own edge types; when converting to G2O, these need to be 
-            converted to their own edge types. Most of the time, this will be EdgeSE3Expmap<sup><a href="#footer-2">2</a></sup>.
+            converted to their own edge types. Most of the time, this will be EdgeSE3Expmap <sup><a href="#footer-2">2</a></sup>.
         </p>
         <h3 id="other-attributes">Other Attributes</h3>
         <p>There are a few other items Graph will store. These include:</p>
@@ -152,6 +152,262 @@
             <li><b>unoptimized_graph</b>: a g2opy.SparseOptimizer, the graph to optimize with G2O</li>
             <li><b>optimized_graph</b>: a g2opy.SparseOptimizer, the resulting graph from G2O</li>
         </ul>
+
+        <h3 id="methods">Methods</h3>
+        <h4 id="update-graph">Update Graph</h4>
+        <ul>
+            <li><b>set_weights</b>: sets the weights, scaling by the amount of edges each type has, if specified</li>
+            <li><b>update_edges</b>: updates each edge with the current set of weights</li>
+            <li><b>update_vertices</b>: updates the estimates of each Vertex to match the ones in optimized_graph</li>
+            <li><b>delete_tag_vertex</b>: deletes a tag vertex from all attributes, except the SparseOptimizer(s)</li>
+            <li><b>remove_edge</b>: removes an edge from all attributes, except the SparseOptimizer(s)</li>
+        </ul>
+        <h4 id="chi-squared-eval">Chi Squared and Evaluation</h4>
+        <ul>
+            <li><b>check_optimized_edges (static)</b>: calculates the total chi2 from a SparseOptimizer</li>
+            <li><b>get_chi2_of_edge (static)</b>: calculates the chi2 from a specific g2opy edge</li>
+            <li><b>get_chi2_of_edge_type</b>: returns a dict containing the chi2 values for each type of edge</li>
+            <li>
+                <b>map_odom_to_adj_chi2</b>: given an odometry vertex, returns the chi2 from that vertex and the
+                number of tag vertices connecting to that tag
+            </li>
+            <li>
+                <b>get_subgraph</b>: returns a subgraph containing the vertices with UIDs between the given values.
+                Used to partition a graph for Duncan's evaluation metric
+            </li>
+        </ul>
+        <h4 id="optimization">Optimization</h4>
+        <ul>
+            <li><b>generate_unoptimized_graph</b>: sets unoptimized_graph to the result of graph_to_optimizer</li>
+            <li>
+                <b>graph_to_optimizer</b>: converts this Graph to a SparseOptimizer. Essentially, it pulls the
+                data from vertices and edges, then creates g2opy objects from that information. 
+                <ul>
+                    <li>To actually optimize the Graph, see GraphManager.get_optimizer</li>
+                </ul>
+            </li>
+        </ul>
+        <p>
+            While there are many other methods in Graph, the rest do not need to be rigorously explained.
+            They are either utility methods, not typically called outside of Graph, or relate to weight tuning
+            ("expectation maximization"), which is not important for now.
+        </p>
+
+        <h2 id="as-graph">As Graph</h2>
+        <p>
+            <b>as_graph</b> essentially contains just one function: converting the raw JSON uploaded from Invisible
+            Map Creator into a Graph object. While the code is long and looks complicated, most of it is simply setup
+            for the final part: creating data structures for more efficient lookup of information. After pulling
+            all of the edge and vertex information into these various structures, it loops through the odometry
+            information, creating nodes for each point and the non-odometry nodes that connect to it, along with edges to
+            connect for them.
+        </p>
+        <p>
+            The only odd portion of As Graph is the creation of dummy nodes. These were implemented as a solution
+            to a problem involving bending of the graph. What would often happen was odometry orientation would be
+            slightly off in successive measurements, causing the path to tilt up or down. When the G2O optimization
+            was run on the graph, it would decide to change the orientation of the odometry nodes rather than the
+            position to correct this tilt (think creating a U or V shape rather than moving points up or down to
+            correct the tilt), resulting in a warped path rather than a straight one. This is because the error function only
+            pays attention to te error between two adjacent nodes and the transformation between them, so warping the
+            path appeared to the optimizer to be the best solution to minimize error, although this solution is
+            obviously incorrect to the human eye.
+        </p>
+        <p>
+            Dummy nodes attempted to fix this by adding more nodes directly below the odometry nodes and giving
+            them a very strong weight for orientation. This gave the optimizer incentive to leave the orientation
+            the same and opt to move the position instead. Note that this solution was implemented before our more
+            feasible weight sweeping methods, so it is possible that this issue is fixed by having better weights,
+            though this is worth checking out (see <a href="../index.html#todo">To Do</a>)
+        </p>
+
+        <h2 id="graph-manager">Graph Manager</h2>
+        <p>
+            GraphManager is the main class to handle anything to do with Graph, from optimization and evaluation
+            to weight correlation. As such, there are many functions to cover.
+        </p>
+        <h3 is="weight-eval">Weight Evaluation and Comparison</h3>
+        <p>
+            As of 8/6/2021, there are three methods to evaluate a set of weights: ground truth, chi2, and Duncan's
+            metric. Ground truth is based on physical measurements of tag locations relative to each other. Chi2 is
+            the resulting chi2 from the graph optimization. While this is based on the weights, theoretically the
+            weights should not matter so long as they are normalized properly. Duncan's metric is similar to chi2,
+            thought it was originally created to try to subvert the issue with different magnitude weights.
+            Below is a quick outline of the pros and cons of each:
+        </p>
+        <table>
+            <tr>
+                <th>Metric</th>
+                <th>Pros</th>
+                <th>Cons</th>
+            </tr>
+            <tr>
+                <td>Ground Truth</td>
+                <td>
+                    <ul>
+                        <li>We know for certian that it is accurate and works</li>
+                    </ul>
+                </td>
+                <td>
+                    <ul>
+                        <li>Painstaking to measure (unless we can find a way to use LiDAR meshes)</li>
+                        <li>Need to remeasure for each map</li>
+                        <li>Infeasible for anything bigger than a room</li>
+                        <li>Does not take into accont odometry nodes</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr>
+                <td>Chi2</td>
+                <td>
+                    <ul>
+                        <li>Quick to calculate</li>
+                        <li>Intuitive</li>
+                    </ul>
+                </td>
+                <td>
+                    <ul>
+                        <li>Unsure if it is an accurate measure of weights</li>
+                    </ul>
+                </td>
+            </tr>
+            <tr>
+                <td>Duncan's Metric</td>
+                <td>
+                    <ul>
+                        <li>While not especially quick to calculate, does not require measurement</li>
+                        <li>Theoretically independent of weights used</li>
+                    </ul>
+                </td>
+                <td>
+                    <ul>
+                        <li>Unsure if it is an accurate measure of weights</li>
+                        <li>
+                            Preliminatry comparisons to ground truth are not promising for weights that are
+                            not normalized (at which pooint hopefully just chi2 will work?)
+                        </li>
+                    </ul>
+                </td>
+            </tr>
+        </table>
+        <p>The methods to calculate these are:</p>
+        <ul>
+            <li>
+                <b>compare_weights</b>: runs Dunan's chi2 comparison metric on the weights specified in
+                GraphManager.iter_weights, displaying and printing the results
+            </li>
+            <li>
+                <b>optimize_weights</b>: runs a genetic machine learning model to attempt to find the best
+                weights. As of 8/6/2021, it uses a ground truth metric based solely on tag positions, but
+                this is easily alterable by changing the lambda expression given to the genetic algorithm.
+            </li>
+            <li>
+                <b>sweep_weights</b>: sets up weight sweeping, running it through _sweep_weights
+                (a recursive function). Can be based on any metric based on the input given to
+                _sweep_weights
+            </li>
+            <li>
+                <b>get_chi2_from_subgraphs</b>: runs Duncan's metric on a given Graph or a tuple of two Graphs
+                without altering the Graph.
+            </li>
+            <li>
+                <b>get_chi2_by_edge_from_subgraphs</b>: calculates Duncan's metric on a Graph as above,
+                but instead returning the chi2 split by edge type
+            </li>
+            <li>
+                <b>create_graphs_for_chi2_comparison</b>: splits a Graph into two sub-Graphs for Duncan's metric
+            </li>
+            <li>
+                <b>get_ground_truth_from_graph</b>: given a Graph, a set of weights, and the ground truth positions
+                of the tags, calculates the average difference between the tag positions in the optimized graph and
+                the ground turht tag positions.
+            </li>
+            <li>
+                <b>_weights_to_dict</b>: returns a set of weights through all the ways we have to represent weights.
+                These are:
+                    <ul>
+                        <li><b>int</b>: an index into GraphManager.ordered_weights_dict_keys</li>
+                        <li><b>string</b>: a key for GraphManager._weights_dict</li>
+                        <li><b>float</b>: a ratio between odometry magnitude and tag magnitude. Each weight
+                        within odometry magnitude and tag ratio will be the same</li>
+                        <li><b>ndarray</b>: see graphutils.weight_dict_from_array</li>
+                        <li><b>dict</b>: an already compiled weight dictionary</li>
+                    </ul>
+            </li>
+            <li>
+                <b>plot_adj_chi2 (static)</b>: plots the chi2 across odometry edges (analogous to over time). Also
+                plots the points in which at least one tag was visible.
+            </li>
+            <li>
+                <b>get_ground_truth_metric (static):</b>: given the poses of the optimized tag locations and actual
+                tag locations, calculates the avreage translational difference between them.
+            </li>
+        </ul>
+        <h3 id="optimize-graph">Optimize Graph</h3>
+        <ul>
+            <li><b>process_maps</b>: main function run to manually process graphs. Will optimize and optionally
+            upload any maps whose file path matches the given pattern</li>
+            <li><b>get_optimized_graph_info</b>: calculates chi2 and the positions of the nodes for the optimized
+            graph witout actually altering the Graph object</li>
+            <li><b>get_optimizer</b>: pulls the SparseOptimizer from the given Graph and optimizes it</li>
+            <li><b>get_json_from_map_info</b>: generates the JSON to give to InvisibleMap given the file path
+            and name of the unoptimized map (stored in MapInfo)</li>
+            <li><b>_map_info_from_path</b>: generates a MapInfo object given the path of an unoptimized map</li>
+            <li><b>_optimize_graph</b>: optimizes a Graph, "committing" the changes to the Graph object. 
+            Optionally can run optimization multiple times, removing edges with chi2 values that are too high.
+            By default, this will run the filter once if the original chi2 is greater than 1.</li>
+            <li><b>plot_optimization_result</b>: plots the original node locations, final node locations, 
+            and tag poses for an optimized Graph</li>
+            <li><b>make_processed_map_JSON</b>: given the poses of all the nodes, dumps the information into a
+            dict to put in a JSON for Invisible Map</li>
+        </ul>
+        <p>Any other functions in GraphManager are just helpers and do not require rigorous explanation.</p>
+
+        <h2 id="scripts">Scripts</h2>
+        <p>
+            While only one script is run on the sever, we have many that we use for testing purposes. Only a
+            brief overview of what each does will be given here; to actually find how to run them, see the code
+            itself and the README. If any command line arguments are given, they will be created in the corresponding
+            file in a function called make_parser.
+        </p>
+        <h3 id="process-graphs">Process Graphs</h3>
+        <p>
+            process_graphs.py is the script that the server runs. The script itself is fairly basic: it first
+            sets up a FirebaseManager and a GraphManager. It creates a function that will be called whenever
+            Firebase updates, which will pull the map info, optimize the map, create a json, and upload it. 
+            Finally, it the FirebaseManager tells Firebase to run that function whenever it is updated.
+        </p>
+        <h3 id="graph-manager-user">Graph Manager User</h3>
+        <p>
+            graph_manager_user.py is essentially the manual version of process_graphs. It does, however, have a few
+            more options, such as the ability to set the weights and the prescaling option (these are defaulted in
+            process_graphs). It also has th eability to display a visualization of the optimized graphs(s). 
+        </p>
+        <h3 id="optimize-weights">Optimize Weights</h3>
+        <p>
+            optimize_weights.py is a script that attempts to find the best set of weights. It has two options to
+            accomplish this. The first (and default) is a genetic machine learning model. As of 8/6/2021, it can tune
+            al 12 parameters, but it is likely worth it to have it only tune 3 (as specified by
+            graph_utils.weight_dict_from_array). The second method is a parameter sweep, where the script will try
+            every combination of values in a certain range and determine the best one. If the sweep is 2-D, it will
+            also display a visualization of the surface the resulting metric creates.
+        </p>
+        <h3 id="correlate-metrics">Correlate Metrics</h3>
+        <p>
+            This script was created to try to measure how good each metric was, especially when compared to ground truth.
+            It visualizes the metrics and calculates the
+            <a href="https://en.wikipedia.org/wiki/Spearman%27s_rank_correlation_coefficient" target="_blank">Spearman Correlation</a>
+            between each. The Spearman Correlation is essentially a measure of correlation that does not rely on
+            linearity - i.e. any monotonically increasing function will have a Spearman Correlation of 1, even if it is
+            nonlinear. This also has the option of instead loading the correlations from a saved file so as to not
+            have to recalculate.
+        </p>
+        <h3 id="visualize-chi2s">Visualize Chi2s</h3>
+        <p>
+            This is a script used when chi2s are suspiciously high, especially when trying to find weights. It will
+            optimize the graphs with several different weight values, and display the resulting chi2 from each 
+            edge type.
+        </p>
 
         <footer id="notes-footer">
             <p>

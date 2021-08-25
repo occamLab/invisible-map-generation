@@ -1,165 +1,236 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="basicstyle.css">
+        <!--Bulma CSS framework-->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.css"/>
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
         <title>Invisible Map Onboarding Materials | Home</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </head>
-    <body>
-        <h1>Invisible Map Project Site</h1>
-        <p>
-            An ever-changing document by contributors to the Invisible Map project. Originally created by
-            Allison Li and Ben Morris.
-        </p>
-        
-        <h2>Pages</h2>
-        <ul>
-            <li><a href="index.html">Home</a></li>
-            <li>The Concepts</li>
-                <ul>
-                    <li><a href="concepts/slam-intro.html">The Problem: SLAM</a></li>
-                    <li><a href="concepts/graphs-intro.html">The Model: Graphs in the Invisible Map</a></li>
-                    <li><a href="concepts/g2o-intro.html">The Solution: Introduction to G2O</a></li>
-                    <li><a href="concepts/eval-intro.html">Map Evaluation</a></li>
-                </ul>
-            <li>Overall Code</li>
-                <ul>
-                    <li><a href="code/code-structure.html">Structure of the Code</a></li>
-                    <li><a href="code/data-structure.html">Structure of the Data</a></li>
-                </ul>
-            <li>Component Details</li>
-                <ul>
-                    <li><a href="details/invisible-map-creator.html">Invisible Map Creator</a></li>
-                    <li><a href="details/invisible-map-generation.html">Invisible Map Generation</a></li>
-                    <li><a href="detials/invisible-map.html">Invisible Map</a></li>
-                </ul>
-        </ul>
+    <body class="has-navbar-fixed-top">
+        <!--Navigation bar (on all pages)-->
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href = "index.html">
+                    <img src=media/InvisibleMapProjectLogo.png alt="InvisibleMap app icon">
+                </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="index.html">Home</a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">The Concepts</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="concepts/slam-intro.html">The Problem: SLAM</a>
+                            <a class = navbar-item href="concepts/graphs-intro.html">The Model: Graphs in the Invisible Map</a>
+                            <a class = navbar-item href="concepts/g2o-intro.html">The Solution: Introduction to G2O</a>
+                            <a class = navbar-item href="concepts/eval-intro.html">Map Evaluation</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Overall Code</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="code/code-structure.html">Code Structure</a>
+                            <a class = navbar-item href="code/data-structure.html">Data Structure</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Component Details</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="details/invisible-map-creator.html">Invisible Map Creator</a>
+                            <a class = navbar-item href="details/invisible-map-generation.html">Invisible Map Generation</a>
+                            <a class = navbar-item href="details/invisible-map.html">Invisible Map</a>
+                        </div>
+                    </div>                    
+                </div>
+            </div>
+        </nav>
 
-        <p>
-            Welcome OCCAM Lab Invisible Map Developers and/or anyone interested in this project!
-            This website explains the base knowledge you should have for you to start
-            learning about and working on the Invisible Map project, as well as links to more detailed resources.
-        </p>
+        <section class="hero is-small is-primary">
+            <div class="hero-body">
+                <h1 class="title is-2">Invisible Map Project Site</h1>
+                <p class="subtitle">
+                    An ever-changing document by contributors to the Invisible Map project. Originally created by
+                    Allison Li and Ben Morris.
+                </p>
+                <p class="is-size-5">
+                    Welcome OCCAM Lab Invisible Map Developers and/or anyone interested in this project!
+                    This website explains the base knowledge you should have for you to start
+                    learning about and working on the Invisible Map project, as well as links to more detailed resources.
+                </p> 
+            </div>
+        </section>
+        <section class="hero is-small is-success">
+            <div class="hero-body">
+                <h2 class="title is-3">On this page</h2>
+                <div class="tabs">
+                    <ul class="is-underlined is-size-5">
+                        <li><a href="#intro">Project Introduction</a></li>
+                        <li><a href="#progress-reports">Progress Reports</a></li>
+                        <li><a href="#todo">TODOs</a></li>
+                        <li><a href="#links">Key Terms and Further Exploration</a></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
 
-        <h2>On this page</h2>
-        <ul>
-            <li><a href="#intro">Project Introduction</a></li>
-            <li><a href="#todo">TODOs</a></li>
-            <li><a href="#links">Key Terms and Further Exploration</a></li>
-        </ul>
+        <section class="section">
+            <h2 class="title is-4" id="intro">Project Introduction</h2>
+            <p class="is-size-5">
+                The Invisible Map is an <a href="https://developer.apple.com/augmented-reality/" target="_blank">
+                iOS ARKit</a> project developed in the OCCAM lab at Olin College of Engineering.
+                It is aimed at assisting people who are blind or visually impaired in navigating unfamiliar spaces,
+                however it is applicable to situations where any person may be able to utilize it, such as hospitals,
+                conventions, stadiums, and other large indoor spaces. The goal of the project is for a user to be able
+                to map out a space by placing <a href="https://april.eecs.umich.edu/software/apriltag.html" target=
+                "_blank">AprilTags</a> around the area and using iPhone AR capabilites to record data and mark points
+                of interest as they walk paths through the space. Then, the map can be used in AR by people unfamiliar
+                with the space to navigate between locations.
+            </p>
+            <p class="is-size-5">
+                The project consists of three parts. The front-end map creation (Invisible Map Creator) is an iOS 
+                app that a user would use to walk around a space populated with AprilTags, track points of interest,
+                and save the map. The back-end map processing is written in Python and will ideally be constantly
+                running on a server, taking the raw map data and optimizing it to synthesize the full invisible
+                map. The front-end map viewing (Invisible Map) is another iOS app which stores the list of maps
+                and is where the user can choose one and begin navigating a space with it. More details about the 
+                structure are on <a href="code/code-structure.html">the code structure page</a>.
+            </p>
+        </section>
 
-        <h2 id="intro">Project Introduction</h2>
-        <p>
-            The Invisible Map is an <a href="https://developer.apple.com/augmented-reality/" target="_blank">
-            iOS ARKit</a> project developed in the OCCAM lab at Olin College of Engineering.
-            It is aimed at assisting people who are blind or visually impaired in navigating unfamiliar spaces,
-            however it is applicable to situations where any person may be able to utilize it, such as hospitals,
-            conventions, stadiums, and other large indoor spaces. The goal of the project is for a user to be able
-            to map out a space by placing <a href="https://april.eecs.umich.edu/software/apriltag.html" target=
-            "_blank">AprilTags</a> around the area and using iPhone AR capabilites to record data and mark points
-            of interest as they walk paths through the space. Then, the map can be used in AR by people unfamiliar
-            with the space to navigate between locations.
-        </p>
-        <p>
-            The project consists of three parts. The front-end map creation (Invisible Map Creator) is an iOS 
-            app that a user would use to walk around a space populated with AprilTags, track points of interest,
-            and save the map. The back-end map processing is written in Python and will ideally be constantly
-            running on a server, taking the raw map data and optimizing it to synthesize the full invisible
-            map. The front-end map viewing (Invisible Map) is another iOS app which stores the list of maps
-            and is where the user can choose one and begin navigating a space with it. More details about the 
-            structure are on <a href="code/code-structure.html">the code structure page</a>.
-        </p>
-        <h2 id="todo">TODOs</h2>
-        <h3>Invisible Map Creator</h3>
-        <ul>
-            <li>Organize maps and make them accessible</li>
-                <ul>
-                    <li>
-                        Public maps: add the ability to make maps that are available to all users and can be
-                        searched for
-                    </li>
-                    <li>
-                        Shareable private maps: add the ability to make maps that can be shared to certain users
-                        via link, code, etc.
-                    </li>
+        <section class="section">
+            <h2 class="title is-4" id="progress-reports">Progress Reports</h2>
+            <p class="is-size-5">The following is a list of links to progress reports written by previous researchers on this project.</p>
+            <div class="content">
+                <ul class="is-size-5">
+                    <li><a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing" target="_blank">Marion Madanguit and Avery Clowes' Invisible Map UX Work</a></li>
+                    <li><a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">Duncan Mazza's map evaluation paper</a></li>
+                    <li><a href="https://docs.google.com/document/d/1NUnC33FnIOHu0muCkSG6TIYBhefHeSSUXdFg5TZ0m-c/edit?usp=sharing" target="_blank">Allison Li and Ben Morris' progress leading to the first beta testing release of Invisible Map and Map Creator</a></li>
                 </ul>
-            <li>Edit maps</li>
-                <ul>
-                    <li>Delete maps</li>
-                    <li>Edit map name & key location names</li>
-                    <li>Add custom picture icon</li>
-                </ul>
-            <li>App features</li>
-                <ul>
-                    <li>Pause map recording</li>
-                    <li>Add new recording to a previously created map</li>
-                </ul>
-            <li>Floor detection</li>
-                <ul>
-                    <li>Connect odometry nodes connected by floor (not just intersections)</li>
-                    <li>Notify mapper of hallways that have not been travelled yet</li>
-                    <li>See <a href="https://docs.google.com/document/d/1gvNzIJJtUXwnBH0q3DORxmr1emweEZUK3XUDZM4-B08/edit?usp=sharing" 
-                        target="_blank">Plan To Add Common Floor Detection</a>, idea 2</li>
-                </ul>
-        </ul>
-        <h3>Invisible Map Generation</h3>
-        <ul>
-            <li>Fix map names to not include numbers</li>
-                <ul>
-                    <li>Probably include more metadata to differentiate maps</li>
-                </ul>
-            <li>Continue finding metrics to evaluate optimized map quality</li>
-                <ul>
-                    <li>Consider ways of obtaining ground truth data</li>
-                </ul>
-            <li>Test if dummy nodes are still needed with the new weights</li>
-        </ul>
-        <h3>Invisible Map</h3>
-        <ul>
-            <li>Improve map navigation</li>
-                <ul>
-                    <li>
-                        Add keypoints at turns (like Clew: fit lines to the path rather than going between each
-                        odometry point.
-                    </li>
-                    <li>Add Clew-style navigation: verbal feedback in addition to audio and haptics</li>
-                    <li>
-                        Investigate using the automatic localization that Clew anchor points sometimes use to start
-                        navigation rather than needing to scan a tag
-                    </li>
-                </ul>
-            <li>App features</li>
-                <ul>
-                    <li>Customization of directions, sounds, haptics, etc.</li>
-                    <li>Voice notes (navigation context is important)</li>
-                    <li>Use GPS positioning to identify public maps in the area</li>
-                </ul>
-        </ul>
-        <h3>User Design</h3>
-        <ul>
-            <li>Helping BVI people find tags</li>
-            <li>Obstacle detections - possibly combine with voice notes</li>
-                <ul>
-                    <li>Make sure to give context for any detours</li>
-                </ul>
-            <li>Tutorials for both apps</li>
-        </ul>
+            </div>
+        </section>
 
-        <h2 id="links">Key Terms and Further Exploration</h2>
-        <ul>
-            <li><a href="https://developer.apple.com/augmented-reality/" target="_blank">ARKit</a></li>
-            <li><a href="https://developer.apple.com/xcode/swiftui/" target="_blank">SwiftUI</a></li>
-            <li><a href="https://developer.apple.com/documentation/uikit">UIKit</a></li>
-            <li><a href="https://firebase.google.com/" target="_blank">Firebase</a></li>
-            <li><a href="https://april.eecs.umich.edu/software/apriltag.html" target="_blank">AprilTags</a></li>
-            <li><a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)" target="_blank">Graphs</a></li>
-            <li><a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf" target="_blank">G2O Algorithm Paper</a></li>
-            <li><a href="http://wangxinliu.com/" target="_blank">Great blog posts by Wangxin Liu about graph optimization and g2o</a></li>
-            <li><a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing" target="_blank">Marion Madanguit and Avery Clowes' Invisible Map UX Work</a></li>
-            <li><a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">Duncan Mazza's map evaluation paper</a></li>
-        </ul>
+        <section class="section">
+            <div class="content">
+                <h3 id="todo">TODOs</h3>
+                <table class="table">
+                    <thead>
+                        <tr class="is-size-5">
+                            <th>Invisible Map Creator</th>
+                            <th>Invisible Map Generation</th>
+                            <th>Invisible Map</th>
+                            <th>User Design</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <ul class="is-size-5">
+                                    <li>Organize maps and make them accessible</li>
+                                        <ul>
+                                            <li>
+                                                Public maps: add the ability to make maps that are available to all users and can be
+                                                searched for
+                                            </li>
+                                            <li>
+                                                Shareable private maps: add the ability to make maps that can be shared to certain users
+                                                via link, code, etc.
+                                            </li>
+                                        </ul>
+                                    <li>Edit maps</li>
+                                        <ul>
+                                            <li>Delete maps</li>
+                                            <li>Edit map name & key location names</li>
+                                            <li>Add custom picture icon</li>
+                                        </ul>
+                                    <li>App features</li>
+                                        <ul>
+                                            <li>Pause map recording</li>
+                                            <li>Add new recording to a previously created map</li>
+                                        </ul>
+                                    <li>Floor detection</li>
+                                        <ul>
+                                            <li>Connect odometry nodes connected by floor (not just intersections)</li>
+                                            <li>Notify mapper of hallways that have not been travelled yet</li>
+                                            <li>See <a href="https://docs.google.com/document/d/1gvNzIJJtUXwnBH0q3DORxmr1emweEZUK3XUDZM4-B08/edit?usp=sharing" 
+                                                target="_blank">Plan To Add Common Floor Detection</a>, idea 2</li>
+                                        </ul>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul class="is-size-5">
+                                    <li>Fix map names to not include numbers</li>
+                                        <ul>
+                                            <li>Probably include more metadata to differentiate maps</li>
+                                        </ul>
+                                    <li>Continue finding metrics to evaluate optimized map quality</li>
+                                        <ul>
+                                            <li>Consider ways of obtaining ground truth data</li>
+                                        </ul>
+                                    <li>Test if dummy nodes are still needed with the new weights</li>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul class="is-size-5">
+                                    <li>Improve map navigation</li>
+                                        <ul>
+                                            <li>
+                                                Add keypoints at turns (like Clew: fit lines to the path rather than going between each
+                                                odometry point.
+                                            </li>
+                                            <li>Add Clew-style navigation: verbal feedback in addition to audio and haptics</li>
+                                            <li>
+                                                Investigate using the automatic localization that Clew anchor points sometimes use to start
+                                                navigation rather than needing to scan a tag
+                                            </li>
+                                        </ul>
+                                    <li>App features</li>
+                                        <ul>
+                                            <li>Customization of directions, sounds, haptics, etc.</li>
+                                            <li>Voice notes (navigation context is important)</li>
+                                            <li>Use GPS positioning to identify public maps in the area</li>
+                                        </ul>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul class="is-size-5">
+                                    <li>Helping BVI people find tags</li>
+                                    <li>Obstacle detections - possibly combine with voice notes</li>
+                                        <ul>
+                                            <li>Make sure to give context for any detours</li>
+                                        </ul>
+                                    <li>Tutorials for both apps</li>
+                                </ul>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="content">
+                <h3 id="links">Key Terms and Further Exploration</h3>
+                <ul class="is-size-5">
+                    <li><a href="https://developer.apple.com/augmented-reality/" target="_blank">ARKit</a></li>
+                    <li><a href="https://developer.apple.com/xcode/swiftui/" target="_blank">SwiftUI</a></li>
+                    <li><a href="https://developer.apple.com/documentation/uikit">UIKit</a></li>
+                    <li><a href="https://firebase.google.com/" target="_blank">Firebase</a></li>
+                    <li><a href="https://april.eecs.umich.edu/software/apriltag.html" target="_blank">AprilTags</a></li>
+                    <li><a href="https://en.wikipedia.org/wiki/Graph_(discrete_mathematics)" target="_blank">Graphs</a></li>
+                    <li><a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf" target="_blank">G2O Algorithm Paper</a></li>
+                    <li><a href="http://wangxinliu.com/" target="_blank">Great blog posts by Wangxin Liu about graph optimization and g2o</a></li>
+                    <li><a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing" target="_blank">Marion Madanguit and Avery Clowes' Invisible Map UX Work</a></li>
+                    <li><a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">Duncan Mazza's map evaluation paper</a></li>
+                </ul>
+            </div>
+        </section>
     </body>
 </html>
