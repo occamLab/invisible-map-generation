@@ -1,19 +1,73 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="../basicstyle.css">
+        <!--Bulma CSS framework-->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.css"/>
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
         <title>Code Usage | Invisible Map</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </head>
-    <body>
-        <a href="../index.html">Home</a>
-        <h1>Invisible Map</h1>
-        <h2>On this page</h2>
-        <ul>
-            <li></li>
-        </ul>
+    <body class="has-navbar-fixed-top">
+        <!--Navigation bar (on all pages)-->
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href = "../index.html">
+                    <img src=../media/InvisibleMapProjectLogo.png alt="Invisible Map Project Icon">
+                </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="../index.html">Home</a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">The Concepts</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../concepts/slam-intro.html">The Problem: SLAM</a>
+                            <a class = navbar-item href="../concepts/graphs-intro.html">The Model: Graphs in the Invisible Map</a>
+                            <a class = navbar-item href="../concepts/g2o-intro.html">The Solution: Introduction to G2O</a>
+                            <a class = navbar-item href="../concepts/eval-intro.html">Map Evaluation</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Overall Code</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../code/code-structure.html">Code Structure</a>
+                            <a class = navbar-item href="../code/data-structure.html">Data Structure</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Component Details</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="invisible-map-creator.html">Invisible Map Creator</a>
+                            <a class = navbar-item href="invisible-map-generation.html">Invisible Map Generation</a>
+                            <a class = navbar-item href="invisible-map.html">Invisible Map</a>
+                        </div>
+                    </div>                    
+                </div>
+            </div>
+        </nav>
+
+        <section class="hero is-small is-primary">
+            <div class="hero-body">
+                <h1 class="title is-2">Invisible Map</h1>
+            </div>
+        </section>
+
+        <section class="hero is-small is-success">
+            <div class="hero-body">
+                <h2 class="title is-3">On this page</h2>
+                <div class="tabs is-toggle">
+                    <ul class="is-size-5">
+                        <li></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
     </body>
 </html>

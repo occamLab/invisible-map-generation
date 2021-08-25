@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="../basicstyle.css">
+        <!--Bulma CSS framework-->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.css"/>
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
         <title>G2O | Invisible Map Onboarding Materials</title>
@@ -10,169 +11,245 @@
             src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js">
         </script>
     </head>
-    <body>
-        <a href="../index.html">Home</a>
-        <h1>The Solution: Introduction to G2O</h1>
-        <h2>On this page</h2>
-        <ul>
-            <li><a href="#definitions">Definitions</a></li>
-            <li><a href="#math">The Math</a></li>
-            <li><a href="#sba">Sparse Bundle Adjustment (SBA)</a></li>
-        </ul>
-        <p>
-            This page introduces G2O on the conceptual level. To learn about how it is implemented in
-            Invisible Map, visit <a href="../details/invisible-map-generation.html">the page on Invisible Map 
-            Generation</a> (the backend processing code).
-        </p>
-        <p>
-            G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf"
-            target="_blank">an algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty
-            standard. G2O, like most other SLAM solutions, represents measurements as a graph. Each vertex contains
-            a pose - some position and orientation, either represented as a vector of 3 position elements followed
-            by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation and a translation. One can
-            easily be translated to the other. The edges each have some linear transformation representing the
-            conversion from one vertex to the next.
-        </p>
-        <p>
-            The most important intuition to get first is that the edge values (the measurements) are fixed, while
-            the vertex values (the poses) are variable. G2O will not change the measurements, instead altering the
-            poses to best match them. The result will (hopefully) be a more accurate version of the already recorded
-            map.
-        </p>
-        <h2 id="definitions">Definitions</h2>
-        <ul>
-            <li>
-                \(x_i\) - a vector defining the pose corresponding to node i. Can be thought of as equivalent to
-                the node itself. Typically, this is either 6-dimensional (x, y, z, yaw, pitch, roll or x, y, z, qx,
-                qy, qz, where q is the quaternion defining the rotation - don’t worry about what quaternions are,
-                just that they are helpful for rotations). These will change as G2O runs.
-            </li>
-            <li>
-                <i>X</i> - a vector containing all \(x_i\). The goal of G2O is to find an X to minimize F(<i>X</i>),
-                <a href="#error-func">the error function</a>.
-            </li>
-            <li>
-                \(z_{ij}\) - a matrix, the transformation from \(x_i\) to \(x_j\). Essentially the edge. This is what
-                is being measured by the phone or robot or whatever sensor. These will stay constant as G2O runs.
-                Note that in the case of more than one connection between the two nodes, \(z_{ij}\) is the average
-                of all the transformations.
-            </li>
-            <li>
-                \(e(x_i,x_j,z_{ij})\), often abbreviated as \(e(X)_{ij}\) or \(e_{ij}\) - a vector, the error between
-                the two poses based on the transformation between them. Although \(z_{ij}\) is a parameter, it will
-                not change. This function tests how good a certain guess for the nodes <i>i</i> and <i>j</i> are. The
-                exact details of the function may vary with different types of edges, but all functions have
-                two properties: 1. the 0 vector when the nodes exactly match the transformation, 2. it increases
-                the further apart the two nodes are from being described by the transformation.
-            </li>
-            <li>
-                \(\Omega_{ij}\)- the “information” matrix for edge <i>i</i>, <i>j</i>. All it does is provide a
-                scale for each term of the error. While it can be different for each specific edge, it often is
-                only different for different types of edges - i.e. edges connecting odometry versus edges
-                connecting odometry and april tags. In most explanations of G2O, this matrix is a side note,
-                but it will be pretty important as we get into weight evaluations for reasons that will become
-                clear later. For now, just know it scales the errors.
-            </li>
-            <li id="error-func">
-                \(F(X)\) - the error function. The goal of G2O is to minimize this function. It is defined as
-                \(\sum\limits_{i,j} e_{ij}^T\Omega_{ij}e_{ij}\). Get used to the ABA form - this is effectively
-                \(ba^2\) for matrices, and just ensures that each term of the error sum is positive. This is how
-                it scales each part of the error. Note that this means \(\Omega\)must also be positive (or
-                technically positive definite, but that is not necessary to know the details of - just know that
-                each term is positive).
-            </li>
-        </ul>
-        <h2 id="math">The Math</h2>
-        <p>
-            For those who want the full understanding, we will work through all the math here, step by step. If
-            you don’t care, feel free to skip this section.
-        </p>
-        <p>
-            First, define \(X^*\) to be the ideal poses - \(argmin F(X)\). Given an initial guess \(\check{X}\),
-            tipically defined as the initial pose guesses given by measurement, define \(\Delta X\) so that
-            \(\check{X} + \Delta X = X^*\). In this way, we just need to find \(\Delta X\). This may seem like a
-            small difference, but it will help a lot.
-        </p>
-        <p>
-            Now we need to minimize \(F(\check{X} + \Delta X)\). Substituing into <a href="#error-func">the
-            error function</a>, we get: $$F(\check{X} + \Delta X) = \sum\limits_{i,j} e_{ij} (\check{X} + 
-            \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$ However, we do not know exactly what
-            \(e_{ij}\) is, so we cannot just plug in \(\check{X} + \Delta X\) without first knowing \(\Delta X\)
-            (which is what we want to find!). We can, however, approximate it through linearization with the
-            following equation: $$e_{ij}(\check{X} + \Delta X) \approx e_{ij}(\check{X}) + J_{ij}\Delta X$$ where
-            \(J_{ij}\) is the Jacobian of \(e_{ij}\). IF the gradient is the vector-to-scalar analog of the 
-            derivative, the Jacobian is the vector-to-vector analog of the gradient - a matrix of partial
-            derivatives of each output variable with respect to each input variale. This effectively creates
-            a plane through \(e_{ij}(\check{X})\) in the direction of the error function, then takes a step
-            of size \(\Delta X\) in that direcion. For sufficiently smooth functions, this will be a pretty
-            good estimation of the resulting value. Notice that this only works with the sum
-            \(\check{X} + \Delta X\); this is why we restated the problem this way in the first place.
-        </p>
-        <p>
-            From here, it will be a lot of math and simplifying. You can follow along or just skip to the
-            final answer. We will take \(e_{ij} = e_{ij}(\check{X})\) for simplicity.
-            $$F_{ij}(\check{X} + \Delta X) = e_{ij}(\check{X} + \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$
-            $$F_{ij}(\check{X} + \Delta X) = (e_{ij} + J_{ij}\Delta X)^T \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
-            $$F_{ij}(\check{X} + \Delta X) = (e_{ij}^T + \Delta X^T J_{ij}^T) \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
-            $$F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + e_{ij}^T\Omega_{ij}J_{ij}\Delta X +
-            \Delta X^T J_{ij}^T\Omega_{ij}e_{ij} + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X$$
-        </p>
-        <p style="text-align:center">
-            \(F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + 2e_{ij}^T\Omega_{ij}J_{ij}\Delta X + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X\)
-            <sup><a href="#notes-footer">1</a></sup>
-        </p>
-        <p>
-            $$c_{ij} = e_{ij}^T\Omega_{ij}e_{ij} \;\;\;\;\;\;\; b_{ij} = e_{ij}^T\Omega_{ij}J_{ij} \;\;\;\;\;\;\; H_{ij} = J_{ij}^T\Omega_{ij}J_{ij}$$
-            $$F_{ij}(\check{X} + \Delta X) = c_{ij} + 2b_{ij}\Delta X + \Delta X^T H_{ij}\Delta X$$
-            $$F(\check{X} + \Delta X) = c + 2b\Delta X + \Delta X^T H\Delta X$$
-        </p>
-        <p>
-            Now we have \(F(\check{X} + \Delta X)\) in terms of constants and \(\Delta X\). To find the minimum,
-            we take the derivative and set it equal to 0. Or, more accurately, take the gradient and set it to
-            equal to \(\vec{0}\):
-            $$\nabla(\check{X} + \Delta X) = \nabla(c + 2b\Delta X + \Delta X^T H \Delta X) = \vec{0}$$
-            $$2b + 2H\Delta X = \vec{0}$$
-            $$H\Delta X = -b$$
-            $$\Delta X = -H^{-1}b$$
-            And now we have a definition for \(\Delta X\) given \(\check{X}\), \(e_{ij}(X)\) and \(J_{ij}(X)\),
-            and can solve for it accordingly. From here, all we need to do is add \(\Delta X\) to \(\check{X}\)
-            to get \(X^*\) and we are done.
-        </p>
+    <body class="has-navbar-fixed-top">
+        <!--Navigation bar (on all pages)-->
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href = "../index.html">
+                    <img src=../media/InvisibleMapProjectLogo.png alt="Invisible Map Project Icon">
+                </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="../index.html">Home</a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">The Concepts</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="slam-intro.html">The Problem: SLAM</a>
+                            <a class = navbar-item href="graphs-intro.html">The Model: Graphs in the Invisible Map</a>
+                            <a class = navbar-item href="g2o-intro.html">The Solution: Introduction to G2O</a>
+                            <a class = navbar-item href="eval-intro.html">Map Evaluation</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Overall Code</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../code/code-structure.html">Code Structure</a>
+                            <a class = navbar-item href="../code/data-structure.html">Data Structure</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Component Details</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../details/invisible-map-creator.html">Invisible Map Creator</a>
+                            <a class = navbar-item href="../details/invisible-map-generation.html">Invisible Map Generation</a>
+                            <a class = navbar-item href="../details/invisible-map.html">Invisible Map</a>
+                        </div>
+                    </div>                    
+                </div>
+            </div>
+        </nav>
 
-        <h2 id="sba">Sparse Bundle Adjustment (SBA)</h2>
-        <p>
-            Sparse Bundle Adjustment (SBA) is an add-on to G2O to make it a little more accurate in the case of 
-            detecting things like April Tags with a camera. The camera does not actually find the center of the 
-            tag; it finds the four corners of the tag, storing them as separate detections. In a normal 
-            implementation of G2O, this is represented as four different vertices and four different edges. These 
-            four vertices, while representing pretty much the same thing, are only connected indirectly, through the
-            odometry nodes. Theoretically, this should not matter, but small changes in the tag (curved surfaces, 
-            slightly too big or too small, etc.) can cause the optimizer to move these corners independently, 
-            resulting in a very skewed tag in the final map.
-        </p>
-        <p>
-            SBA attempts to fix this by creating an extra node in the “middle” of the other four. The odometry node 
-            connects to this, then this node connects to the four corner nodes. These nodes are set as fixed relative 
-            to the main tag node, so the optimizer can only move the center of the tag, not each corner independently.
-            Most of this is abstracted away in a special type of Edge in SparseOptimizer, and by storing only the 
-            position of the center node in our Graph. The only notable change is that this position is stored as an
-            x-y position on the phone screen, in pixels, instead of a pose, in meters and radians.
-        </p>
-        <p>
-            With the switch to mapping with primarily LIDAR phones, SBA is not needed. With LIDAR phones, when we 
-            detect a tag, we shoot a ray in that direction. If it intersects a vertical plane (which it should, 
-            since it is mounted on a wall!), we store the transformation to this intersection instead of the 
-            transformation to the tag. This pose will be on the wall, in the same orientation of the wall. While 
-            this is much more accurate because of LIDAR, it also means it is harder to convert that pose back to 
-            pixels, as is needed for SBA. Therefore, we have largely abandoned SBA, at least for the time being.
-        </p>
+        <section class="hero is-small is-primary">
+            <div class="hero-body">
+                <h1 class="title is-2">The Solution: Introduction to G2O</h1>
+            </div>
+        </section>
 
-        <footer id="notes-footer">
-            <sup>1</sup> Remember the sizes of these vectors - J and \(\Omega\) are square matrices while
-            \(\Delta X\) and e are column vectors. For both of the middle two terms in the previous equation,
-            this evaluates to a scalar. Since \(\Omega\) is a diagonal matrix, it is its own transpose. This
-            means the middle two terms are transposes of each other, and since they are scalars, it means they
-            are equivalent. Hence, they are combined.
-        </footer>
+        <section class="hero is-small is-success">
+            <div class="hero-body">
+                <h2 class="title is-3">On this page</h2>
+                <div class="tabs is-toggle">
+                    <ul class="is-size-5">
+                        <li><a href="#definitions">Definitions</a></li>
+                        <li><a href="#math">The Math</a></li>
+                        <li><a href="#sba">Sparse Bundle Adjustment (SBA)</a></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="content">
+                <p class="is-size-5">
+                    This page introduces G2O on the conceptual level. To learn about how it is implemented in
+                    Invisible Map, visit <a href="../details/invisible-map-generation.html">the page on Invisible Map 
+                    Generation</a> (the backend processing code).
+                </p>
+                <p class="is-size-5">
+                    G2O, or “generic graph optimization”, is <a href="https://www.cct.lsu.edu/~kzhang/papers/g2o.pdf"
+                    target="_blank">an algorithm to solve SLAM problems</a> first proposed in 2011, and is now pretty
+                    standard. G2O, like most other SLAM solutions, represents measurements as a graph. Each vertex contains
+                    a pose - some position and orientation, either represented as a vector of 3 position elements followed
+                    by 3 (or 4) orientation elements, or some 4x4 matrix representing a rotation and a translation. One can
+                    easily be translated to the other. The edges each have some linear transformation representing the
+                    conversion from one vertex to the next.
+                </p>
+                <p class="is-size-5">
+                    The most important intuition to get first is that the edge values (the measurements) are fixed, while
+                    the vertex values (the poses) are variable. G2O will not change the measurements, instead altering the
+                    poses to best match them. The result will (hopefully) be a more accurate version of the already recorded
+                    map.
+                </p>
+            </div>
+        </section>
+
+        <section class="section" id="definitions">
+            <div class="content">
+                <h2>Definitions</h2>
+                <ul class="is-size-5">
+                    <li>
+                        \(x_i\) - a vector defining the pose corresponding to node i. Can be thought of as equivalent to
+                        the node itself. Typically, this is either 6-dimensional (x, y, z, yaw, pitch, roll or x, y, z, qx,
+                        qy, qz, where q is the quaternion defining the rotation - don’t worry about what quaternions are,
+                        just that they are helpful for rotations). These will change as G2O runs.
+                    </li>
+                    <li>
+                        <i>X</i> - a vector containing all \(x_i\). The goal of G2O is to find an X to minimize F(<i>X</i>),
+                        <a href="#error-func">the error function</a>.
+                    </li>
+                    <li>
+                        \(z_{ij}\) - a matrix, the transformation from \(x_i\) to \(x_j\). Essentially the edge. This is what
+                        is being measured by the phone or robot or whatever sensor. These will stay constant as G2O runs.
+                        Note that in the case of more than one connection between the two nodes, \(z_{ij}\) is the average
+                        of all the transformations.
+                    </li>
+                    <li>
+                        \(e(x_i,x_j,z_{ij})\), often abbreviated as \(e(X)_{ij}\) or \(e_{ij}\) - a vector, the error between
+                        the two poses based on the transformation between them. Although \(z_{ij}\) is a parameter, it will
+                        not change. This function tests how good a certain guess for the nodes <i>i</i> and <i>j</i> are. The
+                        exact details of the function may vary with different types of edges, but all functions have
+                        two properties: 1. the 0 vector when the nodes exactly match the transformation, 2. it increases
+                        the further apart the two nodes are from being described by the transformation.
+                    </li>
+                    <li>
+                        \(\Omega_{ij}\)- the “information” matrix for edge <i>i</i>, <i>j</i>. All it does is provide a
+                        scale for each term of the error. While it can be different for each specific edge, it often is
+                        only different for different types of edges - i.e. edges connecting odometry versus edges
+                        connecting odometry and april tags. In most explanations of G2O, this matrix is a side note,
+                        but it will be pretty important as we get into weight evaluations for reasons that will become
+                        clear later. For now, just know it scales the errors.
+                    </li>
+                    <li id="error-func">
+                        \(F(X)\) - the error function. The goal of G2O is to minimize this function. It is defined as
+                        \(\sum\limits_{i,j} e_{ij}^T\Omega_{ij}e_{ij}\). Get used to the ABA form - this is effectively
+                        \(ba^2\) for matrices, and just ensures that each term of the error sum is positive. This is how
+                        it scales each part of the error. Note that this means \(\Omega\)must also be positive (or
+                        technically positive definite, but that is not necessary to know the details of - just know that
+                        each term is positive).
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="section" id="math">
+            <div class="content">
+                <h2>The Math</h2>
+                <p class="is-size-5">
+                    For those who want the full understanding, we will work through all the math here, step by step. If
+                    you don’t care, feel free to skip this section.
+                </p>
+                <p class="is-size-5">
+                    First, define \(X^*\) to be the ideal poses - \(argmin F(X)\). Given an initial guess \(\check{X}\),
+                    tipically defined as the initial pose guesses given by measurement, define \(\Delta X\) so that
+                    \(\check{X} + \Delta X = X^*\). In this way, we just need to find \(\Delta X\). This may seem like a
+                    small difference, but it will help a lot.
+                </p>
+                <p class="is-size-5">
+                    Now we need to minimize \(F(\check{X} + \Delta X)\). Substituing into <a href="#error-func">the
+                    error function</a>, we get: $$F(\check{X} + \Delta X) = \sum\limits_{i,j} e_{ij} (\check{X} + 
+                    \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$ However, we do not know exactly what
+                    \(e_{ij}\) is, so we cannot just plug in \(\check{X} + \Delta X\) without first knowing \(\Delta X\)
+                    (which is what we want to find!). We can, however, approximate it through linearization with the
+                    following equation: $$e_{ij}(\check{X} + \Delta X) \approx e_{ij}(\check{X}) + J_{ij}\Delta X$$ where
+                    \(J_{ij}\) is the Jacobian of \(e_{ij}\). IF the gradient is the vector-to-scalar analog of the 
+                    derivative, the Jacobian is the vector-to-vector analog of the gradient - a matrix of partial
+                    derivatives of each output variable with respect to each input variale. This effectively creates
+                    a plane through \(e_{ij}(\check{X})\) in the direction of the error function, then takes a step
+                    of size \(\Delta X\) in that direcion. For sufficiently smooth functions, this will be a pretty
+                    good estimation of the resulting value. Notice that this only works with the sum
+                    \(\check{X} + \Delta X\); this is why we restated the problem this way in the first place.
+                </p>
+                <p class="is-size-5">
+                    From here, it will be a lot of math and simplifying. You can follow along or just skip to the
+                    final answer. We will take \(e_{ij} = e_{ij}(\check{X})\) for simplicity.
+                    $$F_{ij}(\check{X} + \Delta X) = e_{ij}(\check{X} + \Delta X)^T \Omega_{ij} e_{ij} (\check{X} + \Delta X)$$
+                    $$F_{ij}(\check{X} + \Delta X) = (e_{ij} + J_{ij}\Delta X)^T \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
+                    $$F_{ij}(\check{X} + \Delta X) = (e_{ij}^T + \Delta X^T J_{ij}^T) \Omega_{ij} (e_{ij} + J_{ij}\Delta X)$$
+                    $$F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + e_{ij}^T\Omega_{ij}J_{ij}\Delta X +
+                    \Delta X^T J_{ij}^T\Omega_{ij}e_{ij} + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X$$
+                </p>
+                <p class="is-size-5" style="text-align:center">
+                    \(F_{ij}(\check{X} + \Delta X) = e_{ij}^T\Omega_{ij}e_{ij} + 2e_{ij}^T\Omega_{ij}J_{ij}\Delta X + \Delta X^T J_{ij}^T\Omega_{ij}J_{ij}\Delta X\)
+                    <sup><a href="#notes-footer">1</a></sup>
+                </p>
+                <p class="is-size-5">
+                    $$c_{ij} = e_{ij}^T\Omega_{ij}e_{ij} \;\;\;\;\;\;\; b_{ij} = e_{ij}^T\Omega_{ij}J_{ij} \;\;\;\;\;\;\; H_{ij} = J_{ij}^T\Omega_{ij}J_{ij}$$
+                    $$F_{ij}(\check{X} + \Delta X) = c_{ij} + 2b_{ij}\Delta X + \Delta X^T H_{ij}\Delta X$$
+                    $$F(\check{X} + \Delta X) = c + 2b\Delta X + \Delta X^T H\Delta X$$
+                </p>
+                <p class="is-size-5">
+                    Now we have \(F(\check{X} + \Delta X)\) in terms of constants and \(\Delta X\). To find the minimum,
+                    we take the derivative and set it equal to 0. Or, more accurately, take the gradient and set it to
+                    equal to \(\vec{0}\):
+                    $$\nabla(\check{X} + \Delta X) = \nabla(c + 2b\Delta X + \Delta X^T H \Delta X) = \vec{0}$$
+                    $$2b + 2H\Delta X = \vec{0}$$
+                    $$H\Delta X = -b$$
+                    $$\Delta X = -H^{-1}b$$
+                    And now we have a definition for \(\Delta X\) given \(\check{X}\), \(e_{ij}(X)\) and \(J_{ij}(X)\),
+                    and can solve for it accordingly. From here, all we need to do is add \(\Delta X\) to \(\check{X}\)
+                    to get \(X^*\) and we are done.
+                </p>
+            </div>
+        </section>
+
+        <section class="section" id="sba">
+            <div class="content">
+                <h2>Sparse Bundle Adjustment (SBA)</h2>
+                <p class="is-size-5">
+                    Sparse Bundle Adjustment (SBA) is an add-on to G2O to make it a little more accurate in the case of 
+                    detecting things like April Tags with a camera. The camera does not actually find the center of the 
+                    tag; it finds the four corners of the tag, storing them as separate detections. In a normal 
+                    implementation of G2O, this is represented as four different vertices and four different edges. These 
+                    four vertices, while representing pretty much the same thing, are only connected indirectly, through the
+                    odometry nodes. Theoretically, this should not matter, but small changes in the tag (curved surfaces, 
+                    slightly too big or too small, etc.) can cause the optimizer to move these corners independently, 
+                    resulting in a very skewed tag in the final map.
+                </p>
+                <p class="is-size-5">
+                    SBA attempts to fix this by creating an extra node in the “middle” of the other four. The odometry node 
+                    connects to this, then this node connects to the four corner nodes. These nodes are set as fixed relative 
+                    to the main tag node, so the optimizer can only move the center of the tag, not each corner independently.
+                    Most of this is abstracted away in a special type of Edge in SparseOptimizer, and by storing only the 
+                    position of the center node in our Graph. The only notable change is that this position is stored as an
+                    x-y position on the phone screen, in pixels, instead of a pose, in meters and radians.
+                </p>
+                <p class="is-size-5">
+                    With the switch to mapping with primarily LIDAR phones, SBA is not needed. With LIDAR phones, when we 
+                    detect a tag, we shoot a ray in that direction. If it intersects a vertical plane (which it should, 
+                    since it is mounted on a wall!), we store the transformation to this intersection instead of the 
+                    transformation to the tag. This pose will be on the wall, in the same orientation of the wall. While 
+                    this is much more accurate because of LIDAR, it also means it is harder to convert that pose back to 
+                    pixels, as is needed for SBA. Therefore, we have largely abandoned SBA, at least for the time being.
+                </p>
+            </div>
+        </section>
+
+        <section class="section" id="notes-footer">
+            <div class="content">
+                <footer class="is-size-6">
+                    <sup>1</sup> Remember the sizes of these vectors - J and \(\Omega\) are square matrices while
+                    \(\Delta X\) and e are column vectors. For both of the middle two terms in the previous equation,
+                    this evaluates to a scalar. Since \(\Omega\) is a diagonal matrix, it is its own transpose. This
+                    means the middle two terms are transposes of each other, and since they are scalars, it means they
+                    are equivalent. Hence, they are combined.
+                </footer>
+            </div>
+        </section>
     </body>
 </html>

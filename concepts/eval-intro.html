@@ -1,51 +1,110 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="../basicstyle.css">
+        <!--Bulma CSS framework-->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.css"/>
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
         <title>Map Evaluation | Invisible Map Onboarding Materials</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </head>
-    <body>
-        <a href="../index.html">Home</a>
-        <h2>On this page</h2>
-        <ul>
-            <li><a href="#weight-eval">Weight Evaluation</a></li>
-        </ul>
+    <body class="has-navbar-fixed-top">
+        <!--Navigation bar (on all pages)-->
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href = "../index.html">
+                    <img src=../media/InvisibleMapProjectLogo.png alt="Invisible Map Project Icon">
+                </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="../index.html">Home</a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">The Concepts</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="slam-intro.html">The Problem: SLAM</a>
+                            <a class = navbar-item href="graphs-intro.html">The Model: Graphs in the Invisible Map</a>
+                            <a class = navbar-item href="g2o-intro.html">The Solution: Introduction to G2O</a>
+                            <a class = navbar-item href="eval-intro.html">Map Evaluation</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Overall Code</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../code/code-structure.html">Code Structure</a>
+                            <a class = navbar-item href="../code/data-structure.html">Data Structure</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Component Details</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../details/invisible-map-creator.html">Invisible Map Creator</a>
+                            <a class = navbar-item href="../details/invisible-map-generation.html">Invisible Map Generation</a>
+                            <a class = navbar-item href="../details/invisible-map.html">Invisible Map</a>
+                        </div>
+                    </div>                    
+                </div>
+            </div>
+        </nav>
+
+        <section class="hero is-small is-primary">
+            <div class="hero-body">
+                <h1 class="title is-2">Weight Evaluation</h1>
+            </div>
+        </section>
+
+        <section class="hero is-small is-success">
+            <div class="hero-body">
+                <h2 class="title is-3">On this page</h2>
+                <div class="tabs is-toggle">
+                    <ul class="is-size-5">
+                        <li><a href="#weight-eval">Weight Evaluation</a></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
         
-        <h2 id="weight-eval">Weight Evaluation</h2>
-        <p>
-            The only issue for all this, at least for us, is the lack of ground truth data. In most applications of
-            SLAM, there is some way to get what the final set of poses “should” be - so when you are choosing weights,
-            you can choose them so that they get as close to ground truth as possible, then apply those same weights
-            for future maps. While we can get measures of ground truth data for tag locations around the lab, this
-            is difficult to get for odometry and nearly impossible to get for larger buildings, like the MAC as a
-            whole, where we would like this code to apply.
-        </p>
-        <p>
-            This caused us to start out with a guess and check method, which did okay. Previously, Duncan Mazza 
-            came up with 
-            <a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">
-                a method to evaluate weights without ground truth data
-            </a>
-            . The idea behind it is similar to 
-            machine learning - split the data into training and testing. Duncan ran the training data through G2O 
-            with the weights to evaluate. He then took the resulting tag locations and copied them to the testing 
-            data, fixing them in place, not allowing G2O to change their pose. He then optimizes the map again, but 
-            with a standardized set of weights. This will “warp” the path to fit the new tag positions. The 
-            assumption is that the more the path has to warp (the higher the resulting error), the worse the 
-            original weights were.
-        </p>
-        <p>
-            However, with some testing, we found that the standard set of weights had a large impact on the results 
-            of how good weights were. More than just changing the scale, altering the standard weights would not 
-            result in the same ranking of evaluation weights. On top of this, there was practically no correlation 
-            to ground truth in the OCCAM room. We fixed this by normalizing the weights; setting the total magnitude
-            of the tag and odometry weights to 1, and defining some ratio between the two. This created a really 
-            high correlation between different set of standard weights, and a positive correlation between this 
-            metric and ground truth (though not particularly high).
-        </p>
+        <section class="section" id="weight-eval">
+            <div class="content">
+                <h2>Weight Evaluation</h2>
+                <p class="is-size-5">
+                    The only issue for all this, at least for us, is the lack of ground truth data. In most applications of
+                    SLAM, there is some way to get what the final set of poses “should” be - so when you are choosing weights,
+                    you can choose them so that they get as close to ground truth as possible, then apply those same weights
+                    for future maps. While we can get measures of ground truth data for tag locations around the lab, this
+                    is difficult to get for odometry and nearly impossible to get for larger buildings, like the MAC as a
+                    whole, where we would like this code to apply.
+                </p>
+                <p class="is-size-5">
+                    This caused us to start out with a guess and check method, which did okay. Previously, Duncan Mazza 
+                    came up with 
+                    <a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">
+                        a method to evaluate weights without ground truth data
+                    </a>
+                    . The idea behind it is similar to 
+                    machine learning - split the data into training and testing. Duncan ran the training data through G2O 
+                    with the weights to evaluate. He then took the resulting tag locations and copied them to the testing 
+                    data, fixing them in place, not allowing G2O to change their pose. He then optimizes the map again, but 
+                    with a standardized set of weights. This will “warp” the path to fit the new tag positions. The 
+                    assumption is that the more the path has to warp (the higher the resulting error), the worse the 
+                    original weights were.
+                </p>
+                <p class="is-size-5">
+                    However, with some testing, we found that the standard set of weights had a large impact on the results 
+                    of how good weights were. More than just changing the scale, altering the standard weights would not 
+                    result in the same ranking of evaluation weights. On top of this, there was practically no correlation 
+                    to ground truth in the OCCAM room. We fixed this by normalizing the weights; setting the total magnitude
+                    of the tag and odometry weights to 1, and defining some ratio between the two. This created a really 
+                    high correlation between different sets of standard weights, and a positive correlation between this 
+                    metric and ground truth (though not particularly high).
+                </p>
+            </div>
+        </section>
     </body>
 </html>

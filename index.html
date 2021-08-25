@@ -14,7 +14,7 @@
         <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
             <div class="navbar-brand">
                 <a class="navbar-item" href = "index.html">
-                    <img src=media/InvisibleMapProjectLogo.png alt="InvisibleMap app icon">
+                    <img src=media/InvisibleMapProjectLogo.png alt="Invisible Map Project Icon">
                 </a>
                 <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
                     <span aria-hidden="true"></span>
@@ -70,8 +70,8 @@
         <section class="hero is-small is-success">
             <div class="hero-body">
                 <h2 class="title is-3">On this page</h2>
-                <div class="tabs">
-                    <ul class="is-underlined is-size-5">
+                <div class="tabs is-toggle">
+                    <ul class="is-size-5">
                         <li><a href="#intro">Project Introduction</a></li>
                         <li><a href="#progress-reports">Progress Reports</a></li>
                         <li><a href="#todo">TODOs</a></li>
@@ -81,34 +81,36 @@
             </div>
         </section>
 
-        <section class="section">
-            <h2 class="title is-4" id="intro">Project Introduction</h2>
-            <p class="is-size-5">
-                The Invisible Map is an <a href="https://developer.apple.com/augmented-reality/" target="_blank">
-                iOS ARKit</a> project developed in the OCCAM lab at Olin College of Engineering.
-                It is aimed at assisting people who are blind or visually impaired in navigating unfamiliar spaces,
-                however it is applicable to situations where any person may be able to utilize it, such as hospitals,
-                conventions, stadiums, and other large indoor spaces. The goal of the project is for a user to be able
-                to map out a space by placing <a href="https://april.eecs.umich.edu/software/apriltag.html" target=
-                "_blank">AprilTags</a> around the area and using iPhone AR capabilites to record data and mark points
-                of interest as they walk paths through the space. Then, the map can be used in AR by people unfamiliar
-                with the space to navigate between locations.
-            </p>
-            <p class="is-size-5">
-                The project consists of three parts. The front-end map creation (Invisible Map Creator) is an iOS 
-                app that a user would use to walk around a space populated with AprilTags, track points of interest,
-                and save the map. The back-end map processing is written in Python and will ideally be constantly
-                running on a server, taking the raw map data and optimizing it to synthesize the full invisible
-                map. The front-end map viewing (Invisible Map) is another iOS app which stores the list of maps
-                and is where the user can choose one and begin navigating a space with it. More details about the 
-                structure are on <a href="code/code-structure.html">the code structure page</a>.
-            </p>
+        <section class="section" id="intro">
+            <div class="content">
+                <h2>Project Introduction</h2>
+                <p class="is-size-5">
+                    The Invisible Map is an <a href="https://developer.apple.com/augmented-reality/" target="_blank">
+                    iOS ARKit</a> project developed in the OCCAM lab at Olin College of Engineering.
+                    It is aimed at assisting people who are blind or visually impaired in navigating unfamiliar spaces,
+                    however it is applicable to situations where any person may be able to utilize it, such as hospitals,
+                    conventions, stadiums, and other large indoor spaces. The goal of the project is for a user to be able
+                    to map out a space by placing <a href="https://april.eecs.umich.edu/software/apriltag.html" target=
+                    "_blank">AprilTags</a> around the area and using iPhone AR capabilites to record data and mark points
+                    of interest as they walk paths through the space. Then, the map can be used in AR by people unfamiliar
+                    with the space to navigate between locations.
+                </p>
+                <p class="is-size-5">
+                    The project consists of three parts. The front-end map creation (Invisible Map Creator) is an iOS 
+                    app that a user would use to walk around a space populated with AprilTags, track points of interest,
+                    and save the map. The back-end map processing is written in Python and will ideally be constantly
+                    running on a server, taking the raw map data and optimizing it to synthesize the full invisible
+                    map. The front-end map viewing (Invisible Map) is another iOS app which stores the list of maps
+                    and is where the user can choose one and begin navigating a space with it. More details about the 
+                    structure are on <a href="code/code-structure.html">the code structure page</a>.
+                </p>
+            </div>
         </section>
 
-        <section class="section">
-            <h2 class="title is-4" id="progress-reports">Progress Reports</h2>
-            <p class="is-size-5">The following is a list of links to progress reports written by previous researchers on this project.</p>
+        <section class="section" id="progress-reports">
             <div class="content">
+                <h2>Progress Reports</h2>
+                <p class="is-size-5">The following is a list of links to progress reports written by previous researchers on this project.</p>
                 <ul class="is-size-5">
                     <li><a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing" target="_blank">Marion Madanguit and Avery Clowes' Invisible Map UX Work</a></li>
                     <li><a href="https://drive.google.com/file/d/14lcU2qyMb_LNAWRCVb34AssXpQ95aNUf/view?usp=sharing" target="_blank">Duncan Mazza's map evaluation paper</a></li>
@@ -117,9 +119,9 @@
             </div>
         </section>
 
-        <section class="section">
+        <section class="section" id="todo">
             <div class="content">
-                <h3 id="todo">TODOs</h3>
+                <h2>TODOs</h2>
                 <table class="table">
                     <thead>
                         <tr class="is-size-5">
@@ -215,9 +217,9 @@
             </div>
         </section>
 
-        <section class="section">
+        <section class="section" id="links">
             <div class="content">
-                <h3 id="links">Key Terms and Further Exploration</h3>
+                <h2>Key Terms and Further Exploration</h2>
                 <ul class="is-size-5">
                     <li><a href="https://developer.apple.com/augmented-reality/" target="_blank">ARKit</a></li>
                     <li><a href="https://developer.apple.com/xcode/swiftui/" target="_blank">SwiftUI</a></li>

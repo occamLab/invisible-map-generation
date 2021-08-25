@@ -1,165 +1,237 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <link rel="stylesheet" href="../basicstyle.css">
+        <!--Bulma CSS framework-->
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.css"/>
         <meta charset="utf-12">
         <meta name="viewport" content="width=device-width">
         <title>Code Usage | Invisible Map Creator</title>
         <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
         <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     </head>
-    <body>
-        <a href="../index.html">Home</a>
-        <h1>Invisible Map Creator</h1>
-        <h2>On this page</h2>
-        <ul>
-            <li><a href="#code-structure">Code Structure: In the Files</a></li>
-            <ul>
-                <li><a href="#state-machine">State Machine</a></li>
-                <li><a href="#views">Views</a></li>
-            </ul>
-            <li><a href="#how-it-works">How it Works</a></li>
-        </ul>
-        <p>
-            Invisible Map Creator is the iOS app used to create maps of spaces set up with AprilTags.
-            An important note is that the app works best with a LiDAR enabled phone (currently just the iPhone 12
-            Pro and Pro Max). In general, the more recent the iPhone, the better (non-pro iPhone 12 also works pretty
-            well). In brief, the app works by tracking phone position, using the camera to detect tags and calculate their
-            positions, and then connecting these two types of data into a graph and optimizing it to create the final
-            map. The most recent code is in the InvisibleMapCreator2 directory in the lidar-mesh branch of the
-            <a href="https://github.com/occamLab/InvisibleMap"> InvisibleMap repository on Github</a>.
-        </p>
-        <h2 id="code-structure">Code Structure: In the Files</h2>
-        <p>
-            As described on the <a href="../code/code-structure.html">Code Structure page</a>,
-            InvisibleMapCreator2 is a restructuring and redesign of the original
-            InvisibleMapCreator app. Marion and Avery describe the code structure in
-            <a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing"
-            target="_blank">their write-up of their work</a> and also
-            link to more detailed resources to understand the architecture. In summary, the app utilizes a 
-            composable finite state machine, which tracks the different UIs (views) of the app as <b>states</b>.
-            The state machine responds to <b>events</b> which are usually triggered by some user input or action,
-            and can <b>transition</b> between states or emit a <b>command</b> in response to an events. The commands
-            are used to communicate with the main functional components of the app (such as gathering data points).
-            The map creator uploads the map's raw data to Firebase to be processed by the backend.
-        </p>
-        <p>
-            The <b>AppDelegate</b> is the root object of the app. It calls on the files in the Authentication directory
-            to handle Apple ID sign in and anonymous authentication if the user declines Apple ID sign in. Currently,
-            the Invisible Map relies on the user signing in to Map Creator with Apple ID in order for it to be able
-            to find the maps the user has created (anonymous authenticaiton creates a different ID for different
-            apps). 
-        </p>
-        <h3 id="state-machine">State Machine</h4>
-        <p>
-            The state machine consists of StateType, AppState, AppController, and MapRecorder. <b>StateType</b> is the protocal
-            that provides the basic structure for the AppState class. <b>AppState</b> stores the different states (UI views)
-            that the app can be in (Ex: main screen, recording a map, viewing locations, etc.), the events that can
-            happen (Ex: a new recording is requested, a new AR frame is available to be processed, adding a new
-            location is reqeusted, etc.), and what commands can be fired as a result of events (Ex: record data, 
-            detect tags, pin location, etc.). The <b>handleEvent()</b> function translates the current app state and one or
-            more events into one or more commands to be fired. The response to events can also be transitioning
-            between app states in addition to or instead of commands.
-        </p>
-        <p>
-            <b>AppController</b> is the main class that processes the commands emmitted when events occur and calls functions
-            in the app. The AppController.swift file also contains protocals for other controllers that dictate
-            what functions they need. The <b>processCommands()</b> function translates commands emmitted by AppState into
-            functions in various other files, including MapRecorder and some of the views. The proccessing functions
-            in the extension to AppController are called when things happen while the app is used, such as when
-            certain buttons are pressed, and send events to AppState's handleEvent() to get commands to then send
-            to processCommands(). AppController contains an object named <b>shared</b>, which is a shared instance of
-            the AppController that is referenced throughout all the app files. AppController has an instance of
-            MapRecorder, ARViewController, and RecordViewController.
-        </p>
-        <p>
-            <b>MapRecorder</b> contains the bulk of the backend processing for Invisible Map Creator, which is mainly
-            taking image frames from the phone and detecting tags in them, finding their position, saving the position
-            along with the phone odometry data, and uploading the raw data at the end of making a map. 
-        </p>
-        <h3 id="views">Views</h4>
-        <p>
-            <b>ContentView</b> dictates the main screen when the app is first opened and loads in maps from Firebase. Currently,
-            the maps that are loaded are the ones that you created while signed in to your Apple ID. In the future,
-            you will be able to edit your created maps (change location names, map name, map picture).
-        </p>
-        <p>
-            <b>EditMapView</b> is currently empty, and is the view that will be transitioned to when editing map details
-            as mentioned in the previous paragraph.
-        </p>
-        <p>
-           <b>RecordMapView</b> is the view that displays while recording a map and contains all the buttons and options
-            available while recording. It includes instruction text that transitions based on user actions.
-        </p>
-        <p>
-            <b>ARView</b> handles everything to do with ARKit. Its role is described in more detail below in the
-            <a href="#how-it-works">How it Works</a> section of this page. It handles any AR visualizations and
-            also any data collection that involves the AR scene (mainly raycasting, described below).
-        </p>
-        <p>
-            The <b>Record Map Subviews</b> directory contains a collection of subviews for the different components that
-            appear in the RecordMapView (e.g. add location button).
-        </p>
+    <body class="has-navbar-fixed-top">
+        <!--Navigation bar (on all pages)-->
+        <nav class="navbar is-light is-fixed-top" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href = "../index.html">
+                    <img src=../media/InvisibleMapProjectLogo.png alt="Invisible Map Project Icon">
+                </a>
+                <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" onclick="document.querySelector('.navbar-menu').classList.toggle('is-active');">
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                    <span aria-hidden="true"></span>
+                </a>                
+            </div>
+            <div class="navbar-menu">
+                <div class="navbar-start">
+                    <a class="navbar-item" href="../index.html">Home</a>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">The Concepts</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../concepts/slam-intro.html">The Problem: SLAM</a>
+                            <a class = navbar-item href="../concepts/graphs-intro.html">The Model: Graphs in the Invisible Map</a>
+                            <a class = navbar-item href="../concepts/g2o-intro.html">The Solution: Introduction to G2O</a>
+                            <a class = navbar-item href="../concepts/eval-intro.html">Map Evaluation</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Overall Code</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="../code/code-structure.html">Code Structure</a>
+                            <a class = navbar-item href="../code/data-structure.html">Data Structure</a>
+                        </div>
+                    </div>
+                    <div class="navbar-item has-dropdown is-hoverable">
+                        <a class="navbar-link">Component Details</a>
+                        <div class="navbar-dropdown">
+                            <a class = "navbar-item" href="invisible-map-creator.html">Invisible Map Creator</a>
+                            <a class = navbar-item href="invisible-map-generation.html">Invisible Map Generation</a>
+                            <a class = navbar-item href="invisible-map.html">Invisible Map</a>
+                        </div>
+                    </div>                    
+                </div>
+            </div>
+        </nav>
 
-        <h2 id="how-it-works">How it Works</h2>
-        <p>
-            After starting a recording, as you walk around, the app records odometry data (position and orientation)
-            10 times every second. You can explore the exact data stored during map creation on the
-            <a href="../code/data-structure.html">Data Structure page</a>. MapRecorder processes each frame,
-            sent from ARView, and checks for tags using the TagFinder C++ code in Invisible Map. A robust
-            understanding of how the TagFinder code works is not important to developing on Map Creator. The
-            important information is that the TagFinder returns information about each tag detected in the frame,
-            including the 4x4 transform to the tag relative to the camera
-            coordinate frame. 
-        </p>
-        <p>
-            All of this occurs in MapRecorder, where the main function recordData() is called
-            every time a new ARFrame is recorded. recordData() subsequently calls functions to record odometry pose,
-            tag poses, and plane data. recordTags() then calls getARTags, which calls the TagFinder code to obtain
-            a list of all tags detected in the frame. This function also interfaces with ARView, both directly and 
-            thorugh the state machine, in order to correct the tag position and display the AR tag visualization.
-        </p>
-        <h3>Raycasting</h3>
-        <p>    
-            The correcting tag position mentioned in the previous section is important. In order to take advantage
-            of the capabilities of newer iPhones with LiDAR sensors, a feature was implemented
-            that uses raycasting to force place tags onto flat planes detected by ARKit, rather than relying on the
-            TagFinder's pose estimate. Currently, this is only done on LiDAR enabled devices, but a next step may
-            be to implement it on non-LiDAR devices and assess whether it also makes their detections more accurate.
-        </p>
-        <p>    
-            On a basic level, TagFinder locates the tag by identifying the pixel
-            coordinates of the corners of the tags, and calculates the physical location using the camera's
-            intrinsics. This sometimes is not very accurate for orientation in particular, especially at angles that
-            are mostly straight on, as a difference of a few pixels can be
-            much more significant physically than it seems. ARKit has a built in feature that automatically detects
-            and locates flat planes during an AR session. These flat planes are much more likely to be accurate in
-            terms of orientation than the TagFinder's detections, especially in LiDAR phones. 
-        </p>
-        <p>
-            Raycasting is a function built into ARKit where you can essentially shoot a virtual ray out from a source
-            position in a certain direction. The raycasting function will then return a list of points where the
-            ray struck an object of the types you specify: planes, in the case of Map Creator. This raycasting is
-            done in the raycastTag() function of ARView. The raycast starts at the position of the camera, and is
-            pointed in the direction of the tag center detected by TagFinder. raycastTag() returns the transform of
-            the first raycast result, which is the first point where the raycast strikes a plane. The transform's
-            orientation is the orientation of the plane, and the position is in world frame. MapRecorder's getArTags()
-            function then directly changes the transform of the tag from the one found by TagFinder to the result
-            of the raycast. This forces the tag to lay flat on the detected plane. This does also force the tag to be
-            exactly rotated with the plane, so if a tag were to be flat on the wall but rotated 90 degrees, for example,
-            it would be adjusted to be upright. If a mapper places a tag like this, it will mess up the map navigation later,
-            although it would not mess up the map creation. 
-        </p>
-        <h3>Finishing Map Creation</h3>
-        <p>
-            Along the way, waypoints can be added to the map. These points are just placed relative to the phone
-            position and can be named to indicate key locations. Right now, maps must be created all in one
-            recording. Future plans include adding a pausing feature and adding the ability to save a map and then
-            make another recording to add onto the previous map in a different session. The paths that people can take
-            while navigating the map are entirely dependent on paths that were walked during creation, so if the 
-            mapper misses a set of stairs, those stairs will not appear on the final map, even if the mapper walks
-            across the top and bottom of them. Upon saving the map, all of the data collected is put into a JSON file
-            and uploaded to Firebase for the backend code to download and process.
-        </p>
+        <section class="hero is-small is-primary">
+            <div class="hero-body">
+                <h1 class="title is-2">Invisible Map Creator</h1>
+            </div>
+        </section>
+
+        <section class="hero is-small is-success">
+            <div class="hero-body">
+                <h2 class="title is-3">On this page</h2>
+                <div class="tabs is-toggle">
+                    <ul class="is-size-5">
+                        <li>
+                            <a href="#code-structure">Code Structure: In the Files</a>
+                            <div class="tabs is-toggle">
+                                <ul>
+                                    <li><a href="#state-machine">State Machine</a></li>
+                                    <li><a href="#views">Views</a></li>
+                                </ul>
+                            </div>
+                        </li>
+                        <li><a href="#how-it-works">How it Works</a></li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="content">
+                <p class="is-size-5">
+                    Invisible Map Creator is the iOS app used to create maps of spaces set up with AprilTags.
+                    An important note is that the app works best with a LiDAR enabled phone (currently just the iPhone 12
+                    Pro and Pro Max). In general, the more recent the iPhone, the better (non-pro iPhone 12 also works pretty
+                    well). In brief, the app works by tracking phone position, using the camera to detect tags and calculate their
+                    positions, and then connecting these two types of data into a graph and optimizing it to create the final
+                    map. The most recent code is in the InvisibleMapCreator2 directory in the lidar-mesh branch of the
+                    <a href="https://github.com/occamLab/InvisibleMap"> InvisibleMap repository on Github</a>.
+                </p>
+            </div>
+        </section>
+
+        <section class="section" id="code-structure">
+            <div class="content">
+                <h2>Code Structure: In the Files</h2>
+                <p class="is-size-5">
+                    As described on the <a href="../code/code-structure.html">Code Structure page</a>,
+                    InvisibleMapCreator2 is a restructuring and redesign of the original
+                    InvisibleMapCreator app. Marion and Avery describe the code structure in
+                    <a href="https://docs.google.com/document/d/13iVLu6OGieQ8GTn1ysAw7daawXYnD5HghI6UZjw1c9s/edit?usp=sharing"
+                    target="_blank">their write-up of their work</a> and also
+                    link to more detailed resources to understand the architecture. In summary, the app utilizes a 
+                    composable finite state machine, which tracks the different UIs (views) of the app as <b>states</b>.
+                    The state machine responds to <b>events</b> which are usually triggered by some user input or action,
+                    and can <b>transition</b> between states or emit a <b>command</b> in response to an events. The commands
+                    are used to communicate with the main functional components of the app (such as gathering data points).
+                    The map creator uploads the map's raw data to Firebase to be processed by the backend.
+                </p>
+                <p class="is-size-5">
+                    The <b>AppDelegate</b> is the root object of the app. It calls on the files in the Authentication directory
+                    to handle Apple ID sign in and anonymous authentication if the user declines Apple ID sign in. Currently,
+                    the Invisible Map relies on the user signing in to Map Creator with Apple ID in order for it to be able
+                    to find the maps the user has created (anonymous authenticaiton creates a different ID for different
+                    apps). 
+                </p>
+                <h3 id="state-machine">State Machine</h3>
+                <p class="is-size-5">
+                    The state machine consists of StateType, AppState, AppController, and MapRecorder. <b>StateType</b> is the protocal
+                    that provides the basic structure for the AppState class. <b>AppState</b> stores the different states (UI views)
+                    that the app can be in (Ex: main screen, recording a map, viewing locations, etc.), the events that can
+                    happen (Ex: a new recording is requested, a new AR frame is available to be processed, adding a new
+                    location is reqeusted, etc.), and what commands can be fired as a result of events (Ex: record data, 
+                    detect tags, pin location, etc.). The <b>handleEvent()</b> function translates the current app state and one or
+                    more events into one or more commands to be fired. The response to events can also be transitioning
+                    between app states in addition to or instead of commands.
+                </p>
+                <p class="is-size-5">
+                    <b>AppController</b> is the main class that processes the commands emmitted when events occur and calls functions
+                    in the app. The AppController.swift file also contains protocals for other controllers that dictate
+                    what functions they need. The <b>processCommands()</b> function translates commands emmitted by AppState into
+                    functions in various other files, including MapRecorder and some of the views. The proccessing functions
+                    in the extension to AppController are called when things happen while the app is used, such as when
+                    certain buttons are pressed, and send events to AppState's handleEvent() to get commands to then send
+                    to processCommands(). AppController contains an object named <b>shared</b>, which is a shared instance of
+                    the AppController that is referenced throughout all the app files. AppController has an instance of
+                    MapRecorder, ARViewController, and RecordViewController.
+                </p>
+                <p class="is-size-5">
+                    <b>MapRecorder</b> contains the bulk of the backend processing for Invisible Map Creator, which is mainly
+                    taking image frames from the phone and detecting tags in them, finding their position, saving the position
+                    along with the phone odometry data, and uploading the raw data at the end of making a map. 
+                </p>
+                <h3 id="views">Views</h3>
+                <p class="is-size-5">
+                    <b>ContentView</b> dictates the main screen when the app is first opened and loads in maps from Firebase. Currently,
+                    the maps that are loaded are the ones that you created while signed in to your Apple ID. In the future,
+                    you will be able to edit your created maps (change location names, map name, map picture).
+                </p>
+                <p class="is-size-5">
+                    <b>EditMapView</b> is currently empty, and is the view that will be transitioned to when editing map details
+                    as mentioned in the previous paragraph.
+                </p>
+                <p class="is-size-5">
+                <b>RecordMapView</b> is the view that displays while recording a map and contains all the buttons and options
+                    available while recording. It includes instruction text that transitions based on user actions.
+                </p>
+                <p class="is-size-5">
+                    <b>ARView</b> handles everything to do with ARKit. Its role is described in more detail below in the
+                    <a href="#how-it-works">How it Works</a> section of this page. It handles any AR visualizations and
+                    also any data collection that involves the AR scene (mainly raycasting, described below).
+                </p>
+                <p class="is-size-5">
+                    The <b>Record Map Subviews</b> directory contains a collection of subviews for the different components that
+                    appear in the RecordMapView (e.g. add location button).
+                </p>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="content">
+                <h2 id="how-it-works">How it Works</h2>
+                <p class="is-size-5">
+                    After starting a recording, as you walk around, the app records odometry data (position and orientation)
+                    10 times every second. You can explore the exact data stored during map creation on the
+                    <a href="../code/data-structure.html">Data Structure page</a>. MapRecorder processes each frame,
+                    sent from ARView, and checks for tags using the TagFinder C++ code in Invisible Map. A robust
+                    understanding of how the TagFinder code works is not important to developing on Map Creator. The
+                    important information is that the TagFinder returns information about each tag detected in the frame,
+                    including the 4x4 transform to the tag relative to the camera
+                    coordinate frame. 
+                </p>
+                <p class="is-size-5">
+                    All of this occurs in MapRecorder, where the main function recordData() is called
+                    every time a new ARFrame is recorded. recordData() subsequently calls functions to record odometry pose,
+                    tag poses, and plane data. recordTags() then calls getARTags, which calls the TagFinder code to obtain
+                    a list of all tags detected in the frame. This function also interfaces with ARView, both directly and 
+                    thorugh the state machine, in order to correct the tag position and display the AR tag visualization.
+                </p>
+                <h3>Raycasting</h3>
+                <p class="is-size-5">    
+                    The correcting tag position mentioned in the previous section is important. In order to take advantage
+                    of the capabilities of newer iPhones with LiDAR sensors, a feature was implemented
+                    that uses raycasting to force place tags onto flat planes detected by ARKit, rather than relying on the
+                    TagFinder's pose estimate. Currently, this is only done on LiDAR enabled devices, but a next step may
+                    be to implement it on non-LiDAR devices and assess whether it also makes their detections more accurate.
+                </p>
+                <p class="is-size-5">    
+                    On a basic level, TagFinder locates the tag by identifying the pixel
+                    coordinates of the corners of the tags, and calculates the physical location using the camera's
+                    intrinsics. This sometimes is not very accurate for orientation in particular, especially at angles that
+                    are mostly straight on, as a difference of a few pixels can be
+                    much more significant physically than it seems. ARKit has a built in feature that automatically detects
+                    and locates flat planes during an AR session. These flat planes are much more likely to be accurate in
+                    terms of orientation than the TagFinder's detections, especially in LiDAR phones. 
+                </p>
+                <p class="is-size-5">
+                    Raycasting is a function built into ARKit where you can essentially shoot a virtual ray out from a source
+                    position in a certain direction. The raycasting function will then return a list of points where the
+                    ray struck an object of the types you specify: planes, in the case of Map Creator. This raycasting is
+                    done in the raycastTag() function of ARView. The raycast starts at the position of the camera, and is
+                    pointed in the direction of the tag center detected by TagFinder. raycastTag() returns the transform of
+                    the first raycast result, which is the first point where the raycast strikes a plane. The transform's
+                    orientation is the orientation of the plane, and the position is in world frame. MapRecorder's getArTags()
+                    function then directly changes the transform of the tag from the one found by TagFinder to the result
+                    of the raycast. This forces the tag to lay flat on the detected plane. This does also force the tag to be
+                    exactly rotated with the plane, so if a tag were to be flat on the wall but rotated 90 degrees, for example,
+                    it would be adjusted to be upright. If a mapper places a tag like this, it will mess up the map navigation later,
+                    although it would not mess up the map creation. 
+                </p>
+                <h3>Finishing Map Creation</h3>
+                <p class="is-size-5">
+                    Along the way, waypoints can be added to the map. These points are just placed relative to the phone
+                    position and can be named to indicate key locations. Right now, maps must be created all in one
+                    recording. Future plans include adding a pausing feature and adding the ability to save a map and then
+                    make another recording to add onto the previous map in a different session. The paths that people can take
+                    while navigating the map are entirely dependent on paths that were walked during creation, so if the 
+                    mapper misses a set of stairs, those stairs will not appear on the final map, even if the mapper walks
+                    across the top and bottom of them. Upon saving the map, all of the data collected is put into a JSON file
+                    and uploaded to Firebase for the backend code to download and process.
+                </p>
+            </div>
+        </section>
     </body>
 </html>
