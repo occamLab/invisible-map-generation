@@ -333,61 +333,63 @@
                     thought it was originally created to try to subvert the issue with different magnitude weights.
                     Below is a quick outline of the pros and cons of each:
                 </p>
-                <table class="is-size-5">
-                    <tr>
-                        <th>Metric</th>
-                        <th>Pros</th>
-                        <th>Cons</th>
-                    </tr>
-                    <tr>
-                        <td>Ground Truth</td>
-                        <td>
-                            <ul>
-                                <li>We know for certian that it is accurate and works</li>
-                            </ul>
-                        </td>
-                        <td>
-                            <ul>
-                                <li>Painstaking to measure (unless we can find a way to use LiDAR meshes)</li>
-                                <li>Need to remeasure for each map</li>
-                                <li>Infeasible for anything bigger than a room</li>
-                                <li>Does not take into accont odometry nodes</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Chi2</td>
-                        <td>
-                            <ul>
-                                <li>Quick to calculate</li>
-                                <li>Intuitive</li>
-                            </ul>
-                        </td>
-                        <td>
-                            <ul>
-                                <li>Unsure if it is an accurate measure of weights</li>
-                            </ul>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Duncan's Metric</td>
-                        <td>
-                            <ul>
-                                <li>While not especially quick to calculate, does not require measurement</li>
-                                <li>Theoretically independent of weights used</li>
-                            </ul>
-                        </td>
-                        <td>
-                            <ul>
-                                <li>Unsure if it is an accurate measure of weights</li>
-                                <li>
-                                    Preliminatry comparisons to ground truth are not promising for weights that are
-                                    not normalized (at which pooint hopefully just chi2 will work?)
-                                </li>
-                            </ul>
-                        </td>
-                    </tr>
-                </table>
+                <div class="table-container">
+                    <table class="table is-size-5">
+                        <tr>
+                            <th>Metric</th>
+                            <th>Pros</th>
+                            <th>Cons</th>
+                        </tr>
+                        <tr>
+                            <td>Ground Truth</td>
+                            <td>
+                                <ul>
+                                    <li>We know for certian that it is accurate and works</li>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul>
+                                    <li>Painstaking to measure (unless we can find a way to use LiDAR meshes)</li>
+                                    <li>Need to remeasure for each map</li>
+                                    <li>Infeasible for anything bigger than a room</li>
+                                    <li>Does not take into accont odometry nodes</li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Chi2</td>
+                            <td>
+                                <ul>
+                                    <li>Quick to calculate</li>
+                                    <li>Intuitive</li>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul>
+                                    <li>Unsure if it is an accurate measure of weights</li>
+                                </ul>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Duncan's Metric</td>
+                            <td>
+                                <ul>
+                                    <li>While not especially quick to calculate, does not require measurement</li>
+                                    <li>Theoretically independent of weights used</li>
+                                </ul>
+                            </td>
+                            <td>
+                                <ul>
+                                    <li>Unsure if it is an accurate measure of weights</li>
+                                    <li>
+                                        Preliminatry comparisons to ground truth are not promising for weights that are
+                                        not normalized (at which pooint hopefully just chi2 will work?)
+                                    </li>
+                                </ul>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
                 <p class="is-size-5">The methods to calculate these are:</p>
                 <ul class="is-size-5">
                     <li>
