@@ -1,8 +1,7 @@
 import json
 
-import as_graph
 import numpy as np
-import graph_utils
+from map_processing import graph_utils, as_graph
 import matplotlib.pyplot as plt
 # from mpl_toolkits.mplot3d import Axes3D
 

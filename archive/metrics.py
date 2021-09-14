@@ -1,9 +1,8 @@
 import pickle
 import itertools
 import numpy as np
-from graph_utils import optimizer_to_map
+from map_processing.graph_utils import optimizer_to_map
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from scipy.spatial.transform import Rotation as R
 
 with open('converted-data/academic_center.pkl', 'rb') as data:

@@ -1,7 +1,7 @@
 import itertools
 import numpy as np
-from as_graph import matrix2measurement
-import graph
+from map_processing.as_graph import matrix2measurement
+from map_processing import graph
 
 
 def as_graph(dct):

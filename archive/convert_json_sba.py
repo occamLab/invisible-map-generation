@@ -2,8 +2,8 @@ import itertools
 from collections import defaultdict
 import numpy as np
 from g2o import SE3Quat, CameraParameters
-from as_graph import matrix2measurement, se3_quat_average
-import graph
+from map_processing.as_graph import matrix2measurement, se3_quat_average
+from map_processing import graph
 
 
 def as_graph(dct, fix_tag_vertices=False):
