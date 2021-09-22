@@ -2,60 +2,42 @@
 """
 Contains the GraphManager class. For the command line utility that makes use of it, see graph_manager_user.py. The
 graph_optimization_analysis.ipynb notebook also makes use of this class.
-
-Author: Duncan Mazza
 """
 
 from __future__ import annotations
 
-import copy
-import glob
 import json
-import os
 from typing import *
 
-import firebase_admin
 import matplotlib.pyplot as plt
 import numpy as np
-from firebase_admin import db
 from g2o import Quaternion, SE3Quat, SparseOptimizer
 from geneticalgorithm import geneticalgorithm as ga
-from varname import nameof
 
 import map_processing.as_graph as as_graph
 import map_processing.graph_utils as graph_utils
-from map_processing.graph_utils import occam_room_tags, MapInfo
-from map_processing.graph import Graph
-from map_processing.graph_vertex_edge_classes import Vertex, VertexType
 from map_processing.firebase_manager import FirebaseManager
+from map_processing.graph import Graph
+from map_processing.graph_utils import occam_room_tags, MapInfo
+from map_processing.graph_vertex_edge_classes import Vertex, VertexType
 
 
 class GraphManager:
-    """Class that manages graphs by interfacing with firebase, keeping a cache of data downloaded from firebase, and
-    providing methods wrapping graph optimization and plotting capabilities.
-
+    """Provides wrappers for graph optimization via the Graph class and associated plotting and statistics computation.
+    Graph datasets are accessed via a FirebaseManager instance.
+    
     Class Attributes:
+        _comparison_graph1_subgraph_weights: A list that contains a subset of the keys in
+         _weights_dict; the keys identify the different weights vectors applied to the first subgraph when the
+         compare_weights method is invoked.
         _weights_dict (Dict[str, np.ndarray]): Maps descriptive names of weight vectors to the corresponding weight
          vector, Higher values in the vector indicate greater noise (note: the uncertainty estimates of translation
          seem to be pretty over optimistic, hence the large correction here) for the orientation
-        _app_initialize_dict (Dict[str, str]): Used for initializing the app attribute
-        _unprocessed_listen_to (str): Simultaneously specifies database reference to listen to in the firebase_listen
-         method and the cache location of any maps associated with that database reference.
-        _processed_upload_to (str): Simultaneously specifies Firebase bucket path to upload processed graphs to and the
-         cache location of processed graphs.
-        _comparison_graph1_subgraph_weights (List[str]): A list that contains a subset of the keys in
-         _weights_dict; the keys identify the different weights vectors applied to the first subgraph when the
-         compare_weights method is invoked.
-        _initialized_app: Set to true when the Firebase app is initialized and is used to only let the app be
-         initialized on the first invocation of the GraphManager constructor.
-        _app (firebase_admin.App): App initialized with a service account, granting admin privileges
 
     Attributes:
-        _bucket: Handle to the Google Cloud Storage bucket
-        _db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute _selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
-        _cache_path: String representing the absolute path to the cache folder. The cache path is evaluated to
-         always be located at <path to this file>.cache/
+        _pso: TODO: documentation
+        _selected_weights: TODO: documentation
+        _firebase_manager: TODO: documentation
     """
 
     # Importance is set to e^{-weight}
@@ -102,16 +84,14 @@ class GraphManager:
     _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
                                                       "genetic_results", "best_sweep"]
 
-    def __init__(self, weights_specifier: int, firebase_manager: FirebaseManager,
-                 pso: int = 0):
+    def __init__(self, weights_specifier: int, firebase_manager: FirebaseManager, pso: int = 0):
         """Initializes GraphManager instance (only populates instance attributes)
 
         Args:
              weights_specifier (int): Used as the key to access the corresponding value in
              GraphManager._weights_dict (integer is mapped to the key with the GraphManager.ordered_weights_dict_keys
               list).
-             firebase_creds (firebase_admin.credentials.Certificate): Firebase credentials to pass as the first
-              argument to firebase_admin.initialize_app(cred, ...)
+             firebase_manager (FirebaseManager): The firebase manager to use for reading from/to the cache.
              pso (int): Integer corresponding to the enum value in as_graph.PrescalingOptEnum which selects the
               type of prescaling weights used in non-SBA optimizations
         """
@@ -122,7 +102,7 @@ class GraphManager:
 
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False,
                      new_pso: Union[None, int] = None, new_weights_specifier: Union[None, int] = None,
-                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = ()) -> None:
+                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = (), obs_chi2_filter: float = -1) -> None:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         The _resolve_cache_dir method is first called, then the glob package is used to find matching files.
@@ -144,7 +124,8 @@ class GraphManager:
              the corresponding _pso instance attribute).
             new_weights_specifier: If not none, then it overrides what was specified by the constructor's
              weights_specifier argument (and changes the corresponding _selected_weights instance attribute).
-            fixed_vertices: Parameter to pass to as_graph
+            fixed_vertices: Parameter to pass to the as_graph.as_graph function (see more there)
+            obs_chi2_filter: Parameter to pass to the _optimize_graph method (see more there)
         """
         if new_pso is not None:
             self._pso = as_graph.PrescalingOptEnum.get_by_value(new_pso)
@@ -155,48 +136,42 @@ class GraphManager:
             print("Empty pattern provided; no maps will be processed")
             return
 
-        self._resolve_cache_dir()
-        matching_maps = glob.glob(os.path.join(self._firebase_manager.cache_path, '**/unprocessed_maps/**/'+pattern),
-                                  recursive=True)
-
+        matching_maps = self._firebase_manager.find_maps(pattern)
         if len(matching_maps) == 0:
-            print("No maps matching pattern {} in recursive search of {}".format(pattern,
-                                                                                 self._firebase_manager.cache_path))
+            print("No matches for {} in recursive search of {}".format(pattern, self._firebase_manager.cache_path))
             return
 
-        already_processed = set()
-        for map_json_abs_path in matching_maps:
-            if os.path.isdir(map_json_abs_path):
-                continue  # Ignore directories
-            map_info = self._map_info_from_path(map_json_abs_path)
-            if map_info.map_name in already_processed:
-                continue
-            already_processed.add(map_info.map_name)
-
-            print("\n---- Attempting to process map {} ----".format(map_json_abs_path))
-
+        for map_info in matching_maps:
             if compare:
                 if upload:
                     print("Warning: Ignoring True upload argument because comparing graphs")
                 self.compare_weights(map_info, visualize)
-            else:
-                graph_plot_title = None
-                chi2_plot_title = None
-                if visualize:
-                    graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
-                    chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
-                processed_map_json = self.get_json_from_map_info(map_info, fixed_vertices=fixed_vertices,
-                                                                 visualize=visualize, graph_plot_title=graph_plot_title,
-                                                                 chi2_plot_title=chi2_plot_title)
+                return
 
-                print("Processed map: {}".format(map_info.map_name))
-                if upload:
-                    self._upload(map_info, processed_map_json)
-                    print("Uploaded processed map: {}".format(map_info.map_name))
+            graph_plot_title = None
+            chi2_plot_title = None
+            if visualize:
+                graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
+                chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
-                self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json)
+            processed_map_json = self.optimize_map_and_get_json(
+                map_info,
+                fixed_vertices=fixed_vertices,
+                visualize=visualize,
+                graph_plot_title=graph_plot_title,
+                chi2_plot_title=chi2_plot_title,
+                obs_chi2_filter=obs_chi2_filter
+            )
 
-    def compare_weights(self, map_info: MapInfo, visualize=True) -> None:
+            print("Processed map: {}".format(map_info.map_name))
+            if upload:
+                self._firebase_manager.upload(map_info, processed_map_json)
+                print("Uploaded processed map: {}".format(map_info.map_name))
+
+            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+                                             processed_map_json)
+
+    def compare_weights(self, map_info: MapInfo, visualize: bool = True, obs_chi2_filter: float = -1) -> None:
         """Invocation results in the weights comparison routine.
 
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
@@ -212,8 +187,9 @@ class GraphManager:
         The results of the comparison are then printed.
 
         Args:
-            map_info (MapInfo): Map to use for weights comparison
-            visualize (bool): Used as the visualize argument for the _process_map method invocation.
+            map_info: Map to use for weights comparison
+            visualize: Used as the visualize argument for the _process_map method invocation.
+            obs_chi2_filter: Passed to the _optimize_graph function (read more there)
         """
         results = "\n### Results ###\n\n"
         g1sg, g2sg = self.create_graphs_for_chi2_comparison(map_info.map_dct)
@@ -251,18 +227,24 @@ class GraphManager:
                 g1sg_chi2_plot_title = None
 
             g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_chi_sqr, g1sg_odom_adj_chi2, \
-                g1sg_visible_tags_count = self._optimize_graph(g1sg, tune_weights=False, visualize=visualize,
-                                                               weights_key=iter_weights,
-                                                               graph_plot_title=g1sg_plot_title,
-                                                               chi2_plot_title=g1sg_chi2_plot_title)
+                g1sg_visible_tags_count = self._optimize_graph(
+                    g1sg,
+                    tune_weights=False,
+                    visualize=visualize,
+                    weights_key=iter_weights,
+                    graph_plot_title=g1sg_plot_title,
+                    chi2_plot_title=g1sg_chi2_plot_title,
+                    obs_chi2_filter=obs_chi2_filter
+                )
             processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locs, g1sg_odom_locs,
                                                                         g1sg_waypoint_locs,
                                                                         adj_chi2_arr=g1sg_odom_adj_chi2,
                                                                         visible_tags_count=g1sg_visible_tags_count)
             del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
 
-            self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json_1,
-                            "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
+            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+                                             processed_map_json_1,
+                                             "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
             del processed_map_json_1  # No longer needed
 
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
@@ -282,17 +264,24 @@ class GraphManager:
                 g2sg_chi2_plot_title = None
 
             g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_chi_sqr, g2sg_odom_adj_chi2, \
-                g2sg_visible_tags_count = self._optimize_graph(g2sg, tune_weights=False, visualize=visualize,
-                                                               weights_key=None, graph_plot_title=g2sg_plot_title,
-                                                               chi2_plot_title=g2sg_chi2_plot_title)
+                g2sg_visible_tags_count = self._optimize_graph(
+                    g2sg,
+                    tune_weights=False,
+                    visualize=visualize,
+                    weights_key=None,
+                    graph_plot_title=g2sg_plot_title,
+                    chi2_plot_title=g2sg_chi2_plot_title,
+                    obs_chi2_filter=obs_chi2_filter
+                )
             processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
                                                                         g2sg_waypoint_locs,
                                                                         adj_chi2_arr=g2sg_odom_adj_chi2,
                                                                         visible_tags_count=g2sg_visible_tags_count)
             del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
 
-            self._cache_map(self._firebase_manager.processed_upload_to, map_info, processed_map_json_2,
-                            "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
+            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+                                             processed_map_json_2,
+                                             "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
             del processed_map_json_2  # No longer needed
 
             results += "No fixed tags with weights set {}: chi2 = {}\n" \
@@ -312,10 +301,10 @@ class GraphManager:
         Returns:
             A list of the best weights
         """
-        map_dct = self._map_info_from_path(map_json_path).map_dct
+        map_dct = self._firebase_manager.map_info_from_path(map_json_path).map_dct
         graph = as_graph.as_graph(map_dct)
         # sg1, sg2 = self.create_graphs_for_chi2_comparison(map_dct)
-        model = ga(function=lambda X: self.get_ground_truth_from_graph(X, graph, occam_room_tags, verbose),
+        model = ga(function=lambda x: self.get_ground_truth_from_graph(x, graph, occam_room_tags, verbose),
                    dimension=8, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 8),
                    algorithm_parameters={'max_num_iteration': 2000,
                                          'population_size': 50,
@@ -336,8 +325,7 @@ class GraphManager:
         Args:
             map_json_path (str): the path to the json containing the map data to optimize on
             dimensions (int): the number of dimensions to sweep across
-            bounds (tuple): the lower and upper limits of which to sweep, inclusive
-            step (float): the step size to use between sweeps
+            sweep: TODO: documentation
             verbose (bool): whether to print out the chi2 values
             visualize (bool): whether to display the visualization plot. If not two_d, this will be ignored
 
@@ -345,25 +333,29 @@ class GraphManager:
             An ndarray, where each axis is a weight and each value is the resulting chi2. Note that the indexes will
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
-        map_dct = self._map_info_from_path(map_json_path).map_dct
-        subgraphs = self.create_graphs_for_chi2_comparison(map_dct)
+        map_dct = self._firebase_manager.map_info_from_path(map_json_path).map_dct
         graph = as_graph.as_graph(map_dct)
         metrics = self._sweep_weights(graph, sweep, dimensions, None, verbose=verbose)
 
         if dimensions == 2 and visualize:
             graph_utils.plot_metrics(sweep, metrics, log_sweep=True, log_metric=True)
         if verbose:
-            best_metric = metrics.min()
+            best_metric = metrics.min(initial=None)
             best_weights = [sweep[i[0]] for i in np.where(metrics == best_metric)]
             print(f'\nBEST METRIC: {best_weights}: {best_metric}')
         return metrics
 
-    def get_optimized_graph_info(self, graph: Graph, weights: Union[int, float, str, Dict[str, np.ndarray], np.ndarray,
-                                                                    None] = None, verbose: bool = False,
-                                 vertex_types: List[VertexType] = [VertexType.TAG]) -> Tuple[float, Dict[int, Vertex]]:
+    def get_optimized_graph_info(
+            self, graph: Graph, 
+            weights: Union[int, float, str, Dict[str, np.ndarray], np.ndarray, None] = None, 
+            verbose: bool = False,
+            vertex_types=None
+    ) -> Tuple[float, Dict[int, Vertex]]:
         """
-        Finds the chi2 and vertex locations of the optimized graph without changing the graph itself
+        Finds the chi2 and vertex locations of the optimized graph. Does not modify the graph.
         """
+        if vertex_types is None:
+            vertex_types = [VertexType.TAG]
 
         # Load in new weights and update graph
         optimizer = self.get_optimizer(graph, weights)
@@ -375,26 +367,35 @@ class GraphManager:
                     for uid in optimizer.vertices() if vertex_types is None or graph.vertices[uid].mode in vertex_types}
         return chi2, vertices
 
-    def get_chi2_from_subgraphs(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
-                                subgraphs: Union[Tuple[Graph, Graph], Graph],
-                                comparison_weights: Union[int, str, Dict[str, np.ndarray]] = 'comparison_baseline',
-                                verbose: bool = False) -> float:
-        if isinstance(subgraphs, Graph):
-            subgraphs = self.create_graphs_for_chi2_comparison(subgraphs)
-        else:
-            self._weights_dict['variable'] = self._weights_to_dict(weights)
+    def get_chi2_from_subgraphs(
+            self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
+            subgraphs: Tuple[Graph, Graph],
+            comparison_weights: Union[int, str, Dict[str, np.ndarray]] = "comparison_baseline",
+            verbose: bool = False
+    ) -> float:
+        """TODO: documentation
+        """
+        self._weights_dict['variable'] = self._weights_to_dict(weights)
         _, vertices = self.get_optimized_graph_info(subgraphs[0], weights='variable', verbose=verbose)
         for uid, vertex in vertices.items():
             if subgraphs[1].vertices.__contains__(uid):
                 subgraphs[1].vertices[uid].estimate = vertex.estimate
-        return self.get_optimized_graph_info(subgraphs[1], weights=self.ordered_weights_dict_keys[comparison_weights] if
-                                             isinstance(comparison_weights, int) else comparison_weights,
-                                             verbose=verbose)[0]
+        return self.get_optimized_graph_info(
+            subgraphs[1],
+            weights=self.ordered_weights_dict_keys[comparison_weights] if
+            isinstance(comparison_weights, int) else comparison_weights,
+            verbose=verbose
+        )[0]
 
-    def get_chi2_by_edge_from_subgraphs(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
-                                        subgraphs: Union[Tuple[Graph, Graph], Dict],
-                                        comparison_weights: Union[int, str, Dict[str, np.ndarray]]
-                                        = 'comparison_baseline', verbose: bool = False) -> Dict[str, Dict[str, float]]:
+    def get_chi2_by_edge_from_subgraphs(
+            self, 
+            weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray]],
+            subgraphs: Union[Tuple[Graph, Graph], Dict],
+            comparison_weights: Union[int, str, Dict[str, np.ndarray]] = "comparison_baseline", 
+            verbose: bool = False
+    ) -> Dict[str, Dict[str, float]]:
+        """TODO: documentation
+        """
         if isinstance(subgraphs, Dict):
             subgraphs = self.create_graphs_for_chi2_comparison(subgraphs)
         self._weights_dict['variable'] = self._weights_to_dict(weights)
@@ -407,17 +408,22 @@ class GraphManager:
 
     def get_ground_truth_from_graph(self, weights: Union[str, Dict[str, np.ndarray], np.ndarray], graph: Graph,
                                     ground_truth_tags: np.ndarray, verbose: bool = False) -> float:
+        """TODO: documentation
+        """
         if isinstance(weights, str):
             weight_name = weights
         else:
             weight_name = 'variable'
-            self._weights_dict[weight_name] = weights if isinstance(weights, dict) else\
+            self._weights_dict[weight_name] = weights if isinstance(weights, dict) else \
                 graph_utils.weight_dict_from_array(weights)
         _, vertices = self.get_optimized_graph_info(graph, weights=weight_name)
         return GraphManager.get_ground_truth_from_optimized_tags(vertices, ground_truth_tags, verbose=verbose)
 
-    def get_ground_truth_from_optimized_tags(self, optimized_tags: Dict[int, Vertex], ground_truth_tags: np.ndarray,
+    @staticmethod
+    def get_ground_truth_from_optimized_tags(optimized_tags: Dict[int, Vertex], ground_truth_tags: np.ndarray,
                                              verbose: bool = False) -> float:
+        """TODO: documentation
+        """
         optimized_tag_verts = np.zeros((len(optimized_tags), 7))
         for vertex in optimized_tags.values():
             estimate = vertex.estimate
@@ -433,9 +439,9 @@ class GraphManager:
         """
         Creates then splits a graph in half, as required for weight comparison
 
-        Specifically, this will create the graph based off the information in dct with the given prescaling option. It will
-        then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary, while the
-        second does not.
+        Specifically, this will create the graph based off the information in dct with the given prescaling option. It 
+        will then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary, 
+        while the second does not.
 
         Args:
             graph (Dict): A dictionary containing the unprocessed data to create the graph
@@ -459,39 +465,52 @@ class GraphManager:
         middle_uid_upper = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].enduid
         end_uid = graph1.edges[ordered_odom_edges[-1]].enduid
 
-        print(f'start: {start_uid} mid_lower: {middle_uid_lower} mid_upper: {middle_uid_upper} end: {end_uid} total: {len(graph1.vertices)}')
+        print(f"start: {start_uid} mid_lower: {middle_uid_lower} mid_upper: {middle_uid_upper} end: {end_uid} total: "
+              f"{len(graph1.vertices)}")
 
         g1sg = graph1.get_subgraph(start_vertex_uid=start_uid, end_vertex_uid=middle_uid_lower)
         g2sg = graph2.get_subgraph(start_vertex_uid=middle_uid_upper, end_vertex_uid=end_uid)
 
         return g1sg, g2sg
 
-    def get_optimizer(self, graph: Graph, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None])\
+    def get_optimizer(self, graph: Graph, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None]) \
             -> SparseOptimizer:
         """
-        Returns the optimized g20.SparseOptimizer for the given graph with the given weights, or the graph's default
-        weights if no weights are given.
+        Returns:
+            The optimized g20.SparseOptimizer for the given graph with the given weights, or the graph's default weights
+             if no weights are given.
         """
         if weights is not None:
             graph.set_weights(self._weights_to_dict(weights))
-            graph.update_edges()
+            graph.update_edge_information()
 
         optimizer = graph.graph_to_optimizer()
         optimizer.initialize_optimization()
         optimizer.optimize(1024)
         return optimizer
 
-    def get_json_from_map_info(self, map_info: MapInfo,
-                               fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
-                               visualize: bool = False, graph_plot_title: str = None, chi2_plot_title: str = None):
+    def optimize_map_and_get_json(
+            self,
+            map_info: MapInfo,
+            fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
+            visualize: bool = False,
+            graph_plot_title: str = None,
+            chi2_plot_title: str = None,
+            obs_chi2_filter: float = -1.0
+    ) -> str:
+        """Wrapper for graph optimization that takes in a MapInfo object and returns a json of the optimized map.
+        """
         graph = as_graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
         tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
-            self._optimize_graph(graph,
-                                 tune_weights=False,
-                                 visualize=visualize,
-                                 weights_key=None,
-                                 graph_plot_title=graph_plot_title,
-                                 chi2_plot_title=chi2_plot_title)
+            self._optimize_graph(
+                graph,
+                tune_weights=False,
+                visualize=visualize,
+                weights_key=None,
+                graph_plot_title=graph_plot_title,
+                chi2_plot_title=chi2_plot_title,
+                obs_chi2_filter=obs_chi2_filter
+            )
         return GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
                                                     waypoint_locations, adj_chi2_arr=adj_chi2,
                                                     visible_tags_count=visible_tags_count)
@@ -514,22 +533,6 @@ class GraphManager:
         else:
             return self._selected_weights
 
-    def _map_info_from_path(self, map_json_path: str) -> MapInfo:
-        map_json_abs_path = os.path.join(self._firebase_manager.cache_path, map_json_path)
-        with open(map_json_abs_path, "r") as json_string_file:
-            json_string = json_string_file.read()
-            json_string_file.close()
-
-        map_json = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self._firebase_manager.cache_path.split(
-            os.path.sep)) + 1:])
-        map_dct = json.loads(json_string)
-        map_name = self._read_cache_directory(os.path.basename(map_json))
-
-        last_folder = map_json_path.split('/')[-2]
-        if last_folder == self._firebase_manager.unprocessed_listen_to:
-            return MapInfo(map_name, map_name, map_dct)
-        return MapInfo(map_name, map_name, map_dct, last_folder)
-
     def _sweep_weights(self, graph: Graph, sweep: np.ndarray, dimensions: int,
                        metric_info: Union[np.ndarray, Tuple[Graph, Graph], None] = None, verbose: bool = False,
                        _cur_weights: np.ndarray = np.asarray([])) -> np.ndarray:
@@ -540,32 +543,30 @@ class GraphManager:
             graph (Graph): the graph for weight comparison
             metric_info: Information for the metric calculation.
                 ndarray: an array of SE3Quats representing the actual tag poses
-                (Graph, Graph): the subgraphs for calculating Duncan's metric
+                (Graph, Graph): for subgraph comparison
                 None: use the chi2 of the optimized graph
             sweep (ndarray): a 1D array containing the values to sweep over
-            dimensions (int): the number of dimensions to sweep over (2 or 12)
+            dimensions (int): the number of dimensions to sweep over (1, 2 or 12)
             verbose (bool): whether to print the chi2 values
             _cur_weights (ndarray): the weights that are already set (do not set manually!)
         """
+        # TODO: replace recursion with loop
+
+        if metric_info is None:
+            metric_to_use = lambda w, g, mi: self.get_optimized_graph_info(g, w)[0]
+        elif isinstance(metric_info, tuple):
+            metric_to_use = lambda w, g, mi: self.get_chi2_from_subgraphs(w, mi)
+        elif isinstance(metric_info, np.ndarray):
+            metric_to_use = lambda w, g, mi: self.get_ground_truth_from_graph(w, g, mi)
+        else:
+            raise Exception("metric_info is not a valid type")
+
         if dimensions == 1:
-            def get_metric(w: np.ndarray, g: graph):
-                return 0
-
-            if metric_info is None:
-                def get_metric(w: np.ndarray, g: graph):
-                    return self.get_optimized_graph_info(g, w)[0]
-            elif isinstance(metric_info, tuple):
-                def get_metric(w: np.ndarray, g: graph):
-                    return self.get_chi2_from_subgraphs(w, metric_info)
-            elif isinstance(metric_info, np.ndarray):
-                def get_metric(w: np.ndarray, g: graph):
-                    return self.get_ground_truth_from_graph(w, g, metric_info)
-
             metrics = np.asarray([])
             for weight in sweep:
                 full_weights = np.append(_cur_weights, weight)
                 try:
-                    metric = get_metric(full_weights, graph)
+                    metric = metric_to_use(full_weights, graph, metric_info)
                 except ValueError:
                     metric = -1
                 if verbose:
@@ -578,7 +579,7 @@ class GraphManager:
             for weight in sweep:
                 if first_run:
                     metrics = self._sweep_weights(graph, sweep, dimensions - 1, metric_info, verbose,
-                                                np.append(_cur_weights, weight)).reshape(1, -1)
+                                                  np.append(_cur_weights, weight)).reshape(1, -1)
                     first_run = False
                 else:
                     metrics = np.concatenate((metrics, self._sweep_weights(graph, sweep, dimensions - 1, metric_info,
@@ -586,187 +587,39 @@ class GraphManager:
                                               .reshape(1, -1)))
             return metrics
 
-    def _upload(self, map_info: MapInfo, json_string: str) -> None:
-        """Uploads the map json string into the Firebase bucket under the path
-        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
+    def _optimize_graph(
+            self, graph: Graph, 
+            tune_weights: bool = False, 
+            visualize: bool = False, 
+            weights_key: Union[None, str] = None, 
+            obs_chi2_filter: float = -1, 
+            graph_plot_title: Union[str, None] = None, chi2_plot_title: Union[str, None] = None
+    ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
+        """Optimizes the input graph.
 
-        Note that no exception catching is implemented.
-
-        Args:
-            map_info (MapInfo): Contains the map name and map json path
-            json_string (str): Json string of the map to upload
-        """
-        processed_map_filename = os.path.basename(map_info.map_json)[:-5] + "_processed.json"
-        processed_map_full_path = f'{self._firebase_manager.processed_upload_to}/{processed_map_filename}'
-        print("Attempting to upload {} to the bucket blob {}".format(map_info.map_name, processed_map_full_path))
-        processed_map_blob = self._firebase_manager._bucket.blob(processed_map_full_path)
-        processed_map_blob.upload_from_string(json_string)
-        print("Successfully uploaded map data for {}".format(map_info.map_name))
-        ref = db.reference("maps")
-        if map_info.uid is not None:
-            ref = ref.child(map_info.uid)
-        ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
-        print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
-            map_info.map_name))
-
-    def _append_to_cache_directory(self, key: str, value: str) -> None:
-        """Appends the specified key-value pair to the dictionary stored as a json file in
-        <cache folder>/directory.json.
-
-        If the key already exists in the dictionary, its value is overwritten. Note that no error handling is
-        implemented.
+        Process:
+        1) Prepare the graph: set weights (optionally through expectation maximization), update edge information, and
+        generate the sparse optimizer.
+        2) Optimize the graph.
+        3) [optional] Filter out tag observation edges with high chi2 values (see observation_chi2_filter parameter).
+        4) [optional] Plot the optimization results
 
         Args:
-            key (str): Key to store value in
-            value (str): Value to store under key
-        """
-        directory_json_path = os.path.join(self._firebase_manager.cache_path, "directory.json")
-        with open(directory_json_path, "r") as directory_file_read:
-            directory_json = json.loads(directory_file_read.read())
-            directory_file_read.close()
-        directory_json[key] = value
-        new_directory_json = json.dumps(directory_json, indent=2)
-        with open(directory_json_path, "w") as directory_file_write:
-            directory_file_write.write(new_directory_json)
-            directory_file_write.close()
-
-    def _read_cache_directory(self, key: str) -> str:
-        """Reads the dictionary stored as a json file in <cache folder>/directory.json and returns the value
-        associated with the specified key.
-
-        Note that no error handling is implemented.
-
-        Args:
-            key (str): Key to query the dictionary
-
-        Returns:
-            Value associated with the key
-        """
-        with open(os.path.join(self._firebase_manager.cache_path, "directory.json"), "r") as directory_file:
-            directory_json = json.loads(directory_file.read())
-            directory_file.close()
-            return directory_json[key]
-
-    def _cache_map(self, parent_folder: str, map_info: MapInfo, json_string: str, file_suffix: Union[
-            str, None] = None) -> bool:
-        """Saves a map to a json file in cache directory.
-
-        Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
-        appropriate diagnostic message if one is caught. All of the arguments are checked to ensure that they are, in
-        fact strings; if any are not, then a diagnostic message is printed and False is returned.
-
-        Arguments:
-            parent_folder (str): Specifies the sub-directory of the cache directory that the map is cached in
-            map_info (MapInfo): Contains the map name and map json path in the map_name and map_json
-             fields respectively. If the last 5 characters of this string do not form the substring ".json",
-             then ".json" will be appended automatically.
-            json_string (str): The json string that defines the map (this is what is written as the contents of the
-             cached map file).
-            file_suffix (str): String to append to the file name given by map_info.map_json.
-
-        Returns:
-            True if map was successfully cached, and False otherwise
-
-        Raises:
-            ValueError: Raised if there is any argument (except file_suffix) that is of an incorrect type
-            NotADirectoryError: Raised if _resolve_cache_dir method returns false.
-        """
-        if not isinstance(map_info, MapInfo):
-            raise ValueError("Cannot cache map because '{}' argument is not a {} instance"
-                             .format(nameof(map_info), nameof(MapInfo)))
-        for arg in [parent_folder, map_info.map_name, map_info.map_json, json_string]:
-            if not isinstance(arg, str):
-                raise ValueError("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
-
-        if not self._resolve_cache_dir():
-            raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
-                                     .format(self._firebase_manager.cache_path))
-
-        file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
-        map_json_to_use = str(map_info.map_json)
-        if len(map_json_to_use) < 6:
-            map_json_to_use += file_suffix_str + ".json"
-        else:
-            if map_json_to_use[-5:] != ".json":
-                map_json_to_use += file_suffix_str + ".json"
-            else:
-                map_json_to_use = map_json_to_use[:-5] + file_suffix_str + ".json"
-
-        cached_file_path = os.path.join(self._firebase_manager.cache_path, parent_folder, map_json_to_use)
-        try:
-            cache_to = os.path.join(parent_folder, map_json_to_use)
-            cache_to_split = cache_to.split(os.path.sep)
-            cache_to_split_idx = 0
-            while cache_to_split_idx < len(cache_to_split) - 1:
-                dir_to_check = os.path.join(self._firebase_manager.cache_path, os.path.sep.join(
-                    cache_to_split[:cache_to_split_idx + 1]))
-                if not os.path.exists(dir_to_check):
-                    os.mkdir(dir_to_check)
-                cache_to_split_idx += 1
-
-            with open(cached_file_path, "w") as map_json_file:
-                map_json_file.write(json_string)
-                map_json_file.close()
-
-            self._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
-            print("Successfully cached {}".format(cached_file_path))
-            return True
-        except Exception as ex:
-            print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
-            return False
-
-    def _resolve_cache_dir(self) -> bool:
-        """Returns true if the cache folder exists, and attempts to create a new one if there is none.
-
-        A file named directory.json is also created in the cache folder.
-
-        This method catches all exceptions associated with creating new directories/files and displays a corresponding
-        diagnostic message.
-
-        Returns:
-            True if no exceptions were caught and False otherwise
-        """
-        if not os.path.exists(self._firebase_manager.cache_path):
-            try:
-                os.mkdir(self._firebase_manager.cache_path)
-            except Exception as ex:
-                print("Could not create a cache directory at {} due to error: {}".format(
-                    self._firebase_manager.cache_path, ex))
-                return False
-
-        directory_path = os.path.join(self._firebase_manager.cache_path, "directory.json")
-        if not os.path.exists(directory_path):
-            try:
-                with open(os.path.join(self._firebase_manager.cache_path, "directory.json"), "w") as directory_file:
-                    directory_file.write(json.dumps({}))
-                    directory_file.close()
-                return True
-            except Exception as ex:
-                print("Could not create {} file due to error: {}".format(directory_path, ex))
-        else:
-            return True
-
-    def _optimize_graph(self, graph: Graph, tune_weights: bool = False, visualize: bool = False, weights_key: \
-                        Union[None, str] = None, num_chi2_filters: int = -1, graph_plot_title: Union[str, None] =
-                        None, chi2_plot_title:  Union[str, None] = None, _filters_remaining: int = -1)\
-            -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
-        """Optimizes the input graph
-
-        Arguments:
-            graph (Graph): A graph instance to optimize. The following methods of this instance are (possibly) called:
-             update_edges, generate_unoptimized_graph, get_tags_all_position_estimate, expectation_maximization_once,
-             generate_unoptimized_graph, and optimize_graph. Additionally, the weights attribute of this instance is
-             set.
-            tune_weights (bool): A boolean for whether expectation_maximization_once is called on the graph instance.
-            visualize (bool): A boolean for whether the visualize static method of this class is called.
-            weights_key (str or None): Specifies the weight vector to set the weights attribute of the graph
+            graph: A Graph instance to optimize.
+            tune_weights: A boolean for whether expectation_maximization_once is called on the graph instance.
+            visualize: A boolean for whether the visualize static method of this class is called.
+            weights_key: Specifies the weight vector to set the weights attribute of the graph
              instance to from one of the weight vectors in GraphManager._weights_dict. If weights_key is None,
-             then the weight vector corresponding to self._selected_weights is selected; otherwise, the weights_key
+             then the weight vector corresponding to `self._selected_weights` is selected; otherwise, the weights_key
              selects the weight vector from the dictionary.
-            graph_plot_title (str or None): Plot title argument to pass to the visualization routine.
+            obs_chi2_filter: Removes from the graph (stored in the `graph` instance attribute) observation edges above
+             this many standard deviations from the mean observation edge chi2 value in the optimized graph. The graph
+             optimization is then re-run with the modified graph. A negative value performs no filtering.
+            graph_plot_title: Plot title argument to pass to the visualization routine for the graph visualizations.
+            chi2_plot_title: Plot title argument to pass to the visualization routine for the chi2 plot.
 
         Returns:
-            A tuple containing:
+            A tuple containing in the following order:
             - The numpy array of tag vertices from the optimized graph
             - The numpy array of odometry vertices from the optimized graph
             - The numpy array of waypoint vertices from the optimized graph
@@ -778,36 +631,35 @@ class GraphManager:
             - A numpy array where each element corresponds to the number of visible tag vertices from the corresponding
               odometry vertices.
         """
-        if _filters_remaining == -1:
-            _filters_remaining = num_chi2_filters
-        if _filters_remaining != 0:
-            filtered_graph = copy.deepcopy(graph)
+        graph.set_weights(
+            GraphManager._weights_dict[weights_key if weights_key is not None else self._selected_weights]
+        )
 
-        graph.set_weights(GraphManager._weights_dict[weights_key if isinstance(weights_key, str) else
-                                                     self._selected_weights])
+        if tune_weights:
+            graph.expectation_maximization_once()
+        else:
+            # The expectation_maximization_once invocation calls generate_unoptimized_graph, so avoid repeating this if
+            # tune_weights is true
+            graph.generate_unoptimized_graph()
 
         # Load these weights into the graph
-        graph.update_edges()
-        graph.generate_unoptimized_graph()
+        graph.update_edge_information()
 
-        # Commented out: unused
-        # all_tags_original = graph.get_tags_all_position_estimate()
-
+        # Acquire original_tag_verts for return value (not used elsewhere)
         starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
                                                     is_sparse_bundle_adjustment=self._pso == 0)
         original_tag_verts = graph_utils.locations_from_transforms(starting_map["tags"]) \
             if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map["tags"]
-
-        if tune_weights:
-            print(f'Tuned weights: {graph.expectation_maximization_once()}')
+        del starting_map  # No longer needed
 
         opt_chi2 = graph.optimize_graph()
-        if num_chi2_filters == -1:
-            num_chi2_filters = 1 if opt_chi2 >= 1 else 0
-            _filters_remaining = num_chi2_filters
+
+        if obs_chi2_filter > 0:
+            graph.filter_out_high_chi2_observation_edges(obs_chi2_filter)
+            graph.optimize_graph()
 
         # Change vertex estimates based off the optimized graph
-        graph.update_vertices()
+        graph.update_vertices_estimates()
 
         prior_map = graph_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
         resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
@@ -816,63 +668,32 @@ class GraphManager:
         odom_chi2_adj_vec: np.ndarray = resulting_map["locationsAdjChi2"]
         visible_tags_count_vec: np.ndarray = resulting_map["visibleTagsCount"]
 
-        prior_locations = graph_utils.locations_from_transforms(prior_map["locations"]) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map["locations"]
         locations = graph_utils.locations_from_transforms(resulting_map["locations"]) \
             if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["locations"]
         tag_verts = graph_utils.locations_from_transforms(resulting_map["tags"]) \
             if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["tags"]
-        tagpoint_positions = resulting_map["tagpoints"]
         waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
+            prior_locations = graph_utils.locations_from_transforms(prior_map["locations"]) \
+                if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map["locations"]
+            tagpoint_positions = resulting_map["tagpoints"]
             self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
                                           original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
             GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
 
-        if _filters_remaining > 0:
-            chi2_by_edge = {}
-            chi2s = []
-            for edge in graph.optimized_graph.edges():
-                end_mode = graph.vertices[graph.edges[edge.id()].enduid].mode
-                start_mode = graph.vertices[graph.edges[edge.id()].startuid].mode
-                if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (VertexType.TAG,
-                                                                                       VertexType.TAGPOINT):
-                    chi2 = Graph.get_chi2_of_edge(edge)
-                    chi2_by_edge[edge.id()] = chi2
-                    chi2s.append(chi2)
-
-            chi2s = np.array(chi2s)
-            mean_chi2 = chi2s.mean()
-            std_chi2 = chi2s.std()
-            min_chi2 = mean_chi2 - 1 * std_chi2
-            max_chi2 = mean_chi2 + 1 * std_chi2
-
-            for edge_id, chi2 in chi2_by_edge.items():
-                if chi2 < min_chi2 or chi2 > max_chi2:
-                    print(f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag {graph.vertices[graph.edges[edge_id].enduid].meta_data["tag_id"]}')
-                    filtered_graph.remove_edge(edge_id)
-
-            num_filters = num_chi2_filters - _filters_remaining
-            if visualize:
-                filtered_title = f'(Filtered x{num_filters + 1})'
-                graph_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(graph_plot_title)
-                chi2_title_end = -len(f' (Filtered) x{num_filters}') if num_filters > 0 else len(chi2_plot_title)
-                new_graph_title = None if graph_plot_title is None else f'{graph_plot_title[:graph_title_end]} {filtered_title}'
-                new_chi2_title = None if chi2_plot_title is None else f'{chi2_plot_title[:chi2_title_end]} {filtered_title}'
-                return self._optimize_graph(filtered_graph, tune_weights=tune_weights, visualize=visualize,
-                                            weights_key=weights_key, num_chi2_filters=num_chi2_filters,
-                                            graph_plot_title=new_graph_title, chi2_plot_title=new_chi2_title,
-                                            _filters_remaining=_filters_remaining - 1)
-            else:
-                return self._optimize_graph(filtered_graph, tune_weights=tune_weights, weights_key=weights_key,
-                                            num_chi2_filters=num_chi2_filters, _filters_remaining=_filters_remaining-1)
-
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
 
     # -- Static Methods --
+    
     @staticmethod
-    def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None):
+    def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None) -> None:
+        """TODO: Documentation
+        
+        Args:
+            map_from_opt:
+            plot_title:
+        """
         locations_chi2_viz_tags = []
         locations_shape = np.shape(map_from_opt["locations"])
         for i in range(locations_shape[0]):
@@ -910,7 +731,7 @@ class GraphManager:
         plt.show()
 
     @staticmethod
-    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False)\
+    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False) \
             -> float:
         """
         Generates a metric to compare the accuracy of a map with the ground truth.
@@ -923,7 +744,6 @@ class GraphManager:
                 represent the translation (xyz) and rotation (quaternion) of the optimized tags.
             ground_truth_tags: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
                 represent the translation (xyz) and rotation (quaternion) of the ground truth tags.
-            anchor_tag: An int representing which tag to use as the comparison tag.
             verbose: A boolean representing whether to print the full comparisons for each tag.
 
         Returns:
@@ -944,12 +764,14 @@ class GraphManager:
         return avg
 
     @staticmethod
-    def plot_optimization_result(locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
-                                 tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
-                                 original_tag_verts: Union[None, np.ndarray] = None,
-                                 ground_truth_tags: Union[None, np.ndarray] = None,
-                                 plot_title: Union[str, None] = None,
-                                 is_sba: bool = False) -> None:
+    def plot_optimization_result(
+            locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
+            tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
+            original_tag_verts: Union[None, np.ndarray] = None,
+            ground_truth_tags: Union[None, np.ndarray] = None,
+            plot_title: Union[str, None] = None,
+            is_sba: bool = False
+    ) -> None:
         """Visualization used during the optimization routine.
         """
         f = plt.figure()
@@ -966,27 +788,34 @@ class GraphManager:
         if original_tag_verts is not None:
             if is_sba:
                 for i, tag_vertex in enumerate(original_tag_verts):
-                    original_tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse())
-                                                      .inverse().to_vector(), tag_vertex[-1])
+                    original_tag_verts[i] = np.append(
+                        (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
+                        tag_vertex[-1]
+                    )
             plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                      label="Tag Vertices Original")
 
         # Fix the 1 meter offset on the tag anchors
         if is_sba:
             for i, tag_vertex in enumerate(tag_verts):
-                tag_verts[i] = np.append((SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse()
-                                         .to_vector(), tag_vertex[-1])
+                tag_verts[i] = np.append(
+                    (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
+                    tag_vertex[-1]
+                )
 
         if ground_truth_tags is not None:
-            tag_list = tag_verts.tolist()
+            # noinspection PyTypeChecker
+            tag_list: List = tag_verts.tolist()
             tag_list.sort(key=lambda x: x[-1])
             ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
+
             anchor_tag = 0
             anchor_tag_se3quat = SE3Quat(ordered_tags[anchor_tag])
             to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
             world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
 
-            print(f"\nAverage translation difference: {GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags, True)}\n")
+            print("\nAverage translation difference:", GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags,
+                                                                                        True))
 
             plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                      'o', c='k', label=f'Actual Tags')
@@ -1015,16 +844,15 @@ class GraphManager:
             waypoint_name = waypoint_verts[0][vert_idx]["name"]
             ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
 
+        # Archive of plotting commands:
         # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
         # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
         #          label='All Tag Edges Original')
-
-        # Commented-out: unused
         # all_tags = graph_utils.get_tags_all_position_estimate(graph)
         # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
+        # tag_vertex_shift = original_tag_verts - tag_verts
+        # print("tag_vertex_shift", tag_vertex_shift)
 
-        tag_vertex_shift = original_tag_verts - tag_verts
-        #print("tag_vertex_shift", tag_vertex_shift)
         plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
         GraphManager.axis_equal(ax)
         plt.gcf().set_dpi(300)
@@ -1033,12 +861,15 @@ class GraphManager:
         plt.show()
 
     @staticmethod
-    def axis_equal(ax):
+    def axis_equal(ax: plt.Axes):
         """Create cubic bounding box to simulate equal aspect ratio
+
+        Args:
+            ax: Matplotlib Axes object
         """
         axis_range_from_limits = lambda limits: limits[1] - limits[0]
         max_range = np.max(np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
-                                    axis_range_from_limits(ax.get_zlim())]))
+                                     axis_range_from_limits(ax.get_zlim())]))
         Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
             (ax.get_xlim()[1] + ax.get_xlim()[0])
         Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
@@ -1052,62 +883,102 @@ class GraphManager:
 
     @staticmethod
     def compare_std_dev(all_tags, all_tags_original):
+        """TODO: documentation
+
+        Args:
+            all_tags:
+            all_tags_original:
+
+        Returns:
+
+        """
         return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
                               np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in
                 np.unique(all_tags[:, -1])}
 
     @staticmethod
-    def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray,
-                                waypoint_locations: Tuple[List[Dict], np.ndarray], calculate_intersections: bool = True,
-                                adj_chi2_arr: Union[None, np.ndarray] = None,
-                                visible_tags_count: Union[None, np.ndarray] = None) -> str:
+    def make_processed_map_JSON(
+            tag_locations: np.ndarray,
+            odom_locations: np.ndarray,
+            waypoint_locations: Tuple[List[Dict], np.ndarray],
+            calculate_intersections: bool = True,
+            adj_chi2_arr: Union[None, np.ndarray] = None,
+            visible_tags_count: Union[None, np.ndarray] = None
+    ) -> str:
+        """TODO: documentation
+
+        Args:
+            tag_locations:
+            odom_locations:
+            waypoint_locations:
+            calculate_intersections:
+            adj_chi2_arr:
+            visible_tags_count:
+
+        Returns:
+
+        """
         if (visible_tags_count is None) ^ (adj_chi2_arr is None):
             print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
 
         tag_vertex_map = map(
             lambda curr_tag: {
-                "translation": {"x": curr_tag[0], "y": curr_tag[1], "z": curr_tag[2]},
+                "translation": {"x": curr_tag[0],
+                                "y": curr_tag[1],
+                                "z": curr_tag[2]},
                 "rotation": {"x": curr_tag[3],
                              "y": curr_tag[4],
                              "z": curr_tag[5],
                              "w": curr_tag[6]},
                 "id": int(curr_tag[7])
-            }, tag_locations
+            },
+            tag_locations
         )
 
+        odom_vertex_map: List[Dict[str, Union[List[int], int, float, Dict[str, float]]]]
         if adj_chi2_arr is None:
-            odom_vertex_map = list(map(
-                lambda curr_odom: {
-                    "translation": {"x": curr_odom[0], "y": curr_odom[1],
-                                    "z": curr_odom[2]},
-                    "rotation": {"x": curr_odom[3],
-                                 "y": curr_odom[4],
-                                 "z": curr_odom[5],
-                                 "w": curr_odom[6]},
-                    "poseId": int(curr_odom[8]),
-                }, odom_locations
-            ))
+            odom_vertex_map = list(
+                map(
+                    lambda curr_odom: {
+                        "translation": {"x": curr_odom[0],
+                                        "y": curr_odom[1],
+                                        "z": curr_odom[2]},
+                        "rotation": {"x": curr_odom[3],
+                                     "y": curr_odom[4],
+                                     "z": curr_odom[5],
+                                     "w": curr_odom[6]},
+                        "poseId": int(curr_odom[8]),
+                    },
+                    odom_locations
+                )
+            )
         else:
-            odom_locations_with_chi2_and_viz_tags = np.concatenate([odom_locations, adj_chi2_arr, visible_tags_count],
-                                                                   axis=1)
-            odom_vertex_map = list(map(
-                lambda curr_odom: {
-                    "translation": {"x": curr_odom[0], "y": curr_odom[1],
-                                    "z": curr_odom[2]},
-                    "rotation": {"x": curr_odom[3],
-                                 "y": curr_odom[4],
-                                 "z": curr_odom[5],
-                                 "w": curr_odom[6]},
-                    "poseId": int(curr_odom[8]),
-                    "adjChi2": curr_odom[9],
-                    "vizTags": curr_odom[10]
-                }, odom_locations_with_chi2_and_viz_tags
-            ))
+            odom_locations_with_chi2_and_viz_tags = np.concatenate(
+                [odom_locations, adj_chi2_arr, visible_tags_count],
+                axis=1
+            )
+            odom_vertex_map = list(
+                map(
+                    lambda curr_odom: {
+                        "translation": {"x": curr_odom[0],
+                                        "y": curr_odom[1],
+                                        "z": curr_odom[2]},
+                        "rotation": {"x": curr_odom[3],
+                                     "y": curr_odom[4],
+                                     "z": curr_odom[5],
+                                     "w": curr_odom[6]},
+                        "poseId": int(curr_odom[8]),
+                        "adjChi2": curr_odom[9],
+                        "vizTags": curr_odom[10]
+                    },
+                    odom_locations_with_chi2_and_viz_tags
+                )
+            )
 
         if calculate_intersections:
             neighbors, intersections = graph_utils.get_neighbors(odom_locations[:, :7])
             for index, neighbor in enumerate(neighbors):
-                odom_vertex_map[index]['neighbors'] = neighbor
+                odom_vertex_map[index]["neighbors"] = neighbor
             for intersection in intersections:
                 odom_vertex_map.append(intersection)
 
@@ -1126,8 +997,3 @@ class GraphManager:
         return json.dumps({"tag_vertices": list(tag_vertex_map),
                            "odometry_vertices": odom_vertex_map,
                            "waypoints_vertices": list(waypoint_vertex_map)}, indent=2)
-
-
-if __name__ == "__main__":
-    print("The command line functionality using the GraphManager class is in graph_manager_user.py. The "
-          "graph_optimization_analysis.ipynb notebook also makes use of this class.")

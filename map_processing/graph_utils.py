@@ -44,17 +44,22 @@ class MapInfo:
 
     Attributes:
         map_name (str): Specifies the child of the "maps" database reference to upload the optimized
-         graph to; also passed as the map_name argument to the _cache_map method
-        map_json (str): String corresponding to both the bucket blob name of the map and the path to cache the
-         map relative to parent_folder
+         graph to; also passed as the map_name argument to the cache_map method
+        map_json_name (str): String corresponding to the bucket blob name of the json
         map_dct (dict): String of json containing graph
     """
 
-    def __init__(self, map_name: str, map_json: str, map_dct: Dict = None, uid: str = None):
+    def __init__(self, map_name: str, map_json_name: str, map_dct: Dict = None, uid: str = None):
         self.map_name: str = str(map_name)
+        self.map_json_blob_name: str = str(map_json_name)
         self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
-        self.map_json: str = str(map_json)
         self.uid = uid
+
+    def __hash__(self):
+        return self.map_json_blob_name.__hash__()
+
+    def __repr__(self):
+        return self.map_name
 
 
 def se3_quat_average(transforms):
@@ -336,8 +341,11 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
         A new dict of weights where each value is normalized as said above, keeping dummy weights constant
     """
     odom_tag_ratio = max(0.00001, weights.get('odom_tag_ratio', 1))  # Put lower limit to prevent rounding causing division by 0
+
+    # TODO: explain what these do
     odom_scale = 1 / (1 + 1 / odom_tag_ratio ** 2) ** 0.5
     tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5
+
     if is_sba:
         tag_scale = tag_scale / assumed_focal_length
     normal_weights = {

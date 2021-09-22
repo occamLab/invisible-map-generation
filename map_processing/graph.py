@@ -24,10 +24,7 @@ class Graph:
 
     def __init__(self, vertices: Dict[int, Vertex],
                  edges: Dict[int, Edge],
-                 weights: Dict[str, np.ndarray] = {'odometry': np.zeros(6),
-                                                   'tag_sba': np.zeros(2),
-                                                   'tag': np.zeros(6),
-                                                   'dummy': np.zeros(3)},
+                 weights=None,
                  gravity_axis="y",
                  is_sparse_bundle_adjustment: bool = False,
                  use_huber: bool = False,
@@ -48,6 +45,14 @@ class Graph:
              and qz measurements for odometry edges, tag edges, and dummy edges and has 18 elements [odometry x,
              odometry y, ..., dummy qz]. The weights are related to variance by variance = exp(w).
         """
+        if weights is None:
+            weights = {
+                'odometry': np.zeros(6),
+                'tag_sba': np.zeros(2),
+                'tag': np.zeros(6),
+                'dummy': np.zeros(3)
+            }
+
         self.edges: Dict[int, Edge] = copy.deepcopy(edges)
         self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
         self.original_vertices = copy.deepcopy(vertices)
@@ -73,7 +78,7 @@ class Graph:
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[g2o.SparseOptimizer, None] = None
         self.optimized_graph: Union[g2o.SparseOptimizer, None] = None
-        self.update_edges()
+        self.update_edge_information()
 
         # This is populated in graph_to_optimizer and is currently no updated anywhere else
         self.our_edges_to_g2o_edges: Dict[int, Union[g2o.EdgeProjectPSI2UV, g2o.EdgeSE3Expmap, g2o.EdgeSE3]] = {}
@@ -255,9 +260,8 @@ class Graph:
         return adj_chi2, num_tags_visible
 
     def optimize_graph(self) -> float:
-        """Optimize the graph using g2o.
-
-        The g2o_status attribute is set to to the g2o success output.
+        """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
+        optimized_graph attribute). The g2o_status attribute is set to to the g2o success output.
 
         Returns:
             Chi2 sum of optimized graph as returned by the call to `self.check_optimized_edges(self.optimized_graph)`
@@ -406,10 +410,45 @@ class Graph:
         self._verts_to_edges[edge.startuid].remove(edge_id)
         self._verts_to_edges[edge.enduid].remove(edge_id)
         del self.edges[edge_id]
+        
+    def filter_out_high_chi2_observation_edges(self, filter_std_dv_multiple: float) -> None:
+        """Calls remove_edge on every edge whose associated chi2 value in the optimized_graph attribute is above the
+        specified threshold.
+
+        The threshold is given by m + filter_std_dv_multiple * s where m is the mean, and s is the standard deviation of
+        the optimized graph's edges' chi2 values for the edges between tags and tagpoints.
+
+        If the optimized_graph attribute is not assigned, then no action is taken.
+        """
+        if self.optimized_graph is None:
+            return
+
+        chi2_by_edge = {}
+        chi2s = []
+        for edge in self.optimized_graph.edges():
+            end_mode = self.vertices[self.edges[edge.id()].enduid].mode
+            start_mode = self.vertices[self.edges[edge.id()].startuid].mode
+            if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (VertexType.TAG,
+                                                                                   VertexType.TAGPOINT):
+                chi2 = self.get_chi2_of_edge(edge)
+                chi2_by_edge[edge.id()] = chi2
+                chi2s.append(chi2)
+        chi2s = np.array(chi2s)
+        mean_chi2 = chi2s.mean()
+        std_chi2 = chi2s.std()
+
+        # Filter out chi2 within the specified std devs of the mean
+        max_chi2 = mean_chi2 + filter_std_dv_multiple * std_chi2
+
+        for edge_id, chi2 in chi2_by_edge.items():
+            if chi2 > max_chi2:
+                print(f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag '
+                      f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
+                self.remove_edge(edge_id)
 
     # -- Utility methods --
 
-    def update_edges(self) -> None:
+    def update_edge_information(self) -> None:
         """Populates the information attribute of each of the edges.
 
         Raises:
@@ -458,7 +497,7 @@ class Graph:
             else:
                 raise Exception("Edge of start type {} not recognized.".format(start_mode))
 
-    def update_vertices(self) -> None:
+    def update_vertices_estimates(self) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.
         """
         for uid in self.optimized_graph.vertices():
@@ -685,7 +724,7 @@ class Graph:
         """
         self.generate_unoptimized_graph()
         self.optimize_graph()
-        self.update_vertices()
+        self.update_vertices_estimates()
         self.generate_maximization_params()
         return self.tune_weights()
 
@@ -763,5 +802,5 @@ class Graph:
         self.maximization_success = results.success
         self._weights = graph_utils.weight_dict_from_array(results.x)
         self.maximization_results = results
-        self.update_edges()
+        self.update_edge_information()
         return self._weights

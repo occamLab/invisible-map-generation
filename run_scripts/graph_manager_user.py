@@ -18,9 +18,7 @@ Notes:
 
 import argparse
 import os
-
 from firebase_admin import credentials
-
 from map_processing import graph
 from map_processing.graph_manager import GraphManager
 from map_processing.firebase_manager import FirebaseManager
@@ -92,21 +90,30 @@ def make_parser():
         help="Visualize plots"
     )
     p.add_argument(
-        '--fix',
+        "--fix",
         type=int,
-        nargs='*',
+        nargs="*",
         default=[],
-        help='What vertex types to fix during optimization. Dummy and Tagpoints are always fixed. Otherwise,'
-             ' 0-Odometry,'
-             ' 1-Tag,'
-             ' 2-Waypoint.',
+        help="What vertex types to fix during optimization. Dummy and Tagpoints are always fixed. Otherwise,"
+             " 0-Odometry,"
+             " 1-Tag,"
+             " 2-Waypoint.",
         choices={0, 1, 2}
+    )
+    p.add_argument(
+        "--filter",
+        type=float,
+        required=False,
+        help="Removes from the graph observation edges above this many standard deviations from the mean observation "
+             "edge chi2 value in the optimized graph. The graph optimization is then re-run with the modified graph. "
+             "A negative value performs no filtering.",
+        default=-1.0
     )
     return p
 
 
 def download_maps(event):
-    firebase.get_map_from_event(event)
+    firebase.get_map_from_unprocessed_map_event(event)
 
 
 if __name__ == "__main__":
@@ -119,7 +126,7 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    firebase = FirebaseManager(cred, max_wait=5, download_only=True)
+    firebase = FirebaseManager(cred, max_listen_wait=0)
     graph_manager = GraphManager(args.w, firebase, pso=args.pso)
 
     if args.f:
@@ -134,5 +141,14 @@ if __name__ == "__main__":
             fixed_tags.add(graph.VertexType.TAG)
         elif tag_type == 2:
             fixed_tags.add(graph.VertexType.WAYPOINT)
-    graph_manager.process_maps(map_pattern, visualize=args.v, upload=args.F, compare=args.c, new_pso=args.pso,
-                               new_weights_specifier=args.w, fixed_vertices=tuple(fixed_tags))
+
+    graph_manager.process_maps(
+        map_pattern,
+        visualize=args.v,
+        upload=args.F,
+        compare=args.c,
+        new_pso=args.pso,
+        new_weights_specifier=args.w,
+        fixed_vertices=tuple(fixed_tags),
+        obs_chi2_filter=args.filter
+    )

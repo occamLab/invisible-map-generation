@@ -15,6 +15,7 @@ from map_processing.graph_manager import GraphManager
 from map_processing.graph_utils import occam_room_tags
 from map_processing.firebase_manager import FirebaseManager
 
+
 CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache", "unprocessed_maps", "myTestFolder")
 MAP_JSON = "2900094388220836-17-21 OCCAM Room.json"
 
