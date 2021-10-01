@@ -16,8 +16,13 @@ Notes:
   for further processing.
 """
 
-import argparse
 import os
+import sys
+
+# Ensure that the map_processing module is imported
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
+import argparse
 from firebase_admin import credentials
 from map_processing import graph
 from map_processing.graph_manager import GraphManager
@@ -43,7 +48,8 @@ def make_parser():
         "--pso",
         type=int,
         required=False,
-        help="Specifies the prescaling option used in the as_graph method. Viable options are: "
+        help="Specifies the prescaling option used in the Graph.as_graph class method (according to the "
+             "PrescalingOptEnum enum). Viable options are: "
              " 0-Sparse bundle adjustment, "
              " 1-Tag prescaling uses the full covariance matrix,"
              " 2-Tag prescaling uses only the covariance matrix diagonal,"

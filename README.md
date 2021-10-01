@@ -9,6 +9,7 @@ This repository is a refactor and extension of the work done in [occamlab/assist
   - If g2o is building for the wrong python version, see [this issue](https://github.com/uoip/g2opy/issues/9).
 - Additional Python requirements can be installed using the included requirements.txt
 
+TODO: update the following
 ## Source Files
 - `map_processing`: Python package containing the files that process the maps using g2o
   - `graph.py` The graph type that uses the python g2o bindings

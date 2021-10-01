@@ -50,7 +50,7 @@ def loglikelihood_gradient(weights, *args):
 
 def maxweights(observations, errors, weights):
     """Maximize the likelihood of the errors given a list associated
-    observation by tuning measurement weights.
+    observation by tuning transform_vector weights.
 
     Args:
         observations:

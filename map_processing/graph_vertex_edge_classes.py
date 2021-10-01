@@ -32,16 +32,16 @@ class Vertex:
             mode: The :class: VertexType of the vertex.
             estimate: The estimate of where the vertex is
         """
-        self.mode = mode
-        self.estimate = estimate
-        self.fixed = fixed
-        self.meta_data = {} if meta_data is None else meta_data
+        self.mode: VertexType = mode
+        self.estimate: np.ndarray = estimate
+        self.fixed: bool = fixed
+        self.meta_data: Dict = {} if meta_data is None else meta_data
 
 
 class Edge:
     """A class for graph edges.
 
-    It encodes UIDs for the start and end vertices, the measurement, and the information matrix.
+    It encodes UIDs for the start and end vertices, the transform_vector, and the information matrix.
     """
 
     def __init__(self, startuid: int, enduid: int, corner_ids: Union[None, List], information: np.ndarray,
@@ -49,13 +49,13 @@ class Edge:
                  measurement: np.ndarray):
         """The edge class.
 
-        The arguments are a startuid, enduid, an information matrix represented by a 6x6 numpy array, and a measurement.
+        The arguments are a startuid, enduid, an information matrix represented by a 6x6 numpy array, and a transform_vector.
 
         Args:
             startuid: The UID of the starting vertex. This can be any hashable such as an int.
             enduid: The UID of the ending vertex. This can be any hashable such as an int.
             corner_ids: an array of UIDs for each of the tag corner vertices. This only applies to edges to a tag
-            information: A 6x6 numpy array encoding measurement information. The rows and columns encode x, y, z, qx,
+            information: A 6x6 numpy array encoding transform_vector information. The rows and columns encode x, y, z, qx,
              qy, and qz information.
             information_prescaling: A 6 element numpy array encoding the diagonal of a matrix that pre-multiplies the
              edge information matrix specified by the weights. If None is past, then the 6 element vector is assumed to

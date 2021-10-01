@@ -1,16 +1,21 @@
 """
 Program to visualize the chi2s of each edge type, sweeped over weights
 """
+import os
+import sys
+
+# Ensure that the map_processing module is imported
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
 import argparse
 import json
 
 from firebase_admin import credentials
 from matplotlib import pyplot as plt
 import numpy as np
-import os
 
 from map_processing.graph_manager import GraphManager
-from map_processing.as_graph import as_graph
+from map_processing import graph_opt_utils
 from map_processing.graph import Graph
 
 CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache", "unprocessed_maps", "myTestFolder")
@@ -52,7 +57,7 @@ def main():
             json_string = json_string_file.read()
             json_string_file.close()
         map_dct = json.loads(json_string)
-        graph = as_graph(map_dct)
+        graph = Graph.as_graph(map_dct)
 
         sweep = np.exp(np.arange(-10, 10.1, 0.1))
         total_runs = sweep.shape[0]
@@ -80,7 +85,7 @@ def main():
             for edge, chi2 in run_chi2s.items():
                 chi2s[edge][run] = chi2['sum']
                 full_chi2s[edge][run] = chi2
-            full_chi2s['actual_chi2s'][run] = Graph.check_optimized_edges(optimizer)
+            full_chi2s['actual_chi2s'][run] = graph_opt_utils.sum_optimized_edges_chi2(optimizer)
             full_chi2s['total_chi2'][run] = sum([run_chi2s[edge]['sum'] for edge in ('odometry', 'tag', 'dummy')])
 
         with open(os.path.join('saved_sweeps', 'chi2_visualization', file_name), 'w') as file:

@@ -2,14 +2,19 @@
 Uses a genetic algorithm to optimize the weights for the graph optimization
 """
 
+import os
+import sys
+
+# Ensure that the map_processing module is imported
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
 import argparse
 import json
 
 import numpy as np
 from firebase_admin import credentials
-import os
 
-from map_processing import graph_utils
+import map_processing.graph_opt_plot_utils
 from map_processing.graph_manager import GraphManager
 from map_processing.firebase_manager import FirebaseManager
 
@@ -74,7 +79,7 @@ if __name__ == "__main__":
                     best_weights = [np.log(odom_tag_ratio[indexes[0][0], indexes[1][0]]),
                                     np.log(pose_orientation_ratio[indexes[0][0], indexes[1][0]])]
                     print(f'\nBEST METRIC: e^{best_weights}: {best_metric}')
-                    graph_utils.plot_metrics(pose_orientation_ratio, reprocessed_metrics, True, True)
+                    map_processing.graph_opt_plot_utils.plot_metrics(pose_orientation_ratio, reprocessed_metrics, True, True)
         else:
             bounds = (-10, 10)
             step = 0.5
@@ -94,7 +99,7 @@ if __name__ == "__main__":
                     'metrics': metrics.tolist()
                 }
                 json.dump(dct, results_file)
-            graph_utils.plot_metrics(sweep, metrics, True, True)
+            map_processing.graph_opt_plot_utils.plot_metrics(sweep, metrics, True, True)
     else:
         if args.l:
             print('l flag must be included with s flag - ignoring l flag.')

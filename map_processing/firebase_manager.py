@@ -1,15 +1,41 @@
+"""
+Contains the FirebaseManager class used for managing the local cache.
+"""
+
 import glob
 import json
 import os
 from threading import Semaphore, Thread, Timer
 from typing import *
+from typing import Dict, Union
 
 import firebase_admin
 from firebase_admin import db
 from firebase_admin import storage
 from varname import nameof
 
-from map_processing.graph_utils import MapInfo
+
+class MapInfo:
+    """Container for identifying information for a graph (useful for caching process)
+
+    Attributes:
+        map_name (str): Specifies the child of the "maps" database reference to upload the optimized
+         graph to; also passed as the map_name argument to the cache_map method
+        map_json_name (str): String corresponding to the bucket blob name of the json
+        map_dct (dict): String of json containing graph
+    """
+
+    def __init__(self, map_name: str, map_json_name: str, map_dct: Dict = None, uid: str = None):
+        self.map_name: str = str(map_name)
+        self.map_json_blob_name: str = str(map_json_name)
+        self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
+        self.uid = uid
+
+    def __hash__(self):
+        return self.map_json_blob_name.__hash__()
+
+    def __repr__(self):
+        return self.map_name
 
 
 class FirebaseManager:
@@ -23,13 +49,13 @@ class FirebaseManager:
          method and the cache location of any maps associated with that database reference.
         processed_upload_to: Simultaneously specifies Firebase bucket path to upload processed graphs to and the
          cache location of processed graphs.
-        cache_path: String representing the absolute path to the cache folder. The cache path is evaluated to
-         always be located at <path to this file>.cache/
         _app_initialize_dict: Used for initializing the app attribute
         _app: Firebase App initialized with a service account, granting admin privileges. Shared across all instances of
          this class (only initialized once).
 
     Attributes:
+        cache_path: String representing the absolute path to the cache folder. The cache path is evaluated to
+         always be located at <path to this file>.cache/
         _bucket: Handle to the Google Cloud Storage bucket
         _db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
          class attribute _selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
@@ -49,7 +75,6 @@ class FirebaseManager:
 
     unprocessed_maps_parent: str = "unprocessed_maps"
     processed_upload_to: str = "TestProcessed"
-    cache_path: str
 
     def __init__(self, firebase_creds: firebase_admin.credentials.Certificate, max_listen_wait: int = -1):
         """
@@ -71,29 +96,35 @@ class FirebaseManager:
         self._timer_mutex: Semaphore = Semaphore()
         self._max_listen_wait = max_listen_wait
 
-    def map_info_from_path(self, map_json_abs_path: str) -> Union[MapInfo, None]:
+    def map_info_from_path(self, map_json_path: str) -> Union[MapInfo, None]:
         """
         Parses a json file into a MapInfo instance.
 
         Args:
-            map_json_abs_path: Path to the json file
+            map_json_path: Path to the json file. If the path is not an absolute path, then the cache directory is
+             prepended. If this path does not end with ".json", then ".json" is appended.
 
         Returns:
             MapInfo instance if the specified file exists and is a json file (and None otherwise)
         """
-        if not os.path.exists(map_json_abs_path) or not map_json_abs_path.endswith(".json"):
+        if not map_json_path.endswith(".json"):
+            map_json_path += ".json"
+        if not os.path.isabs(map_json_path):
+            map_json_path = os.path.join(self.cache_path, map_json_path)
+
+        if not os.path.exists(map_json_path):
             return None
 
-        map_json_abs_path = os.path.join(self.cache_path, map_json_abs_path)
-        with open(map_json_abs_path, "r") as json_string_file:
+        map_json_path = os.path.join(self.cache_path, map_json_path)
+        with open(map_json_path, "r") as json_string_file:
             json_string = json_string_file.read()
             json_string_file.close()
 
-        map_json_blob_name = os.path.sep.join(map_json_abs_path.split(os.path.sep)[len(self.cache_path.split(os.path.sep)) + 1:])
+        map_json_blob_name = os.path.sep.join(map_json_path.split(os.path.sep)[len(self.cache_path.split(os.path.sep)) + 1:])
         map_dct = json.loads(json_string)
         map_name = self.read_cache_directory(os.path.basename(map_json_blob_name))
 
-        last_folder = map_json_abs_path.split('/')[-2]
+        last_folder = map_json_path.split('/')[-2]
         if last_folder == self.unprocessed_maps_parent:
             return MapInfo(map_name, map_json_blob_name, map_dct)
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)

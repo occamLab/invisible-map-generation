@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Contains the GraphManager class. For the command line utility that makes use of it, see graph_manager_user.py. The
 graph_optimization_analysis.ipynb notebook also makes use of this class.
@@ -6,26 +5,26 @@ graph_optimization_analysis.ipynb notebook also makes use of this class.
 
 from __future__ import annotations
 
-import json
 from typing import *
 
-import matplotlib.pyplot as plt
 import numpy as np
-from g2o import Quaternion, SE3Quat, SparseOptimizer
+from g2o import SE3Quat, SparseOptimizer
 from geneticalgorithm import geneticalgorithm as ga
 
-import map_processing.as_graph as as_graph
-import map_processing.graph_utils as graph_utils
-from map_processing.firebase_manager import FirebaseManager
-from map_processing.graph import Graph
-from map_processing.graph_utils import occam_room_tags, MapInfo
-from map_processing.graph_vertex_edge_classes import Vertex, VertexType
+import map_processing
+import map_processing.graph_opt_utils
+from . import graph_opt_utils, graph_opt_plot_utils, transform_utils, OCCAM_ROOM_TAGS_DICT
+from .firebase_manager import FirebaseManager, MapInfo
+from .graph import Graph
+from .graph_vertex_edge_classes import Vertex, VertexType
 
 
 class GraphManager:
-    """Provides wrappers for graph optimization via the Graph class and associated plotting and statistics computation.
-    Graph datasets are accessed via a FirebaseManager instance.
-    
+    """Provides routines for the graph optimization capabilities provided by the Graph class.
+
+    Organized as a class instead of a namespace of functions because the class and instance attributes configure the
+    optimization routines.
+
     Class Attributes:
         _comparison_graph1_subgraph_weights: A list that contains a subset of the keys in
          _weights_dict; the keys identify the different weights vectors applied to the first subgraph when the
@@ -49,40 +48,47 @@ class GraphManager:
         "best_sweep",
         "comparison_baseline"
     ]
+    _default_dummy_weights = np.array([-1, 1e2, -1])
     _weights_dict: Dict[str, Dict[str, np.ndarray]] = {
-        "sensible_default_weights": graph_utils.normalize_weights({
+        "sensible_default_weights": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
             'tag_sba': np.array([18, 18]),
             'tag': np.array([18, 18, 0, 0, 0, 0]),
             'dummy': np.array([-1, 1e2, -1]),
         }),
-        "trust_odom": graph_utils.normalize_weights({
+        "trust_odom": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.array([-3., -3., -3., -3., -3., -3.]),
             'tag_sba': np.array([10.6, 10.6]),
             'tag': np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
-            'dummy': graph_utils.default_dummy_weights,
+            'dummy': _default_dummy_weights,
         }),
-        "trust_tags": graph_utils.normalize_weights({
+        "trust_tags": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.array([10, 10, 10, 10, 10, 10]),
             'tag_sba': np.array([-10.6, -10.6]),
             'tag': np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
-            'dummy': graph_utils.default_dummy_weights,
+            'dummy': _default_dummy_weights,
         }),
-        "genetic_results": graph_utils.normalize_weights({  # only used for SBA - no non-SBA tag weights
+        # Only used for SBA - no non-SBA tag weights
+        "genetic_results": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08]),
             'tag_sba': np.array([9.91, 8.88]),
-            'dummy': graph_utils.default_dummy_weights,
+            'dummy': _default_dummy_weights,
         }),
-        "best_sweep": graph_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
-        "comparison_baseline": graph_utils.normalize_weights({
+        "best_sweep": map_processing.graph_opt_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
+        "comparison_baseline": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.ones(6),
             'tag_sba': np.ones(2),
             'tag': np.ones(6),
-            'dummy': graph_utils.default_dummy_weights,
+            'dummy': _default_dummy_weights,
         })
     }
-    _comparison_graph1_subgraph_weights: List[str] = ["sensible_default_weights", "trust_odom", "trust_tags",
-                                                      "genetic_results", "best_sweep"]
+    _comparison_graph1_subgraph_weights: List[str] = [
+        "sensible_default_weights",
+        "trust_odom",
+        "trust_tags",
+        "genetic_results",
+        "best_sweep"
+    ]
 
     def __init__(self, weights_specifier: int, firebase_manager: FirebaseManager, pso: int = 0):
         """Initializes GraphManager instance (only populates instance attributes)
@@ -92,11 +98,11 @@ class GraphManager:
              GraphManager._weights_dict (integer is mapped to the key with the GraphManager.ordered_weights_dict_keys
               list).
              firebase_manager (FirebaseManager): The firebase manager to use for reading from/to the cache.
-             pso (int): Integer corresponding to the enum value in as_graph.PrescalingOptEnum which selects the
+             pso (int): Integer corresponding to the enum value in the PrescalingOptEnum enum which selects the
               type of prescaling weights used in non-SBA optimizations
         """
 
-        self._pso = as_graph.PrescalingOptEnum.get_by_value(pso)
+        self._pso = map_processing.PrescalingOptEnum.get_by_value(pso)
         self._selected_weights: str = GraphManager.ordered_weights_dict_keys[weights_specifier]
         self._firebase_manager = firebase_manager
 
@@ -124,11 +130,11 @@ class GraphManager:
              the corresponding _pso instance attribute).
             new_weights_specifier: If not none, then it overrides what was specified by the constructor's
              weights_specifier argument (and changes the corresponding _selected_weights instance attribute).
-            fixed_vertices: Parameter to pass to the as_graph.as_graph function (see more there)
+            fixed_vertices: Parameter to pass to the Graph.as_graph class method (see more there)
             obs_chi2_filter: Parameter to pass to the _optimize_graph method (see more there)
         """
         if new_pso is not None:
-            self._pso = as_graph.PrescalingOptEnum.get_by_value(new_pso)
+            self._pso = map_processing.PrescalingOptEnum.get_by_value(new_pso)
         if new_weights_specifier is not None:
             self._selected_weights: str = GraphManager.ordered_weights_dict_keys[new_weights_specifier]
 
@@ -177,7 +183,7 @@ class GraphManager:
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
         following:
         1. Acquire two sub-graphs: one from the first half of the ordered odometry nodes (called g1sg) and one from the
-           other half (called g2sg); note that g2sg is created from the as_graph.as_graph function with the
+           other half (called g2sg); note that g2sg is created from the Graph.as_graph class method with the
            fix_tag_vertices as True, whereas g1sg is created with fix_tag_vertices as False.
         2. Optimize the g1sg with the iter_weights, then transfer the estimated locations of its tag vertices to the
            g2sg. The assumption is that a majority - if not all - tag vertices are present in both sub-graphs; the
@@ -236,16 +242,19 @@ class GraphManager:
                     chi2_plot_title=g1sg_chi2_plot_title,
                     obs_chi2_filter=obs_chi2_filter
                 )
-            processed_map_json_1 = GraphManager.make_processed_map_JSON(g1sg_tag_locs, g1sg_odom_locs,
-                                                                        g1sg_waypoint_locs,
-                                                                        adj_chi2_arr=g1sg_odom_adj_chi2,
-                                                                        visible_tags_count=g1sg_visible_tags_count)
-            del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs  # No longer needed
+            processed_map_json_1 = map_processing.graph_opt_utils.make_processed_map_JSON(
+                tag_locations=g1sg_tag_locs, 
+                odom_locations=g1sg_odom_locs,
+                waypoint_locations=g1sg_waypoint_locs,
+                adj_chi2_arr=g1sg_odom_adj_chi2,
+                visible_tags_count=g1sg_visible_tags_count
+            )
+            del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs
 
             self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
                                              processed_map_json_1,
                                              "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
-            del processed_map_json_1  # No longer needed
+            del processed_map_json_1
 
             print("\n-- Processing sub-graph with tags fixed using weights set: {} --".format(self._selected_weights))
 
@@ -273,16 +282,19 @@ class GraphManager:
                     chi2_plot_title=g2sg_chi2_plot_title,
                     obs_chi2_filter=obs_chi2_filter
                 )
-            processed_map_json_2 = GraphManager.make_processed_map_JSON(g2sg_tag_locs, g2sg_odom_locs,
-                                                                        g2sg_waypoint_locs,
-                                                                        adj_chi2_arr=g2sg_odom_adj_chi2,
-                                                                        visible_tags_count=g2sg_visible_tags_count)
-            del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs  # No longer needed
+            processed_map_json_2 = map_processing.graph_opt_utils.make_processed_map_JSON(
+                tag_locations=g2sg_tag_locs, 
+                odom_locations=g2sg_odom_locs,
+                waypoint_locations=g2sg_waypoint_locs,
+                adj_chi2_arr=g2sg_odom_adj_chi2,
+                visible_tags_count=g2sg_visible_tags_count
+            )
+            del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs
 
             self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
                                              processed_map_json_2,
                                              "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
-            del processed_map_json_2  # No longer needed
+            del processed_map_json_2
 
             results += "No fixed tags with weights set {}: chi2 = {}\n" \
                        "Subsequent optimization, fixed tags with weights set {}: chi2 = {}\n" \
@@ -302,18 +314,25 @@ class GraphManager:
             A list of the best weights
         """
         map_dct = self._firebase_manager.map_info_from_path(map_json_path).map_dct
-        graph = as_graph.as_graph(map_dct)
-        # sg1, sg2 = self.create_graphs_for_chi2_comparison(map_dct)
-        model = ga(function=lambda x: self.get_ground_truth_from_graph(x, graph, occam_room_tags, verbose),
-                   dimension=8, variable_type='real', variable_boundaries=np.array([[-10, 10]] * 8),
-                   algorithm_parameters={'max_num_iteration': 2000,
-                                         'population_size': 50,
-                                         'mutation_probability': 0.1,
-                                         'elit_ratio': 0.01,
-                                         'crossover_probability': 0.5,
-                                         'parents_portion': 0.3,
-                                         'crossover_type': 'uniform',
-                                         'max_iteration_without_improv': None})
+        graph = Graph.as_graph(map_dct)
+
+        # Use a genetic algorithm
+        model = ga(
+            function=lambda x: self.get_ground_truth_from_graph(x, graph, OCCAM_ROOM_TAGS_DICT, verbose),
+            dimension=8,
+            variable_type='real',
+            variable_boundaries=np.array([[-10, 10]] * 8),
+            algorithm_parameters={
+                'max_num_iteration': 2000,
+                'population_size': 50,
+                'mutation_probability': 0.1,
+                'elit_ratio': 0.01,
+                'crossover_probability': 0.5,
+                'parents_portion': 0.3,
+                'crossover_type': 'uniform',
+                'max_iteration_without_improv': None
+            }
+        )
         model.run()
         return model.report
 
@@ -334,11 +353,11 @@ class GraphManager:
                 start at 0 with a step size of 1 regardless of actual bounds and step size
         """
         map_dct = self._firebase_manager.map_info_from_path(map_json_path).map_dct
-        graph = as_graph.as_graph(map_dct)
+        graph = Graph.as_graph(map_dct)
         metrics = self._sweep_weights(graph, sweep, dimensions, None, verbose=verbose)
 
         if dimensions == 2 and visualize:
-            graph_utils.plot_metrics(sweep, metrics, log_sweep=True, log_metric=True)
+            map_processing.graph_opt_plot_utils.plot_metrics(sweep, metrics, log_sweep=True, log_metric=True)
         if verbose:
             best_metric = metrics.min(initial=None)
             best_weights = [sweep[i[0]] for i in np.where(metrics == best_metric)]
@@ -361,7 +380,7 @@ class GraphManager:
         optimizer = self.get_optimizer(graph, weights)
 
         # Find info
-        chi2 = Graph.check_optimized_edges(optimizer, verbose=verbose)
+        chi2 = graph_opt_utils.sum_optimized_edges_chi2(optimizer, verbose=verbose)
         vertices = {uid: Vertex(graph.vertices[uid].mode, optimizer.vertex(uid).estimate().vector(),
                                 graph.vertices[uid].fixed, graph.vertices[uid].meta_data)
                     for uid in optimizer.vertices() if vertex_types is None or graph.vertices[uid].mode in vertex_types}
@@ -398,6 +417,7 @@ class GraphManager:
         """
         if isinstance(subgraphs, Dict):
             subgraphs = self.create_graphs_for_chi2_comparison(subgraphs)
+
         self._weights_dict['variable'] = self._weights_to_dict(weights)
         _, vertices = self.get_optimized_graph_info(subgraphs[0], weights='variable', verbose=verbose)
         for uid, vertex in vertices.items():
@@ -406,8 +426,13 @@ class GraphManager:
 
         return subgraphs[1].get_chi2_by_edge_type(self.get_optimizer(subgraphs[1], comparison_weights), verbose=verbose)
 
-    def get_ground_truth_from_graph(self, weights: Union[str, Dict[str, np.ndarray], np.ndarray], graph: Graph,
-                                    ground_truth_tags: np.ndarray, verbose: bool = False) -> float:
+    def get_ground_truth_from_graph(
+            self, 
+            weights: Union[str, Dict[str, np.ndarray], np.ndarray], 
+            graph: Graph,
+            ground_truth_tags: np.ndarray, 
+            verbose: bool = False
+    ) -> float:
         """TODO: documentation
         """
         if isinstance(weights, str):
@@ -415,22 +440,50 @@ class GraphManager:
         else:
             weight_name = 'variable'
             self._weights_dict[weight_name] = weights if isinstance(weights, dict) else \
-                graph_utils.weight_dict_from_array(weights)
+                map_processing.graph_opt_utils.weight_dict_from_array(weights)
+
         _, vertices = self.get_optimized_graph_info(graph, weights=weight_name)
-        return GraphManager.get_ground_truth_from_optimized_tags(vertices, ground_truth_tags, verbose=verbose)
+        return GraphManager.get_ground_truth_from_optimized_tags(
+            optimized_tags=vertices,
+            ground_truth_tags=ground_truth_tags,
+            verbose=verbose
+        )
 
     @staticmethod
-    def get_ground_truth_from_optimized_tags(optimized_tags: Dict[int, Vertex], ground_truth_tags: np.ndarray,
-                                             verbose: bool = False) -> float:
-        """TODO: documentation
+    def get_ground_truth_from_optimized_tags(
+            optimized_tags: Dict[int, Vertex],
+            ground_truth_tags: np.ndarray,
+            verbose: bool = False
+    ) -> float:
+        """
+
+        Args:
+            optimized_tags: A dictionary of tag pose estimates keyed by the tag id
+            ground_truth_tags:
+            verbose:
+
+        Returns:
+
         """
         optimized_tag_verts = np.zeros((len(optimized_tags), 7))
         for vertex in optimized_tags.values():
             estimate = vertex.estimate
-            optimized_tag_verts[vertex.meta_data['tag_id']] = \
+            # vertex_tag_id = vertex.meta_data["tag_id"]
+
+            # if not optimized_tag_verts.__contains__(vertex_tag_id):
+            #     raise Exception("Could not ")
+            optimized_tag_verts[vertex.meta_data["tag_id"]] = \
                 (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
-        metric = GraphManager.ground_truth_metric(optimized_tag_verts, ground_truth_tags,
-                                                  verbose=verbose)
+
+        # TODO: find intersection of tag ids and convert to numpy arrays after. Display warnings for tags not in
+        #  intersection.
+
+        metric = graph_opt_utils.ground_truth_metric(
+            optimized_tag_verts=optimized_tag_verts,
+            ground_truth_tags=ground_truth_tags,
+            verbose=verbose
+        )
+
         if verbose:
             print(metric)
         return metric
@@ -449,8 +502,8 @@ class GraphManager:
         Returns:
             A tuple of 2 graphs, an even split of graph, as described above
         """
-        graph1 = as_graph.as_graph(graph, prescaling_opt=self._pso)
-        graph2 = as_graph.as_graph(graph, fixed_vertices=VertexType.TAG, prescaling_opt=self._pso)
+        graph1 = Graph.as_graph(graph, prescaling_opt=self._pso)
+        graph2 = Graph.as_graph(graph, fixed_vertices=VertexType.TAG, prescaling_opt=self._pso)
         dummy_nodes = [0, 0]
         for vertex in graph1.vertices.values():
             if vertex.mode == VertexType.DUMMY:
@@ -500,7 +553,7 @@ class GraphManager:
     ) -> str:
         """Wrapper for graph optimization that takes in a MapInfo object and returns a json of the optimized map.
         """
-        graph = as_graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
+        graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self._pso)
         tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
             self._optimize_graph(
                 graph,
@@ -511,11 +564,16 @@ class GraphManager:
                 chi2_plot_title=chi2_plot_title,
                 obs_chi2_filter=obs_chi2_filter
             )
-        return GraphManager.make_processed_map_JSON(tag_locations, odom_locations,
-                                                    waypoint_locations, adj_chi2_arr=adj_chi2,
-                                                    visible_tags_count=visible_tags_count)
+        return map_processing.graph_opt_utils.make_processed_map_JSON(
+            tag_locations=tag_locations,
+            odom_locations=odom_locations,
+            waypoint_locations=waypoint_locations,
+            adj_chi2_arr=adj_chi2,
+            visible_tags_count=visible_tags_count
+        )
 
     # -- Private Methods --
+
     def _weights_to_dict(self, weights: Union[int, float, str, np.ndarray, Dict[str, np.ndarray], None]):
         """
         Converts each representation of weights to a weight dictionary
@@ -523,11 +581,11 @@ class GraphManager:
         if isinstance(weights, int):
             return self._weights_dict[self.ordered_weights_dict_keys[weights]]
         elif isinstance(weights, float):
-            return graph_utils.weights_from_ratio(weights)
+            return map_processing.graph_opt_utils.weights_from_ratio(weights)
         elif isinstance(weights, str):
             return self._weights_dict[weights]
         elif isinstance(weights, np.ndarray):
-            return graph_utils.weight_dict_from_array(weights)
+            return map_processing.graph_opt_utils.weight_dict_from_array(weights)
         elif isinstance(weights, dict):
             return weights
         else:
@@ -588,12 +646,14 @@ class GraphManager:
             return metrics
 
     def _optimize_graph(
-            self, graph: Graph, 
+            self, 
+            graph: Graph, 
             tune_weights: bool = False, 
             visualize: bool = False, 
             weights_key: Union[None, str] = None, 
             obs_chi2_filter: float = -1, 
-            graph_plot_title: Union[str, None] = None, chi2_plot_title: Union[str, None] = None
+            graph_plot_title: Union[str, None] = None, 
+            chi2_plot_title: Union[str, None] = None
     ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
         """Optimizes the input graph.
 
@@ -631,9 +691,8 @@ class GraphManager:
             - A numpy array where each element corresponds to the number of visible tag vertices from the corresponding
               odometry vertices.
         """
-        graph.set_weights(
-            GraphManager._weights_dict[weights_key if weights_key is not None else self._selected_weights]
-        )
+        graph.set_weights(GraphManager._weights_dict[weights_key if weights_key is not None else 
+                          self._selected_weights])
 
         if tune_weights:
             graph.expectation_maximization_once()
@@ -646,11 +705,11 @@ class GraphManager:
         graph.update_edge_information()
 
         # Acquire original_tag_verts for return value (not used elsewhere)
-        starting_map = graph_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
-                                                    is_sparse_bundle_adjustment=self._pso == 0)
-        original_tag_verts = graph_utils.locations_from_transforms(starting_map["tags"]) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else starting_map["tags"]
-        del starting_map  # No longer needed
+        starting_map = map_processing.graph_opt_utils.optimizer_to_map(graph.vertices, graph.unoptimized_graph,
+                                                                       is_sparse_bundle_adjustment=self._pso == 0)
+        original_tag_verts = transform_utils.locations_from_transforms(starting_map["tags"]) \
+            if self._pso == map_processing.PrescalingOptEnum.USE_SBA else starting_map["tags"]
+        del starting_map
 
         opt_chi2 = graph.optimize_graph()
 
@@ -661,339 +720,34 @@ class GraphManager:
         # Change vertex estimates based off the optimized graph
         graph.update_vertices_estimates()
 
-        prior_map = graph_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
-        resulting_map = graph_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
-                                                          is_sparse_bundle_adjustment=self._pso == 0)
+        prior_map = map_processing.graph_opt_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph)
+        resulting_map = map_processing.graph_opt_utils.optimizer_to_map_chi2(graph, graph.optimized_graph,
+                                                                             is_sparse_bundle_adjustment=self._pso == 0)
 
         odom_chi2_adj_vec: np.ndarray = resulting_map["locationsAdjChi2"]
         visible_tags_count_vec: np.ndarray = resulting_map["visibleTagsCount"]
 
-        locations = graph_utils.locations_from_transforms(resulting_map["locations"]) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["locations"]
-        tag_verts = graph_utils.locations_from_transforms(resulting_map["tags"]) \
-            if self._pso == as_graph.PrescalingOptEnum.USE_SBA else resulting_map["tags"]
+        locations = transform_utils.locations_from_transforms(resulting_map["locations"]) \
+            if self._pso == map_processing.PrescalingOptEnum.USE_SBA else resulting_map["locations"]
+        tag_verts = transform_utils.locations_from_transforms(resulting_map["tags"]) \
+            if self._pso == map_processing.PrescalingOptEnum.USE_SBA else resulting_map["tags"]
         waypoint_verts = tuple(resulting_map["waypoints"])
 
         if visualize:
-            prior_locations = graph_utils.locations_from_transforms(prior_map["locations"]) \
-                if self._pso == as_graph.PrescalingOptEnum.USE_SBA else prior_map["locations"]
+            prior_locations = transform_utils.locations_from_transforms(prior_map["locations"]) \
+                if self._pso == map_processing.PrescalingOptEnum.USE_SBA else prior_map["locations"]
             tagpoint_positions = resulting_map["tagpoints"]
-            self.plot_optimization_result(locations, prior_locations, tag_verts, tagpoint_positions, waypoint_verts,
-                                          original_tag_verts, None, graph_plot_title, is_sba=self._pso == 0)
-            GraphManager.plot_adj_chi2(resulting_map, chi2_plot_title)
+            graph_opt_plot_utils.plot_optimization_result(
+                locations=locations,
+                prior_locations=prior_locations,
+                tag_verts=tag_verts,
+                tagpoint_positions=tagpoint_positions,
+                waypoint_verts=waypoint_verts,
+                original_tag_verts=original_tag_verts,
+                ground_truth_tags=None,
+                plot_title=graph_plot_title,
+                is_sba=self._pso == 0
+            )
+            graph_opt_plot_utils.plot_adj_chi2(resulting_map, chi2_plot_title)
 
         return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
-
-    # -- Static Methods --
-    
-    @staticmethod
-    def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None) -> None:
-        """TODO: Documentation
-        
-        Args:
-            map_from_opt:
-            plot_title:
-        """
-        locations_chi2_viz_tags = []
-        locations_shape = np.shape(map_from_opt["locations"])
-        for i in range(locations_shape[0]):
-            locations_chi2_viz_tags.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i],
-                                            map_from_opt["visibleTagsCount"][i]))
-        locations_chi2_viz_tags.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
-
-        chi2_values = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
-        viz_tags = np.zeros([locations_shape[0], 3])
-        odom_uids = np.zeros([locations_shape[0], 1])  # Contains UIDs
-        for idx in range(locations_shape[0]):
-            chi2_values[idx] = locations_chi2_viz_tags[idx][1]
-            odom_uids[idx] = int(locations_chi2_viz_tags[idx][0][7])
-
-            # Each row: UID, chi2_value, and num. viz. tags (only if != 0). As of now, the number of visible tags is
-            # ignored when plotting (plot only shows boolean value: whether at least 1 tag vertex is visible)
-            num_tag_verts = locations_chi2_viz_tags[idx][2]
-            if num_tag_verts != 0:
-                viz_tags[idx, :] = np.array([odom_uids[idx], chi2_values[idx], num_tag_verts]).flatten()
-
-        odom_uids.flatten()
-        chi2_values.flatten()
-
-        f = plt.figure()
-        ax: plt.Axes = f.add_axes([0.1, 0.1, 0.8, 0.7])
-        ax.plot(odom_uids, chi2_values)
-        ax.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
-        ax.set_xlim(min(odom_uids), max(odom_uids))
-        ax.legend(["chi2 value", ">=1 tag vertex visible"])
-        ax.set_xlabel("Odometry vertex UID")
-
-        plt.xlabel("Odometry vertex UID")
-        if plot_title is not None:
-            plt.title(plot_title, wrap=True)
-        plt.show()
-
-    @staticmethod
-    def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False) \
-            -> float:
-        """
-        Generates a metric to compare the accuracy of a map with the ground truth.
-
-        Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
-        then compares the transforms and finds the difference in the translation components.
-
-        Args:
-            optimized_tag_verts: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
-                represent the translation (xyz) and rotation (quaternion) of the optimized tags.
-            ground_truth_tags: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
-                represent the translation (xyz) and rotation (quaternion) of the ground truth tags.
-            verbose: A boolean representing whether to print the full comparisons for each tag.
-
-        Returns:
-            A float representing the average difference in tag positions (translation only) in meters.
-        """
-        num_tags = optimized_tag_verts.shape[0]
-        sum_trans_diffs = np.zeros((num_tags,))
-        for anchor_tag in range(num_tags):
-            anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-            to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
-            world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])[:, :3]
-            sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
-        avg_trans_diffs = sum_trans_diffs / num_tags
-        avg = np.mean(avg_trans_diffs)
-        if verbose:
-            print(f'Ground truth metric is {avg}')
-        # noinspection PyTypeChecker
-        return avg
-
-    @staticmethod
-    def plot_optimization_result(
-            locations: np.ndarray, prior_locations: np.ndarray, tag_verts: np.ndarray,
-            tagpoint_positions: np.ndarray, waypoint_verts: Tuple[List, np.ndarray],
-            original_tag_verts: Union[None, np.ndarray] = None,
-            ground_truth_tags: Union[None, np.ndarray] = None,
-            plot_title: Union[str, None] = None,
-            is_sba: bool = False
-    ) -> None:
-        """Visualization used during the optimization routine.
-        """
-        f = plt.figure()
-        ax = f.add_axes([0.1, 0.1, 0.6, 0.75], projection="3d")
-        ax.set_xlabel("X")
-        ax.set_ylabel("Y")
-        ax.set_zlabel("Z")
-        ax.view_init(120, -90)
-
-        plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], "-", c="g",
-                 label="Prior Odom Vertices")
-        plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
-
-        if original_tag_verts is not None:
-            if is_sba:
-                for i, tag_vertex in enumerate(original_tag_verts):
-                    original_tag_verts[i] = np.append(
-                        (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
-                        tag_vertex[-1]
-                    )
-            plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
-                     label="Tag Vertices Original")
-
-        # Fix the 1 meter offset on the tag anchors
-        if is_sba:
-            for i, tag_vertex in enumerate(tag_verts):
-                tag_verts[i] = np.append(
-                    (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
-                    tag_vertex[-1]
-                )
-
-        if ground_truth_tags is not None:
-            # noinspection PyTypeChecker
-            tag_list: List = tag_verts.tolist()
-            tag_list.sort(key=lambda x: x[-1])
-            ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
-
-            anchor_tag = 0
-            anchor_tag_se3quat = SE3Quat(ordered_tags[anchor_tag])
-            to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
-            world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
-
-            print("\nAverage translation difference:", GraphManager.ground_truth_metric(ordered_tags, ground_truth_tags,
-                                                                                        True))
-
-            plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
-                     'o', c='k', label=f'Actual Tags')
-            for i, tag in enumerate(world_frame_ground_truth):
-                ax.text(tag[0], tag[1], tag[2], str(i), c='k')
-
-        plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], "o", c="r", label="Tag Vertices")
-        for tag_vert in tag_verts:
-            R = Quaternion(tag_vert[3:-1]).rotation_matrix()
-            axis_to_color = ["r", "g", "b"]
-            for axis_id in range(3):
-                ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
-                          R[2, axis_id], length=1, color=axis_to_color[axis_id])
-
-        plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], ".", c="m",
-                 label="Tag Corners")
-
-        for vert in tag_verts:
-            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color="black")
-
-        plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], "o", c="y",
-                 label="Waypoint Vertices")
-
-        for vert_idx in range(len(waypoint_verts[0])):
-            vert = waypoint_verts[1][vert_idx]
-            waypoint_name = waypoint_verts[0][vert_idx]["name"]
-            ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
-
-        # Archive of plotting commands:
-        # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
-        # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m',
-        #          label='All Tag Edges Original')
-        # all_tags = graph_utils.get_tags_all_position_estimate(graph)
-        # tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
-        # tag_vertex_shift = original_tag_verts - tag_verts
-        # print("tag_vertex_shift", tag_vertex_shift)
-
-        plt.legend(bbox_to_anchor=(1.05, 1), loc="upper left", fontsize="small")
-        GraphManager.axis_equal(ax)
-        plt.gcf().set_dpi(300)
-        if isinstance(plot_title, str):
-            plt.title(plot_title, wrap=True)
-        plt.show()
-
-    @staticmethod
-    def axis_equal(ax: plt.Axes):
-        """Create cubic bounding box to simulate equal aspect ratio
-
-        Args:
-            ax: Matplotlib Axes object
-        """
-        axis_range_from_limits = lambda limits: limits[1] - limits[0]
-        max_range = np.max(np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
-                                     axis_range_from_limits(ax.get_zlim())]))
-        Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
-            (ax.get_xlim()[1] + ax.get_xlim()[0])
-        Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
-            (ax.get_ylim()[1] + ax.get_ylim()[0])
-        Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * \
-            (ax.get_zlim()[1] + ax.get_zlim()[0])
-
-        # Comment or uncomment following both lines to test the fake bounding box:
-        for xb, yb, zb in zip(Xb, Yb, Zb):
-            ax.plot([xb], [yb], [zb], "w")
-
-    @staticmethod
-    def compare_std_dev(all_tags, all_tags_original):
-        """TODO: documentation
-
-        Args:
-            all_tags:
-            all_tags_original:
-
-        Returns:
-
-        """
-        return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
-                              np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in
-                np.unique(all_tags[:, -1])}
-
-    @staticmethod
-    def make_processed_map_JSON(
-            tag_locations: np.ndarray,
-            odom_locations: np.ndarray,
-            waypoint_locations: Tuple[List[Dict], np.ndarray],
-            calculate_intersections: bool = True,
-            adj_chi2_arr: Union[None, np.ndarray] = None,
-            visible_tags_count: Union[None, np.ndarray] = None
-    ) -> str:
-        """TODO: documentation
-
-        Args:
-            tag_locations:
-            odom_locations:
-            waypoint_locations:
-            calculate_intersections:
-            adj_chi2_arr:
-            visible_tags_count:
-
-        Returns:
-
-        """
-        if (visible_tags_count is None) ^ (adj_chi2_arr is None):
-            print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
-
-        tag_vertex_map = map(
-            lambda curr_tag: {
-                "translation": {"x": curr_tag[0],
-                                "y": curr_tag[1],
-                                "z": curr_tag[2]},
-                "rotation": {"x": curr_tag[3],
-                             "y": curr_tag[4],
-                             "z": curr_tag[5],
-                             "w": curr_tag[6]},
-                "id": int(curr_tag[7])
-            },
-            tag_locations
-        )
-
-        odom_vertex_map: List[Dict[str, Union[List[int], int, float, Dict[str, float]]]]
-        if adj_chi2_arr is None:
-            odom_vertex_map = list(
-                map(
-                    lambda curr_odom: {
-                        "translation": {"x": curr_odom[0],
-                                        "y": curr_odom[1],
-                                        "z": curr_odom[2]},
-                        "rotation": {"x": curr_odom[3],
-                                     "y": curr_odom[4],
-                                     "z": curr_odom[5],
-                                     "w": curr_odom[6]},
-                        "poseId": int(curr_odom[8]),
-                    },
-                    odom_locations
-                )
-            )
-        else:
-            odom_locations_with_chi2_and_viz_tags = np.concatenate(
-                [odom_locations, adj_chi2_arr, visible_tags_count],
-                axis=1
-            )
-            odom_vertex_map = list(
-                map(
-                    lambda curr_odom: {
-                        "translation": {"x": curr_odom[0],
-                                        "y": curr_odom[1],
-                                        "z": curr_odom[2]},
-                        "rotation": {"x": curr_odom[3],
-                                     "y": curr_odom[4],
-                                     "z": curr_odom[5],
-                                     "w": curr_odom[6]},
-                        "poseId": int(curr_odom[8]),
-                        "adjChi2": curr_odom[9],
-                        "vizTags": curr_odom[10]
-                    },
-                    odom_locations_with_chi2_and_viz_tags
-                )
-            )
-
-        if calculate_intersections:
-            neighbors, intersections = graph_utils.get_neighbors(odom_locations[:, :7])
-            for index, neighbor in enumerate(neighbors):
-                odom_vertex_map[index]["neighbors"] = neighbor
-            for intersection in intersections:
-                odom_vertex_map.append(intersection)
-
-        waypoint_vertex_map = map(
-            lambda idx: {
-                "translation": {"x": waypoint_locations[1][idx][0],
-                                "y": waypoint_locations[1][idx][1],
-                                "z": waypoint_locations[1][idx][2]},
-                "rotation": {"x": waypoint_locations[1][idx][3],
-                             "y": waypoint_locations[1][idx][4],
-                             "z": waypoint_locations[1][idx][5],
-                             "w": waypoint_locations[1][idx][6]},
-                "id": waypoint_locations[0][idx]["name"]
-            }, range(len(waypoint_locations[0]))
-        )
-        return json.dumps({"tag_vertices": list(tag_vertex_map),
-                           "odometry_vertices": odom_vertex_map,
-                           "waypoints_vertices": list(waypoint_vertex_map)}, indent=2)
