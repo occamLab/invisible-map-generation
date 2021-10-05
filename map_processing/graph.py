@@ -16,10 +16,10 @@ from scipy.spatial.transform import Rotation as Rot
 
 import map_processing.graph_opt_utils
 from expectation_maximization.maximization_model import maxweights
-from . import SWITCH_HANDEDNESS, PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
+from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
 from .graph_vertex_edge_classes import *
 from .transform_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
-    measurement_to_matrix, matrix2measurement, se3_quat_average, make_sba_tag_arrays
+    transform_vector_to_matrix, transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, FLIP_Y_AND_Z_AXES
 
 
 class Graph:
@@ -504,8 +504,8 @@ class Graph:
         """
         poses = [initial]
         for edgeuid in edgeuids:
-            old_pose = measurement_to_matrix(poses[-1])
-            transform = measurement_to_matrix(self.edges[edgeuid].measurement)
+            old_pose = transform_vector_to_matrix(poses[-1])
+            transform = transform_vector_to_matrix(self.edges[edgeuid].measurement)
             new_pose = old_pose.dot(transform)
             translation = new_pose[:3, 3]
             rotation = Rot.from_matrix(new_pose[:3, :3]).as_quat()
@@ -540,8 +540,8 @@ class Graph:
             edge = self.edges[edgeuid]
             if self.vertices[edge.startuid].mode == VertexType.ODOMETRY and self.vertices[edge.enduid].mode == \
                     VertexType.TAG:
-                odom_transform = measurement_to_matrix(self.vertices[edge.startuid].estimate)
-                edge_transform = measurement_to_matrix(edge.measurement)
+                odom_transform = transform_vector_to_matrix(self.vertices[edge.startuid].estimate)
+                edge_transform = transform_vector_to_matrix(edge.measurement)
 
                 tag_transform = odom_transform.dot(edge_transform)
                 tag_translation = tag_transform[:3, 3]
@@ -768,7 +768,8 @@ class Graph:
 
         Raises:
             Exception: if prescaling_opt is a enum_value that is not handled.
-            KeyError: exceptions from missing keys in the dictionary are not caught
+            Exception: if no pose data was provided to the dictionary
+            KeyError: exceptions from missing keys that are expected to be in dct (i.e., KeyErrors are not caught)
 
         Notes:
             Coordinate system expectations:
@@ -808,10 +809,11 @@ class Graph:
             true_3d_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
 
         frame_ids = [pose['id'] for pose in dct['pose_data']]
-        pose_matrices = np.zeros((0, 16))
-        if len(dct['pose_data']) > 0:
-            pose_matrices = np.array([pose['pose'] for pose in dct['pose_data']]).reshape((-1, 4, 4)).transpose(0, 2, 1)
-        odom_vertex_estimates = matrix2measurement(pose_matrices, invert=use_sba)
+        if len(dct['pose_data']) == 0:
+            raise Exception("No pose data in the provided dictionary")
+
+        pose_matrices = np.array([pose['pose'] for pose in dct['pose_data']]).reshape((-1, 4, 4), order="F")
+        odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
         # Extract data from the dictionary. If no tag data exists, then generate placeholder vectors of the right shape
         # containing 0s
@@ -861,9 +863,10 @@ class Graph:
         else:
             tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
 
-        # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom measurements
-        tag_edge_measurements_matrix = np.matmul(SWITCH_HANDEDNESS, tag_pose_flat.reshape([-1, 4, 4]))
-        tag_edge_measurements = matrix2measurement(tag_edge_measurements_matrix)
+        # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
+        # measurements. Additionally, note that the matrix here is recorded in row-major format.
+        tag_edge_measurements_matrix = np.matmul(FLIP_Y_AND_Z_AXES, tag_pose_flat.reshape([-1, 4, 4]))
+        tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 
         if not use_sba:
@@ -917,7 +920,7 @@ class Graph:
             waypoint_edge_measurements_matrix = np.concatenate(
                 [np.asarray(location_data['transform']).reshape((-1, 4, 4)) for location_data in dct['location_data']]
             )
-        waypoint_edge_measurements = matrix2measurement(waypoint_edge_measurements_matrix)
+        waypoint_edge_measurements = transform_matrix_to_vector(waypoint_edge_measurements_matrix)
         waypoint_frame_ids = [location_data['pose_id'] for location_data in dct['location_data']]
 
         if use_sba:
@@ -985,8 +988,8 @@ class Graph:
                                 estimate=np.hstack((true_point_3d, [0, 0, 0, 1])),
                                 fixed=True)
                         counted_tag_vertex_ids.add(tag_vertex_id)
-                    # adjust the x-coordinates of the detections to account for differences in coordinate systems 
-                    # induced by the SWITCH_HANDEDNESS
+                    # adjust the x-coordinates of the detections to account for differences in coordinate systems
+                    # induced by the FLIP_Y_AND_Z_AXES
                     tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - \
                         tag_corners[tag_index][::2]
 
@@ -1013,7 +1016,7 @@ class Graph:
                     if tag_vertex_id not in counted_tag_vertex_ids:
                         vertices[tag_vertex_id] = Vertex(
                             mode=VertexType.TAG,
-                            estimate=matrix2measurement(pose_matrices[i].dot(
+                            estimate=transform_matrix_to_vector(pose_matrices[i].dot(
                                 tag_edge_measurements_matrix[tag_index])),
                             fixed=VertexType.TAG in fixed_vertices,
                             meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
@@ -1037,7 +1040,7 @@ class Graph:
                         estimate_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse() * SE3Quat(
                             waypoint_edge_measurements[waypoint_index])).to_vector()
                     else:
-                        estimate_arg = matrix2measurement(pose_matrices[i].dot(waypoint_edge_measurements_matrix[
+                        estimate_arg = transform_matrix_to_vector(pose_matrices[i].dot(waypoint_edge_measurements_matrix[
                                                                                    waypoint_index]))
                     vertices[waypoint_vertex_id] = Vertex(
                         mode=VertexType.WAYPOINT,
@@ -1067,7 +1070,7 @@ class Graph:
                         vertices[previous_vertex].estimate).inverse()).to_vector()
                 else:
                     # TODO: might want to consider prescaling based on the magnitude of the change
-                    measurement_arg = matrix2measurement(np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
+                    measurement_arg = transform_matrix_to_vector(np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
 
                 edges[edge_counter] = Edge(
                     startuid=previous_vertex,

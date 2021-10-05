@@ -20,13 +20,15 @@ import os
 import sys
 
 # Ensure that the map_processing module is imported
+import map_processing
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
 
 import argparse
 from firebase_admin import credentials
 from map_processing import graph
 from map_processing.graph_manager import GraphManager
-from map_processing.firebase_manager import FirebaseManager
+from map_processing.cache_manager import CacheManagerSingleton
 
 
 def make_parser():
@@ -119,7 +121,7 @@ def make_parser():
 
 
 def download_maps(event):
-    firebase.get_map_from_unprocessed_map_event(event)
+    cms.get_map_from_unprocessed_map_event(event)
 
 
 if __name__ == "__main__":
@@ -132,11 +134,11 @@ if __name__ == "__main__":
 
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    firebase = FirebaseManager(cred, max_listen_wait=0)
-    graph_manager = GraphManager(args.w, firebase, pso=args.pso)
+    cms = CacheManagerSingleton(cred, max_listen_wait=0)
+    graph_manager = GraphManager(args.w, cms, pso=args.pso)
 
     if args.f:
-        firebase.download_all_maps()
+        cms.download_all_maps()
 
     map_pattern = args.p if args.p else ""
     fixed_tags = set()

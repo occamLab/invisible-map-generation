@@ -8,7 +8,7 @@ import numpy as np
 from g2o import Quaternion, SE3Quat
 from matplotlib import pyplot as plt, cm
 
-from . import graph_opt_utils
+from . import graph_opt_utils, transform_utils
 
 
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
@@ -50,21 +50,15 @@ def plot_optimization_result(
 
     if original_tag_verts is not None:
         if is_sba:
-            for i, tag_vertex in enumerate(original_tag_verts):
-                original_tag_verts[i] = np.append(
-                    (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
-                    tag_vertex[-1]
-                )
+            for i, orig_tag_vertex in enumerate(original_tag_verts):
+                original_tag_verts[i] = transform_utils.get_tag_estimate_in_global_frame_when_sba(orig_tag_vertex)
         plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                  label="Tag Vertices Original")
 
     # Fix the 1 meter offset on the tag anchors
     if is_sba:
         for i, tag_vertex in enumerate(tag_verts):
-            tag_verts[i] = np.append(
-                (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(tag_vertex[:-1]).inverse()).inverse().to_vector(),
-                tag_vertex[-1]
-            )
+            tag_verts[i] = transform_utils.get_tag_estimate_in_global_frame_when_sba(tag_vertex)
 
     if ground_truth_tags is not None:
         # noinspection PyTypeChecker

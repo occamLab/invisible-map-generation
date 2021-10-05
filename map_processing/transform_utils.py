@@ -1,13 +1,31 @@
 """
-Utilities for manipulating transformations.
+Utilities for manipulating transformations and providing other helpful matrix operations.
 """
 
 from typing import List
 
 import g2o
+from typing import Tuple
 import numpy as np
 from g2o import SE3Quat, Quaternion
 from scipy.spatial.transform import Rotation as Rot
+
+
+def get_tag_estimate_in_global_frame_when_sba(estimate: np.ndarray) -> np.ndarray:
+    """Derives tag pose in the global reference frame from one reported when using SBA.
+
+    Tag observations when SBA is used result in a +1m offset being applied along the tag's Z axis; this function
+    accounts for that.
+
+    Args:
+        estimate: A length-7 vector that contains the pose estimate of the tag in the camera reference frame.
+    Returns:
+        A vector adjusted by -1m along its local Z axis, then inverted.
+    """
+    return np.append(
+        (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate[:-1]).inverse()).inverse().to_vector(),
+        estimate[-1]
+    )
 
 
 def se3_quat_average(transforms: List[SE3Quat]) -> SE3Quat:
@@ -41,18 +59,33 @@ def se3_quat_average(transforms: List[SE3Quat]) -> SE3Quat:
     return SE3Quat(average_as_quat, translation_average)
 
 
-def measurement_to_matrix(transform_vector: np.ndarray) -> np.ndarray:
+def transform_vector_to_matrix(transform_vector: np.ndarray) -> np.ndarray:
     """Convert a vectorized transform into a transform matrix.
 
     Args:
-        transform_vector: 7-element 1D numpy array in the form of [translation, rotation]
+        transform_vector: 7-element vector in the form of [x_trans, y_trans, z_trans, rot_x, rot_y, rot_z, rot_w]
 
     Returns:
-        4x4 numpy array representing the transform
+        4x4 matrix containing the corresponding homogenous transform.
     """
     transformation = np.eye(4)
     transformation[:3, 3] = transform_vector[:3]
     transformation[:3, :3] = Rot.from_quat(transform_vector[3:7]).as_matrix()
+    return transformation
+
+
+def translation_vector_to_matrix(translation_vector: np.ndarray) -> np.ndarray:
+    """Convert a vectorized translation into a transform matrix.
+
+    Args:
+        translation_vector: 3-element vector in the form of [x, y, z]
+
+    Returns:
+        4x4 matrix containing the corresponding homogenous transform
+    """
+    transformation = np.zeros(4)
+    transformation[3, 3] = 1
+    transformation[:3, 3] = translation_vector
     return transformation
 
 
@@ -86,8 +119,7 @@ def isometry_to_pose(isometry: g2o.Isometry3d) -> np.ndarray:
     Returns:
         A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
     """
-    return np.concatenate(
-        [isometry.translation(), isometry.rotation().coeffs()])
+    return np.concatenate([isometry.translation(), isometry.rotation().coeffs()])
 
 
 def global_yaw_effect_basis(rotation, gravity_axis='z'):
@@ -122,18 +154,14 @@ def locations_from_transforms(locations):
     return locations
 
 
-def matrix2measurement(pose, invert=False):
-    """Convert a pose or array of poses in matrix form to [x, y, z,
-    qx, qy, qz, qw].
-
-    The output will have one fewer dimension than the input.
+def transform_matrix_to_vector(pose: np.ndarray, invert=False) -> np.ndarray:
+    """Convert a pose/multiple poses in homogenous transform matrix form to [x, y, z, qx, qy, qz, qw].
 
     Args:
-        pose (np.ndarray): Pose or array of poses in matrix form.
-         The poses are converted along the last two axes.
+        pose (np.ndarray): Pose or array of poses in matrix form. The poses are converted along the last two axes.
         invert (bool): If inverted, then the return enum_value will be inverted
     Returns:
-      Converted pose or array of poses.
+      Converted pose or array of poses (the output has one fewer dimensions than the input)
     """
     translation = pose[..., :3, 3]
     if pose.shape[0] != 0:
@@ -160,3 +188,56 @@ def pose2diffs(poses):
         diffs.append(np.linalg.inv(previous_pose).dot(current_pose))
     diffs = np.array(diffs)
     return diffs
+
+
+def make_sba_tag_arrays(tag_size) -> Tuple[np.ndarray, np.ndarray]:
+    """Generate tag coordinates given a specified tag size (assuming relative to a reference frame 1m in front of the
+    tag).
+
+    Args:
+        tag_size: Size of the square tag's side length.
+
+    Returns:
+        true_3d_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the center
+         of the tag by -1 in the Z axis. Order of tags is bottom-left, bottom-right, top-right, and top-left.
+        true_tag_center: The length-3 vector containing (0, 0, 1).
+    """
+    pos_tag_sz_div_2 = tag_size / 2
+    neg_tag_sz_div_2 = - pos_tag_sz_div_2
+
+    true_3d_points = np.array(
+        [
+            [neg_tag_sz_div_2, neg_tag_sz_div_2, 1],  # Bottom-left
+            [pos_tag_sz_div_2, neg_tag_sz_div_2, 1],  # Bottom-right
+            [pos_tag_sz_div_2, pos_tag_sz_div_2, 1],  # Top-right
+            [neg_tag_sz_div_2, pos_tag_sz_div_2, 1]  # Top-left
+        ]
+    )
+
+    true_3d_tag_center = np.array([0, 0, 1])
+    return true_3d_points, true_3d_tag_center
+
+
+def norm_array_cols(arr: np.ndarray) -> np.ndarray:
+    """Normalize each column of the array.
+
+    Args:
+        arr: 2-dimensional array.
+
+    The arr argument is not modified (because of how numpy arrays are passed).
+    """
+    # Is there a better way to do this?
+    norm = np.linalg.norm(arr, axis=0)
+    for i in range(arr.shape[0]):
+        arr[i, :] = np.divide(arr[i, :], norm)
+    return arr
+
+
+FLIP_Y_AND_Z_AXES = np.array(
+    [
+        [1, 0, 0, 0],
+        [0, -1, 0, 0],
+        [0, 0, -1, 0],
+        [0, 0, 0, 1]
+    ]
+)

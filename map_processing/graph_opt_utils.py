@@ -224,13 +224,6 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundl
 
 def optimizer_find_connected_tag_vert(optimizer: g2o.SparseOptimizer, location_vert):
     """TODO: documentation
-
-    Args:
-        optimizer:
-        location_vert:
-
-    Returns:
-
     """
     # TODO: it would be nice if we didn't have to scan the entire graph
     for edge in optimizer.edges():
@@ -254,19 +247,12 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> 
          EdgeSE3Expmap, and EdgeSE3)
     """
     if isinstance(edge, EdgeProjectPSI2UV):
-        # if np.abs(edge.transform_vector()[1] - 939.6618652) < 0.00001:
-        #     print('test')
+        # Based on this function: https://github.com/uoip/g2opy/blob/5587024b17fd812c66d91740716fbf0bf5824fbc/g2o/types/
+        #  sba/types_six_dof_expmap.cpp#L174
         cam = edge.parameter(0)
         camera_coords = edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate()
         pixel_coords = cam.cam_map(camera_coords)
-        error = edge.measurement() - cam.cam_map(
-            edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate())
-        # if edge.vertex(2).id() == 0:
-        #     print(f"Camera: {camera_coords}")
-        #     print(f"Pixel: {pixel_coords}")
-        #     print(f"Edge: {edge.transform_vector()}")
-        #     print(f"Error: {error}")
-
+        error = edge.measurement() - pixel_coords
         return error.dot(edge.information()).dot(error)
     elif isinstance(edge, EdgeSE3Expmap):
         error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
@@ -341,26 +327,11 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     return avg
 
 
-def make_processed_map_JSON(
-        tag_locations: np.ndarray,
-        odom_locations: np.ndarray,
-        waypoint_locations: Tuple[List[Dict], np.ndarray],
-        calculate_intersections: bool = True,
-        adj_chi2_arr: Union[None, np.ndarray] = None,
-        visible_tags_count: Union[None, np.ndarray] = None
-) -> str:
+def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray,
+                            waypoint_locations: Tuple[List[Dict], np.ndarray], calculate_intersections: bool = False,
+                            adj_chi2_arr: Union[None, np.ndarray] = None,
+                            visible_tags_count: Union[None, np.ndarray] = None) -> str:
     """TODO: documentation
-
-    Args:
-        tag_locations:
-        odom_locations:
-        waypoint_locations:
-        calculate_intersections:
-        adj_chi2_arr:
-        visible_tags_count:
-
-    Returns:
-
     """
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
         print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
@@ -445,13 +416,6 @@ def make_processed_map_JSON(
 
 def compare_std_dev(all_tags, all_tags_original):
     """TODO: documentation
-
-    Args:
-        all_tags:
-        all_tags_original:
-
-    Returns:
-
     """
     return {int(tag_id): (np.std(all_tags_original[all_tags_original[:, -1] == tag_id, :-1], axis=0),
                           np.std(all_tags[all_tags[:, -1] == tag_id, :-1], axis=0)) for tag_id in

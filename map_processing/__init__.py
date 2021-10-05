@@ -2,22 +2,14 @@
 """
 
 from enum import Enum
-from typing import Dict
 
 import numpy as np
 from g2o import SE3Quat
 
-SWITCH_HANDEDNESS = np.array(
-    [
-        [1, 0, 0, 0],
-        [0, -1, 0, 0],
-        [0, 0, -1, 0],
-        [0, 0, 0, 1]
-    ]
-)
-
-
 ASSUMED_FOCAL_LENGTH = 1464
+
+# TODO: send tag size with the tag detection
+ASSUMED_TAG_SIZE = 0.172  # Tag's x and y dimension length in meters
 
 
 # The ground truth tags for the 6-17-21 OCCAM Room. Keyed by tag ID. Measurements in meters (measurements taken in
@@ -50,7 +42,3 @@ class PrescalingOptEnum(Enum):
     FULL_COV = 1
     DIAG_COV = 2
     ONES = 3
-
-    @staticmethod
-    def get_by_value(enum_value: int):
-        return PrescalingOptEnum._value2member_map_[enum_value]

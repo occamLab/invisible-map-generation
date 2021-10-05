@@ -16,7 +16,7 @@ TODO: update the following
   - `graph_utils.py`: Contains useful helper functions and types for graphs, such as converting them to a dict of arrays for plotting or integrating measurements into a path.
   - `graph_vertex_edge_classes.py`: Classes used by graph.py for components of the graph
   - `as_graph.py`: Main file that contains functions to convert the raw JSON map files to graphs that can be processed
-  - `firebase_manager.py`: File with the FirebaseManager class that handles interactions with Firebase (download, upload)
+  - `cache_amanger.py`: File with the CacheManagerSingleton class that handles caching
   - `graph_manager.py`: Main file with the GraphManager class that handles the optimization of the map
 - `run_scripts`: Python package containing the files that can be run to either process, optimize, or evaluate maps and map parameters
   - `graph_manager_user.py`: Script to manually download, process, and visualize maps

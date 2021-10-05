@@ -18,7 +18,7 @@ import map_processing.graph_opt_utils
 from map_processing import OCCAM_ROOM_TAGS_DICT
 from map_processing.graph import Graph
 from map_processing.graph_manager import GraphManager
-from map_processing.firebase_manager import FirebaseManager
+from map_processing.cache_manager import CacheManagerSingleton
 import typing
 
 SpearmenrResult = typing.NamedTuple("SpearmenrResult", [("correlation", float), ("pvalue", float)])
@@ -61,10 +61,10 @@ def do_sweeping(sweep: np.ndarray):
     optimized_total_chi2s = np.zeros(total_runs)
 
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    firebase = FirebaseManager(cred)
-    gm = GraphManager(GraphManager.WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS, firebase)
+    cms = CacheManagerSingleton(cred)
+    gm = GraphManager(GraphManager.WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS, cms)
 
-    map_info = firebase.map_info_from_path(MAP_TO_ANALYZE)
+    map_info = cms.map_info_from_path(MAP_TO_ANALYZE)
     if map_info is None:
         print("Could not find the map {}".format(MAP_TO_ANALYZE))
         return

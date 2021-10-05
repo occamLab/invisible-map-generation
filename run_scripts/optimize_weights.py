@@ -16,7 +16,7 @@ from firebase_admin import credentials
 
 import map_processing.graph_opt_plot_utils
 from map_processing.graph_manager import GraphManager
-from map_processing.firebase_manager import FirebaseManager
+from map_processing.cache_manager import CacheManagerSingleton
 
 CACHE_DIRECTORY = os.path.join("unprocessed_maps", "rawMapData")
 MAP_JSON = "127027593745666Partial MAC Multiple Plane Detection 7-19-21.json"
@@ -57,8 +57,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    firebase = FirebaseManager(cred)
-    graph_manager = GraphManager(0, firebase)
+    cms = CacheManagerSingleton(cred)
+    graph_manager = GraphManager(0, cms)
     map_json_path = os.path.join(CACHE_DIRECTORY, MAP_JSON)
 
     if args.s is not None:

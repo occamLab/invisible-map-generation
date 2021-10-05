@@ -12,11 +12,12 @@ from g2o import SE3Quat, SparseOptimizer
 from geneticalgorithm import geneticalgorithm as ga
 
 import map_processing
-import map_processing.graph_opt_utils
+from map_processing import graph_opt_utils, PrescalingOptEnum
 from . import graph_opt_utils, graph_opt_plot_utils, transform_utils, OCCAM_ROOM_TAGS_DICT
-from .firebase_manager import FirebaseManager, MapInfo
+from .cache_manager import CacheManagerSingleton, MapInfo
 from .graph import Graph
 from .graph_vertex_edge_classes import Vertex, VertexType
+from enum import Enum
 
 
 class GraphManager:
@@ -38,6 +39,14 @@ class GraphManager:
         _selected_weights: TODO: documentation
         _firebase_manager: TODO: documentation
     """
+
+    class WeightSpecifier(Enum):
+        SENSIBLE_DEFAULT_WEIGHTS = 0
+        TRUST_ODOM = 1
+        TRUST_TAGS = 2
+        GENETIC_RESULTS = 3
+        BEST_SWEEP = 4
+        COMPARISON_BASELINE = 5
 
     # Importance is set to e^{-weight}
     ordered_weights_dict_keys: List[str] = [
@@ -74,7 +83,8 @@ class GraphManager:
             'tag_sba': np.array([9.91, 8.88]),
             'dummy': _default_dummy_weights,
         }),
-        "best_sweep": map_processing.graph_opt_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
+        "best_sweep":
+            map_processing.graph_opt_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
         "comparison_baseline": map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.ones(6),
             'tag_sba': np.ones(2),
@@ -90,19 +100,19 @@ class GraphManager:
         "best_sweep"
     ]
 
-    def __init__(self, weights_specifier: int, firebase_manager: FirebaseManager, pso: int = 0):
+    def __init__(self, weights_specifier: int, firebase_manager: CacheManagerSingleton, pso: int = 0):
         """Initializes GraphManager instance (only populates instance attributes)
 
         Args:
-             weights_specifier (int): Used as the key to access the corresponding value in
-             GraphManager._weights_dict (integer is mapped to the key with the GraphManager.ordered_weights_dict_keys
+             weights_specifier: Used as the key to access the corresponding value in
+              GraphManager._weights_dict (integer is mapped to the key with the GraphManager.ordered_weights_dict_keys
               list).
-             firebase_manager (FirebaseManager): The firebase manager to use for reading from/to the cache.
-             pso (int): Integer corresponding to the enum value in the PrescalingOptEnum enum which selects the
+             firebase_manager: The firebase manager to use for reading from/to the cache.
+             pso: Integer corresponding to the enum value in the PrescalingOptEnum enum which selects the
               type of prescaling weights used in non-SBA optimizations
         """
 
-        self._pso = map_processing.PrescalingOptEnum.get_by_value(pso)
+        self._pso = map_processing.PrescalingOptEnum(pso)
         self._selected_weights: str = GraphManager.ordered_weights_dict_keys[weights_specifier]
         self._firebase_manager = firebase_manager
 
@@ -134,7 +144,7 @@ class GraphManager:
             obs_chi2_filter: Parameter to pass to the _optimize_graph method (see more there)
         """
         if new_pso is not None:
-            self._pso = map_processing.PrescalingOptEnum.get_by_value(new_pso)
+            self._pso = map_processing.PrescalingOptEnum(new_pso)
         if new_weights_specifier is not None:
             self._selected_weights: str = GraphManager.ordered_weights_dict_keys[new_weights_specifier]
 
@@ -142,7 +152,7 @@ class GraphManager:
             print("Empty pattern provided; no maps will be processed")
             return
 
-        matching_maps = self._firebase_manager.find_maps(pattern)
+        matching_maps = self._firebase_manager.find_maps(pattern, search_only_unprocessed=False)
         if len(matching_maps) == 0:
             print("No matches for {} in recursive search of {}".format(pattern, self._firebase_manager.cache_path))
             return
@@ -174,7 +184,7 @@ class GraphManager:
                 self._firebase_manager.upload(map_info, processed_map_json)
                 print("Uploaded processed map: {}".format(map_info.map_name))
 
-            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+            self._firebase_manager.cache_map(self._firebase_manager.PROCESSED_UPLOAD_TO, map_info,
                                              processed_map_json)
 
     def compare_weights(self, map_info: MapInfo, visualize: bool = True, obs_chi2_filter: float = -1) -> None:
@@ -242,16 +252,14 @@ class GraphManager:
                     chi2_plot_title=g1sg_chi2_plot_title,
                     obs_chi2_filter=obs_chi2_filter
                 )
-            processed_map_json_1 = map_processing.graph_opt_utils.make_processed_map_JSON(
-                tag_locations=g1sg_tag_locs, 
-                odom_locations=g1sg_odom_locs,
-                waypoint_locations=g1sg_waypoint_locs,
-                adj_chi2_arr=g1sg_odom_adj_chi2,
-                visible_tags_count=g1sg_visible_tags_count
-            )
+            processed_map_json_1 = map_processing.graph_opt_utils.make_processed_map_JSON(tag_locations=g1sg_tag_locs,
+                                                                                          odom_locations=g1sg_odom_locs,
+                                                                                          waypoint_locations=g1sg_waypoint_locs,
+                                                                                          adj_chi2_arr=g1sg_odom_adj_chi2,
+                                                                                          visible_tags_count=g1sg_visible_tags_count)
             del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs
 
-            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+            self._firebase_manager.cache_map(self._firebase_manager.PROCESSED_UPLOAD_TO, map_info,
                                              processed_map_json_1,
                                              "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
             del processed_map_json_1
@@ -282,16 +290,14 @@ class GraphManager:
                     chi2_plot_title=g2sg_chi2_plot_title,
                     obs_chi2_filter=obs_chi2_filter
                 )
-            processed_map_json_2 = map_processing.graph_opt_utils.make_processed_map_JSON(
-                tag_locations=g2sg_tag_locs, 
-                odom_locations=g2sg_odom_locs,
-                waypoint_locations=g2sg_waypoint_locs,
-                adj_chi2_arr=g2sg_odom_adj_chi2,
-                visible_tags_count=g2sg_visible_tags_count
-            )
+            processed_map_json_2 = map_processing.graph_opt_utils.make_processed_map_JSON(tag_locations=g2sg_tag_locs,
+                                                                                          odom_locations=g2sg_odom_locs,
+                                                                                          waypoint_locations=g2sg_waypoint_locs,
+                                                                                          adj_chi2_arr=g2sg_odom_adj_chi2,
+                                                                                          visible_tags_count=g2sg_visible_tags_count)
             del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs
 
-            self._firebase_manager.cache_map(self._firebase_manager.processed_upload_to, map_info,
+            self._firebase_manager.cache_map(self._firebase_manager.PROCESSED_UPLOAD_TO, map_info,
                                              processed_map_json_2,
                                              "-comparison-subgraph-2-with_weights-set{}".format(self._selected_weights))
             del processed_map_json_2
@@ -366,12 +372,15 @@ class GraphManager:
 
     def get_optimized_graph_info(
             self, graph: Graph, 
-            weights: Union[int, float, str, Dict[str, np.ndarray], np.ndarray, None] = None, 
+            weights: Union[int, float, str, Dict[str, np.ndarray], np.ndarray, None] = None,
             verbose: bool = False,
             vertex_types=None
     ) -> Tuple[float, Dict[int, Vertex]]:
-        """
-        Finds the chi2 and vertex locations of the optimized graph. Does not modify the graph.
+        """Finds the total chi2 and vertex locations of the optimized graph. Does not modify the graph.
+
+        Returns:
+             chi2: The sum of all edges' chi2 values.
+             vertices: The optimized graph's vertices
         """
         if vertex_types is None:
             vertex_types = [VertexType.TAG]
@@ -453,27 +462,21 @@ class GraphManager:
     def get_ground_truth_from_optimized_tags(
             optimized_tags: Dict[int, Vertex],
             ground_truth_tags: np.ndarray,
-            verbose: bool = False
+            verbose: bool = False,
+            is_sba: bool = False
     ) -> float:
-        """
-
-        Args:
-            optimized_tags: A dictionary of tag pose estimates keyed by the tag id
-            ground_truth_tags:
-            verbose:
-
-        Returns:
-
+        """TODO: documentation
         """
         optimized_tag_verts = np.zeros((len(optimized_tags), 7))
         for vertex in optimized_tags.values():
             estimate = vertex.estimate
-            # vertex_tag_id = vertex.meta_data["tag_id"]
 
-            # if not optimized_tag_verts.__contains__(vertex_tag_id):
-            #     raise Exception("Could not ")
-            optimized_tag_verts[vertex.meta_data["tag_id"]] = \
-                (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
+            # TODO: Double-check whether this check for SBA is being correctly handled
+            if is_sba:
+                optimized_tag_verts[vertex.meta_data["tag_id"]] = \
+                    (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate)).inverse().to_vector()
+            else:
+                optimized_tag_verts[vertex.meta_data["tag_id"]] = estimate
 
         # TODO: find intersection of tag ids and convert to numpy arrays after. Display warnings for tags not in
         #  intersection.
@@ -564,13 +567,11 @@ class GraphManager:
                 chi2_plot_title=chi2_plot_title,
                 obs_chi2_filter=obs_chi2_filter
             )
-        return map_processing.graph_opt_utils.make_processed_map_JSON(
-            tag_locations=tag_locations,
-            odom_locations=odom_locations,
-            waypoint_locations=waypoint_locations,
-            adj_chi2_arr=adj_chi2,
-            visible_tags_count=visible_tags_count
-        )
+        return map_processing.graph_opt_utils.make_processed_map_JSON(tag_locations=tag_locations,
+                                                                      odom_locations=odom_locations,
+                                                                      waypoint_locations=waypoint_locations,
+                                                                      adj_chi2_arr=adj_chi2,
+                                                                      visible_tags_count=visible_tags_count)
 
     # -- Private Methods --
 

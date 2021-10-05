@@ -18,4 +18,4 @@ venv
 *.mp4
 
 /optimization_weight_analysis/duncan_image_exports/
-/optimization_weight_analysis/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
