@@ -4,6 +4,7 @@ Contains the GraphGenerator class, as well as a main routine for testing it.
 import random
 import json
 from typing import Callable, Tuple, Optional, List, Dict
+from enum import Enum
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -42,6 +43,12 @@ class GraphGenerator:
          recorded in _observation_poses.
     """
 
+    class OdomNoiseDims(Enum):
+        X = 0
+        Y = 1
+        Z = 2
+        RVert = 3
+
     CAMERA_INTRINSICS_VEC = [
         1458.0604248046875,  # fx (camera focal length in the x-axis)
         1458.0604248046875,  # fy (camera focal length in the y-axis)
@@ -54,6 +61,7 @@ class GraphGenerator:
         [0, CAMERA_INTRINSICS_VEC[1], CAMERA_INTRINSICS_VEC[3]],
         [0, 0, 1]
     ])
+    _double_camera_intrinsics = 2 * CAMERA_INTRINSICS
 
     TAG_CORNERS_SIZE_1 = np.transpose(np.array([
         [-1, -1, 0, 1],  # Bottom left
@@ -61,8 +69,6 @@ class GraphGenerator:
         [1, 1, 0, 1],  # Top right
         [-1, 1, 0, 1],  # Top left
     ]).astype(float))
-
-    _double_camera_intrinsics = 2 * CAMERA_INTRINSICS
 
     PHONE_IN_FRENET = np.array([
         [0, -1, 0, 0],
@@ -79,7 +85,8 @@ class GraphGenerator:
 
     def __init__(self, path: Callable[[np.ndarray], np.ndarray], t_max: float, n_poses: int = 100,
                  tag_poses: Optional[Dict[int, np.ndarray]] = None, dist_threshold: float = 3.7,
-                 aoa_threshold: float = np.pi / 4, tag_size: float = 0.7):
+                 aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
+                 odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None):
         """
         Args:
             path: Defines a parameterized path. Takes as input a N-length vector of parameters to evaluate the curve at,
@@ -105,15 +112,24 @@ class GraphGenerator:
         for i, pose in enumerate(self._tag_poses.values()):
             self._tag_poses_arr[i, :, :] = pose
 
-        self._odometry: Optional[np.ndarray] = None
+        self._poses: Optional[np.ndarray] = None
         self._odometry_t_vec = np.arange(0, self._t_max, self._t_max / self._n_poses)
+        self._delta_t = self._t_max / (self._n_poses - 1)
         self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
         self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
 
         self._tag_corners_in_tag = GraphGenerator.TAG_CORNERS_SIZE_1
         self._tag_corners_in_tag[:3, :] *= tag_size / 2
 
-        self._cms: Optional[None, CacheManagerSingleton] = None
+        self._cms: Optional[CacheManagerSingleton] = None
+
+        self._odometry_noise_var: Dict[GraphGenerator.OdomNoiseDims, float] = odometry_noise if odometry_noise is not \
+                                                                                                None else {
+            GraphGenerator.OdomNoiseDims.X: 0,
+            GraphGenerator.OdomNoiseDims.Y: 0,
+            GraphGenerator.OdomNoiseDims.Z: 0,
+            GraphGenerator.OdomNoiseDims.RVert: 0,
+        }
 
     # -- Public methods --
 
@@ -126,10 +142,10 @@ class GraphGenerator:
         pose_data: List[UGPoseDatum] = []
         tag_data: List[List[UGTagDatum]] = []
         tag_data_idx = -1
-        for pose_idx in range(self._odometry.shape[0]):
+        for pose_idx in range(self._poses.shape[0]):
             pose_data.append(
                 UGPoseDatum(
-                    pose=tuple(self._odometry[pose_idx, :, :].flatten(order="F")),
+                    pose=tuple(self._poses[pose_idx, :, :].flatten(order="F")),
                     timestamp=self._odometry_t_vec[pose_idx],
                     # Intentionally skipping planes
                     pose_id=pose_idx
@@ -206,13 +222,13 @@ class GraphGenerator:
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
-        gg.draw_frames((self._odometry[:, :3, 3]).transpose(), self._odometry[:, :3, :3], ax)
+        gg.draw_frames((self._poses[:, :3, 3]).transpose(), self._poses[:, :3, :3], ax)
         gg.draw_frames((self._tag_poses_arr[:, :3, 3]).transpose(), self._tag_poses_arr[:, :3, :3], ax,
                        colors=("m", "m", "m"))
 
         # Get observation vectors in the global frame and plot them
         for i, dct in enumerate(self._observation_poses):
-            pose = self._odometry[i, :, :]
+            pose = self._poses[i, :, :]
             line_start = pose[:3, 3]
             for obs in dct.values():
                 # If transforms are computed correctly, then obs_in_global should be equivalent to the original tag pose
@@ -228,17 +244,17 @@ class GraphGenerator:
         plt.show()
 
     def generate(self) -> None:
-        """Populate the _odometry attribute with the poses sampled at the given parameter values, then the
+        """Populate the _poses attribute with the poses sampled at the given parameter values, then the
         _observation_poses attribute is populated with the tag observations at each of the poses.
         """
         positions = self._path(self._odometry_t_vec)  # 3xN
         frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path)  # Nx3x3
-        odometry = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
-        odometry[:, 3, 3] = 1
-        odometry[:, :3, 3] = positions.transpose()
-        for i in range(odometry.shape[0]):
-            odometry[i, :3, :3] = np.matmul(frenet_frames[i, :, :], GraphGenerator.PHONE_IN_FRENET[:3, :3])
-        self._odometry = odometry
+        true_poses = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
+        true_poses[:, 3, 3] = 1
+        true_poses[:, :3, 3] = positions.transpose()
+        true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
+
+        self._poses = self._apply_noise(true_poses)
 
         self._observation_poses = []
         self._observation_pixels = []
@@ -246,7 +262,7 @@ class GraphGenerator:
             self._observation_poses.append(dict())
             self._observation_pixels.append(dict())
             for tag_id in self._tag_poses:
-                tag_obs, tag_pixels = self._get_tag_observation(self._odometry[i, :, :], self._tag_poses[tag_id])
+                tag_obs, tag_pixels = self._get_tag_observation(self._poses[i, :, :], self._tag_poses[tag_id])
                 if tag_obs.shape[0] == 0:  # True if no tags were visible
                     continue
 
@@ -255,6 +271,44 @@ class GraphGenerator:
                 self._observation_pixels[i][tag_id] = tag_pixels
 
     # -- Private methods --
+
+    def _apply_noise(self, true_poses: np.ndarray) -> np.ndarray:
+        if true_poses.shape[0] <= 1:
+            raise Exception("To apply noise, there must be >=2 poses")
+
+        # The t^th sub-array of the pose_to_pose array contains the transform from the pose at time t-1 to t.
+        pose_to_pose = np.zeros((true_poses.shape[0] - 1, 4, 4))
+        for i in range(0, true_poses.shape[0] - 1):
+            pose_to_pose[i, :, :] = np.matmul(np.linalg.inv(true_poses[i, :, :]), true_poses[i + 1, :, :])
+
+        # Noise model: assume that noise variance is proportional to the elapsed time. noisy_transforms contains the
+        # pose-to-pose transforms except with noise applied.
+        noisy_transforms = np.zeros((true_poses.shape[0] - 1, 4, 4))
+        for i in range(0, true_poses.shape[0] - 1):
+            noise_as_transform = np.zeros((4, 4))
+            noise_as_transform[3, 3] = 1
+            noise_as_transform[:3, 3] = np.array([
+                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X])),
+                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y])),
+                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]))
+            ])
+            theta = np.random.normal(0, np.sqrt(self._delta_t *
+                                                self._odometry_noise_var[GraphGenerator.OdomNoiseDims.RVert]))
+            # Interpret rotational noise as noise w.r.t. the rotation about the vertical (x) axis
+            noise_as_transform[:3, :3] = np.array([
+                [1, 0, 0],
+                [0, np.cos(theta), -np.sin(theta)],
+                [0, np.sin(theta), np.cos(theta)]
+            ])
+            noisy_transforms[i, :, :] = np.matmul(pose_to_pose[i, :, :], noise_as_transform)
+
+        # Reconstruct new list of poses from the noisy pose-to-pose transforms (dead-reckon, where the initial pose is
+        # the same as the true initial pose)
+        noisy_poses = np.zeros(true_poses.shape)
+        noisy_poses[0, :, :] = true_poses[0, :, :]
+        for i in range(0, true_poses.shape[0] - 1):
+            noisy_poses[i + 1, :, :] = np.matmul(noisy_poses[i, :, :], noisy_transforms[i, :, :])
+        return noisy_poses
 
     def _generate_time_series_for_equidistant_poses(self, n_odom, t_end):
         raise NotImplementedError()
@@ -356,7 +410,7 @@ class GraphGenerator:
              encode the translation offset in the first, second, and third dimensions, respectively.
             frames: Nx3x3 array of rotation matrices.
             plt_axes: Matplotlib axes to plot on
-            colors: Tuple of color codes to use for the first, second, and third dimensions' basis vector arrows, 
+            colors: Tuple of color codes to use for the first, second, and third dimensions' basis vector arrows,
              respectively.
         """
         for b in range(3):
