@@ -112,10 +112,11 @@ class GraphGenerator:
         for i, pose in enumerate(self._tag_poses.values()):
             self._tag_poses_arr[i, :, :] = pose
 
-        self._poses: Optional[np.ndarray] = None
+        self._odometry_poses: Optional[np.ndarray] = None
         self._odometry_t_vec = np.arange(0, self._t_max, self._t_max / self._n_poses)
         self._delta_t = self._t_max / (self._n_poses - 1)
         self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
+        self._obs_from_poses: Optional[np.ndarray] = None
         self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
 
         self._tag_corners_in_tag = GraphGenerator.TAG_CORNERS_SIZE_1
@@ -142,10 +143,10 @@ class GraphGenerator:
         pose_data: List[UGPoseDatum] = []
         tag_data: List[List[UGTagDatum]] = []
         tag_data_idx = -1
-        for pose_idx in range(self._poses.shape[0]):
+        for pose_idx in range(self._odometry_poses.shape[0]):
             pose_data.append(
                 UGPoseDatum(
-                    pose=tuple(self._poses[pose_idx, :, :].flatten(order="F")),
+                    pose=tuple(self._odometry_poses[pose_idx, :, :].flatten(order="F")),
                     timestamp=self._odometry_t_vec[pose_idx],
                     # Intentionally skipping planes
                     pose_id=pose_idx
@@ -222,13 +223,13 @@ class GraphGenerator:
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
-        gg.draw_frames((self._poses[:, :3, 3]).transpose(), self._poses[:, :3, :3], ax)
+        gg.draw_frames((self._odometry_poses[:, :3, 3]).transpose(), self._odometry_poses[:, :3, :3], ax)
         gg.draw_frames((self._tag_poses_arr[:, :3, 3]).transpose(), self._tag_poses_arr[:, :3, :3], ax,
                        colors=("m", "m", "m"))
 
         # Get observation vectors in the global frame and plot them
         for i, dct in enumerate(self._observation_poses):
-            pose = self._poses[i, :, :]
+            pose = self._obs_from_poses[i, :, :]
             line_start = pose[:3, 3]
             for obs in dct.values():
                 # If transforms are computed correctly, then obs_in_global should be equivalent to the original tag pose
@@ -244,7 +245,7 @@ class GraphGenerator:
         plt.show()
 
     def generate(self) -> None:
-        """Populate the _poses attribute with the poses sampled at the given parameter values, then the
+        """Populate the _odometry_poses attribute with the poses sampled at the given parameter values, then the
         _observation_poses attribute is populated with the tag observations at each of the poses.
         """
         positions = self._path(self._odometry_t_vec)  # 3xN
@@ -254,7 +255,8 @@ class GraphGenerator:
         true_poses[:, :3, 3] = positions.transpose()
         true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
 
-        self._poses = self._apply_noise(true_poses)
+        self._odometry_poses = self._apply_noise(true_poses)
+        self._obs_from_poses = true_poses
 
         self._observation_poses = []
         self._observation_pixels = []
@@ -262,7 +264,7 @@ class GraphGenerator:
             self._observation_poses.append(dict())
             self._observation_pixels.append(dict())
             for tag_id in self._tag_poses:
-                tag_obs, tag_pixels = self._get_tag_observation(self._poses[i, :, :], self._tag_poses[tag_id])
+                tag_obs, tag_pixels = self._get_tag_observation(self._obs_from_poses[i, :, :], self._tag_poses[tag_id])
                 if tag_obs.shape[0] == 0:  # True if no tags were visible
                     continue
 
@@ -502,8 +504,14 @@ if __name__ == "__main__":
             ])
         },
         t_max=6 * np.pi,
-        n_poses=600,
-        tag_size=ASSUMED_TAG_SIZE
+        n_poses=100,
+        tag_size=ASSUMED_TAG_SIZE,
+        odometry_noise={
+            GraphGenerator.OdomNoiseDims.X:     0.001,
+            GraphGenerator.OdomNoiseDims.Y:     0.01,
+            GraphGenerator.OdomNoiseDims.Z:     0.01,
+            GraphGenerator.OdomNoiseDims.RVert: 0.001,
+        }
     )
     gg.generate()
     gg.visualize()
