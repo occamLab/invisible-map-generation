@@ -11,23 +11,6 @@ from g2o import SE3Quat, Quaternion
 from scipy.spatial.transform import Rotation as Rot
 
 
-def get_tag_estimate_in_global_frame_when_sba(estimate: np.ndarray) -> np.ndarray:
-    """Derives tag pose in the global reference frame from one reported when using SBA.
-
-    Tag observations when SBA is used result in a +1m offset being applied along the tag's Z axis; this function
-    accounts for that.
-
-    Args:
-        estimate: A length-7 vector that contains the pose estimate of the tag in the camera reference frame.
-    Returns:
-        A vector adjusted by -1m along its local Z axis, then inverted.
-    """
-    return np.append(
-        (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(estimate[:-1]).inverse()).inverse().to_vector(),
-        estimate[-1]
-    )
-
-
 def se3_quat_average(transforms: List[SE3Quat]) -> SE3Quat:
     """Computes the average transform from a list of transforms.
 
@@ -140,18 +123,42 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
     return np.linalg.svd(change[:, np.newaxis])[0]
 
 
-def locations_from_transforms(locations):
-    """TODO: documentation
+def invert_array_of_se3_vectors(array_of_se3_vectors: np.ndarray) -> np.ndarray:
+    """Invert the transforms contained in the input.
 
     Args:
-        locations:
+        array_of_se3_vectors: Expected to be a nx7+ array of n transforms. The first 7 elements of each row are treated
+         as a vectorized SE3 transform, which is to be inverted. Any additional elements beyond the first 7 in each row
+         are not modified.
 
     Returns:
-
+        The modified input array.
     """
-    for i in range(locations.shape[0]):
-        locations[i, :7] = SE3Quat(locations[i, :7]).inverse().to_vector()
-    return locations
+    for i in range(array_of_se3_vectors.shape[0]):
+        array_of_se3_vectors[i, :7] = SE3Quat(array_of_se3_vectors[i, :7]).inverse().to_vector()
+    return array_of_se3_vectors
+
+
+def apply_z_translation_to_lhs_of_se3_vectors(array_of_se3_vectors, offset: float = 1) -> np.ndarray:
+    """Applies a translation to the transforms contained in the input. Transform is applied on the LHS, and consists of
+    an identity rotation component and a translation component with 'offset' in the z-axis translation component.
+
+    Notes:
+        Modifies the input argument.
+
+    Args:
+        array_of_se3_vectors: Expected to be a nx7+ array of n transforms. The first 7 elements of each row are treated
+         as a vectorized SE3 transform, which is to be transformed. Any additional elements beyond the first 7 in each
+         row are not modified.
+        offset: z-axis translation component to use.
+
+    Returns:
+        The modified input array.
+    """
+    for i in range(array_of_se3_vectors.shape[0]):
+        array_of_se3_vectors[i, :7] = (SE3Quat([0, 0, offset, 0, 0, 0, 1]) *
+                                       SE3Quat(array_of_se3_vectors[i, :7])).to_vector()
+    return array_of_se3_vectors
 
 
 def transform_matrix_to_vector(pose: np.ndarray, invert=False) -> np.ndarray:
@@ -198,14 +205,14 @@ def make_sba_tag_arrays(tag_size) -> Tuple[np.ndarray, np.ndarray]:
         tag_size: Size of the square tag's side length.
 
     Returns:
-        true_3d_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the center
+        true_3d_tag_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the center
          of the tag by -1 in the Z axis. Order of tags is bottom-left, bottom-right, top-right, and top-left.
         true_tag_center: The length-3 vector containing (0, 0, 1).
     """
     pos_tag_sz_div_2 = tag_size / 2
     neg_tag_sz_div_2 = - pos_tag_sz_div_2
 
-    true_3d_points = np.array(
+    true_3d_tag_points = np.array(
         [
             [neg_tag_sz_div_2, neg_tag_sz_div_2, 1],  # Bottom-left
             [pos_tag_sz_div_2, neg_tag_sz_div_2, 1],  # Bottom-right
@@ -215,7 +222,7 @@ def make_sba_tag_arrays(tag_size) -> Tuple[np.ndarray, np.ndarray]:
     )
 
     true_3d_tag_center = np.array([0, 0, 1])
-    return true_3d_points, true_3d_tag_center
+    return true_3d_tag_points, true_3d_tag_center
 
 
 def norm_array_cols(arr: np.ndarray) -> np.ndarray:

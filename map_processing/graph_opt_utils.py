@@ -117,75 +117,71 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
     return normal_weights
 
 
-def weights_from_ratio(ratio: float) -> Dict[str, np.ndarray]:
-    """Returns a weight dict with the given ratio between odom and tag weights
-    """
-    return weight_dict_from_array(np.array([ratio]))
-
-
-def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False) -> \
-        Dict[str, Union[List, np.ndarray]]:
+def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> Dict[str, Union[List, np.ndarray]]:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
     Args:
         vertices: A dictionary of vertices. This is used to lookup the type of vertex pulled from the optimizer.
         optimizer: a :class: g2o.SparseOptimizer containing a map.
-        is_sparse_bundle_adjustment: True if the optimizer is based on sparse bundle adjustment and False otherwise.
+        is_sba: Set to True if the optimizer is based on sparse bundle adjustment and False
+         otherwise. If true, the odometry locations and the tag vertices' poses are inverted. In the case of the tag
+         vertices, the poses are first transformed by a -1 translation (applied on the LHS of the pose) before
+         inversion.
 
     Returns:
         A dictionary with fields 'locations', 'tags', and 'waypoints'. The 'locations' key covers a (n, 8) array
          containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at n points. The 'tags' and
         'waypoints' keys cover the locations of the tags and waypoints in the same format.
     """
-    locations = np.reshape([], [0, 9])
-    tagpoints = np.reshape([], [0, 3])
-    tags = np.reshape([], [0, 8])
-    waypoints = np.reshape([], [0, 8])
+    locations = []
+    tagpoints = []
+    tags = []
+    waypoints = []
     waypoint_metadata = []
     exaggerate_tag_corners = True
     for i in optimizer.vertices():
         mode = vertices[i].mode
         if mode == VertexType.TAGPOINT:
             tag_vert = optimizer_find_connected_tag_vert(optimizer, optimizer.vertex(i))
-
             if tag_vert is None:
                 # TODO: double-check that the right way to handle this case is to continue
                 continue
-
             location = optimizer.vertex(i).estimate()
             if exaggerate_tag_corners:
                 location = location * np.array([10, 10, 1])
-
-            tagpoints = np.vstack((tagpoints, tag_vert.estimate().inverse() * location))
+            tagpoints.append(tag_vert.estimate().inverse() * location)
         else:
             location = optimizer.vertex(i).estimate().translation()
             rotation = optimizer.vertex(i).estimate().rotation().coeffs()
+            pose = np.concatenate([location, rotation])
 
             if mode == VertexType.ODOMETRY:
-                pose = np.concatenate([location, rotation, [i], [vertices[i].meta_data['pose_id']]])
-                locations = np.vstack([locations, pose])
-
+                if is_sba:
+                    pose = SE3Quat(pose).inverse().to_vector()
+                pose_with_metadata = np.concatenate([pose, [i], [vertices[i].meta_data['pose_id']]])
+                locations.append(pose_with_metadata)
             elif mode == VertexType.TAG:
-                pose = np.concatenate([location, rotation, [i]])
-                if is_sparse_bundle_adjustment:
-                    # adjusts tag based on the position of the tag center
-                    pose[:-1] = (SE3Quat([0, 0, 1, 0, 0, 0, 1]).inverse() * SE3Quat(vertices[i].estimate)).to_vector()
+                pose_with_metadata = np.concatenate([pose, [i]])
+                if is_sba:
+                    # Adjust tag based on the position of the tag center
+                    pose_with_metadata[:-1] = (SE3Quat([0, 0, -1, 0, 0, 0, 1]) * SE3Quat(pose)).inverse().to_vector()
                 if 'tag_id' in vertices[i].meta_data:
-                    pose[-1] = vertices[i].meta_data['tag_id']
-                tags = np.vstack([tags, pose])
+                    pose_with_metadata[-1] = vertices[i].meta_data['tag_id']
+                tags.append(pose_with_metadata)
             elif mode == VertexType.WAYPOINT:
-                pose = np.concatenate([location, rotation, [i]])
-                waypoints = np.vstack([waypoints, pose])
+                pose_with_metadata = np.concatenate([pose, [i]])
+                waypoints.append(pose_with_metadata)
                 waypoint_metadata.append(vertices[i].meta_data)
+    locations_arr = np.array(locations)
+    locations_arr = locations_arr[locations_arr[:, -1].argsort()] if len(locations) > 0 else np.zeros((0, 9))
+    tags_arr = np.array(tags) if len(tags) > 0 else np.zeros((0, 8))
+    tagpoints_arr = np.array(tagpoints) if len(tagpoints) > 0 else np.zeros((0, 3))
+    waypoints_arr = np.array(waypoints) if len(waypoints) > 0 else np.zeros((0, 8))
+    return {'locations': locations_arr, 'tags': tags_arr, 'tagpoints': tagpoints_arr,
+            'waypoints': [waypoint_metadata, waypoints_arr]}
 
-    # convert to array for sorting
-    locations = np.array(locations)
-    locations = locations[locations[:, -1].argsort()]
-    return {'locations': locations, 'tags': np.array(tags), 'tagpoints': tagpoints,
-            'waypoints': [waypoint_metadata, np.array(waypoints)]}
 
-
-def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundle_adjustment=False) -> \
+def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sba=False) -> \
         Dict[str, Union[List, np.ndarray]]:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, waypoints, and
     per-odometry edge chi2 information.
@@ -198,8 +194,8 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundl
          and whose `map_odom_to_adj_chi2` method is used.
         optimizer: a :class: g2o.SparseOptimizer containing a map, which is passed as the second argument to
          `optimizer_to_map`.
-        is_sparse_bundle_adjustment: True if the optimizer is based on sparse bundle adjustment and False otherwise;
-         passed as the `is_sparse_bundle_adjustment` keyword argument to `optimizer_to_map`.
+        is_sba: True if the optimizer is based on sparse bundle adjustment and False otherwise;
+         passed as the `is_sba` keyword argument to `optimizer_to_map`.
 
     Returns:
         A dictionary with fields 'locations', 'tags', 'waypoints', and 'locationsAdjChi2'. The 'locations' key covers a
@@ -208,7 +204,7 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sparse_bundl
         with each odometry node is a chi2 calculated from the `map_odom_to_adj_chi2` method of the `Graph` class, which
         is stored in the vector in the locationsAdjChi2 vector.
     """
-    ret_map = optimizer_to_map(graph.vertices, optimizer, is_sparse_bundle_adjustment=is_sparse_bundle_adjustment)
+    ret_map = optimizer_to_map(graph.vertices, optimizer, is_sba=is_sba)
     locations_shape = np.shape(ret_map["locations"])
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
     visible_tags_count = np.zeros([locations_shape[0], 1])
@@ -297,17 +293,14 @@ def sum_optimized_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = Tru
 
 def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False) \
         -> float:
-    """
-    Generates a metric to compare the accuracy of a map with the ground truth.
+    """Error metric for tag pose accuracy.
 
     Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
     then compares the transforms and finds the difference in the translation components.
 
     Args:
-        optimized_tag_verts: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
-            represent the translation (xyz) and rotation (quaternion) of the optimized tags.
-        ground_truth_tags: A n-by-7 numpy.ndarray, where n is the number of tags in the map, and the 7 elements
-            represent the translation (xyz) and rotation (quaternion) of the ground truth tags.
+        optimized_tag_verts: A n-by-7 numpy array containing length-7 pose vectors.
+        ground_truth_tags: A n-by-7 numpy array containing length-7 pose vectors.
         verbose: A boolean representing whether to print the full comparisons for each tag.
 
     Returns:
@@ -315,10 +308,12 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     """
     num_tags = optimized_tag_verts.shape[0]
     sum_trans_diffs = np.zeros((num_tags,))
+    ground_truth_as_se3 = [SE3Quat(tag_pose) for tag_pose in ground_truth_tags]
+
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-        to_world: SE3Quat = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
-        world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])[:, :3]
+        to_world: SE3Quat = anchor_tag_se3quat * SE3Quat(ground_truth_tags[anchor_tag]).inverse()
+        world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_as_se3])[:, :3]
         sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))

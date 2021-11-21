@@ -2,8 +2,8 @@ import inspect
 import re
 import typing
 from abc import ABC, abstractmethod
-from json import JSONEncoder
-from typing import Dict, Any, Tuple, Iterable, List, Optional, Set
+from json import JSONEncoder, JSONDecoder
+from typing import Dict, Any, Tuple, Iterable, List, Optional, Set, Union
 
 
 class CouldNotCheckTypeException(Exception):
@@ -19,6 +19,8 @@ class InvalidInstanceVariableType(Exception):
 class SubscriptedTypeChecker(ABC):
     """Enables type checking with type specifications given by typing._GenericAlias types, including subscripted List
     and Tuple generic aliases (which would otherwise raise an exception if checked by Python normally at runtime).
+
+    This is an abstract class and is intended to provide capabilities solely to its child classes.
     """
     __primitives_allowed = {"float", "int", "str", "None"}
     __accepted_subscripted_types = {
@@ -40,7 +42,19 @@ class SubscriptedTypeChecker(ABC):
         """
         all_class_attrs = inspect.getmembers(self.__class__, lambda a: not (inspect.isroutine(a)))
         self.__class__.class_attr_dict = {attr[0]: attr[1] for attr in all_class_attrs if attr[0].startswith("type_")}
-        results = self.check_instance_attrs_match_expected_types(instance_attr_strs_to_check)
+        self.check_instance_attrs_match_expected_types_and_raise(instance_attr_strs_to_check)
+
+    def check_instance_attrs_match_expected_types_and_raise(self, instance_attr_strs: Iterable[str]) -> None:
+        """Based on the results of invoking check_instance_attrs_match_expected_types, raises an exception if any
+        of the instance attributes checked are not of the correct type.
+
+        Args:
+            instance_attr_strs: Names of instance attributes to check.
+
+        Raises:
+             InvalidInstanceVariableType: if one or more of the instance attributes is not of the correct type.
+        """
+        results = self.check_instance_attrs_match_expected_types(instance_attr_strs)
         if not results[0]:
             raise InvalidInstanceVariableType(
                 f"The following variables are of the incorrect type as indicated by their corresponding class "
@@ -51,6 +65,9 @@ class SubscriptedTypeChecker(ABC):
             -> Tuple[bool, Dict[str, bool]]:
         """For each string in instance_attr_strs, invokes the __check_type method with the corresponding instance
         attribute. See that method for more details.
+
+        Args:
+            instance_attr_strs: Names of instance attributes to check.
 
         Returns:
             A tuple whose second value is a dictionary mapping instance attribute names to True if they are of the
@@ -216,7 +233,8 @@ class TypeCheckingJSONEncoder(JSONEncoder, SubscriptedTypeChecker, ABC):
     attrs_to_skip = set(JSONEncoder().__dict__.keys())
 
     @abstractmethod
-    def __init__(self, attrs_to_skip_checking_of: Optional[Set[str]] = None):
+    def __init__(self, attrs_to_skip_checking_of: Optional[Set[str]] = None,
+                 attrs_to_set: Optional[Dict[str, object]] = None):
         """Abstract initializer intended to be extended.
 
         If invoked at the end of the child class's initialization, checks the type-correctness of all of the child
@@ -224,19 +242,40 @@ class TypeCheckingJSONEncoder(JSONEncoder, SubscriptedTypeChecker, ABC):
 
         Args:
             attrs_to_skip_checking_of: A set of strings specifying instance attributes to exclude from the type checking
+            attrs_to_set: A dictionary whose key-value pairs are used to set attributes' names and their contents for
+             this instance being initialized.
 
         Raises:
             InvalidInstanceVariableType if there is a discrepancy in types. Refer to SubscriptedTypeChecker's
              initializer documentation for more information.
         """
+        if attrs_to_set is not None:
+            for item in attrs_to_set.items():
+                self.__setattr__(item[0], item[1])
+
         self.attr_strs_to_serialize: Set[str] = set(self.__dict__.keys()) \
             .difference(TypeCheckingJSONEncoder.attrs_to_skip,
                         attrs_to_skip_checking_of if attrs_to_skip_checking_of is not None else {})
         super().__init__()
         SubscriptedTypeChecker.__init__(self, instance_attr_strs_to_check=self.attr_strs_to_serialize)
 
-    def default(self, o: Any) -> Any:
-        super().check_instance_attrs_match_expected_types(self.attr_strs_to_serialize)
+    def default(self, o: "TypeCheckingJSONEncoder") -> Dict:
+        """Overrides JSONEncoder's default instance method. Converts an instance of this class into a dictionary.
+
+        Notes:
+            This method is mutually recursive with _recursive_list_builder.
+
+        Args:
+            o: Instance of this class.
+
+        Returns:
+            Dictionary representation of the object
+
+        Raises:
+            InvalidInstanceVariableType: If the specified instance attributes are not of the correct type, then an
+             exception raised by check_instance_attrs_match_expected_types_and_raise will go uncaught.
+        """
+        super().check_instance_attrs_match_expected_types_and_raise(self.attr_strs_to_serialize)
         serialized = {}
         for attr_str in o.attr_strs_to_serialize:
             attr = o.__getattribute__(attr_str)
@@ -249,9 +288,11 @@ class TypeCheckingJSONEncoder(JSONEncoder, SubscriptedTypeChecker, ABC):
                 serialized[attr_str] = attr
         return serialized
 
-    def _recursive_list_builder(self, o: Any) -> Any:
+    @staticmethod
+    def _recursive_list_builder(o: Union[List, Tuple, "TypeCheckingJSONEncoder"]) -> \
+            Union[List, Dict, "TypeCheckingJSONEncoder"]:
         if isinstance(o, list) or isinstance(o, tuple):
-            return [self._recursive_list_builder(elem) for elem in o]
+            return [TypeCheckingJSONEncoder._recursive_list_builder(elem) for elem in o]
         elif issubclass(o.__class__, TypeCheckingJSONEncoder):
             return o.default(o)
         else:

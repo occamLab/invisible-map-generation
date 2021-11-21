@@ -12,7 +12,6 @@ from . import graph_opt_utils, transform_utils
 
 
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
-    filtered_metrics = metrics > -1
     sweep_plot = np.log(sweep) if log_sweep else sweep
     to_plot = np.log(metrics) if log_metric else metrics
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
@@ -49,16 +48,16 @@ def plot_optimization_result(
     plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
 
     if original_tag_verts is not None:
+        original_tag_verts = np.array(original_tag_verts)  # Copy to avoid modifying input
         if is_sba:
-            for i, orig_tag_vertex in enumerate(original_tag_verts):
-                original_tag_verts[i] = transform_utils.get_tag_estimate_in_global_frame_when_sba(orig_tag_vertex)
+            transform_utils.apply_z_translation_to_lhs_of_se3_vectors(original_tag_verts)
         plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                  label="Tag Vertices Original")
 
     # Fix the 1 meter offset on the tag anchors
     if is_sba:
-        for i, tag_vertex in enumerate(tag_verts):
-            tag_verts[i] = transform_utils.get_tag_estimate_in_global_frame_when_sba(tag_vertex)
+        tag_verts = np.array(tag_verts)  # Copy to avoid modifying input
+        transform_utils.apply_z_translation_to_lhs_of_se3_vectors(tag_verts)
 
     if ground_truth_tags is not None:
         # noinspection PyTypeChecker
@@ -70,10 +69,8 @@ def plot_optimization_result(
         anchor_tag_se3quat = SE3Quat(ordered_tags[anchor_tag])
         to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
         world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
-
         print("\nAverage translation difference:", graph_opt_utils.ground_truth_metric(ordered_tags, ground_truth_tags,
                                                                                        True))
-
         plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                  'o', c='k', label=f'Actual Tags')
         for i, tag in enumerate(world_frame_ground_truth):
@@ -95,7 +92,6 @@ def plot_optimization_result(
 
     plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], "o", c="y",
              label="Waypoint Vertices")
-
     for vert_idx in range(len(waypoint_verts[0])):
         vert = waypoint_verts[1][vert_idx]
         waypoint_name = waypoint_verts[0][vert_idx]["name"]

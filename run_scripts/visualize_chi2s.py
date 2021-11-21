@@ -76,9 +76,10 @@ def main():
         subgraphs = gm.create_graphs_for_chi2_comparison(map_dct)
 
         for run in range(total_runs):
-            optimizer = gm.get_optimizer(graph, sweep[run])
+            optimizer = gm.optimize_and_return_optimizer(graph, sweep[run])
             if args.m:
-                run_chi2s = gm.get_chi2_by_edge_from_subgraphs(sweep[run], subgraphs, comparison_weights='trust_tags')
+                run_chi2s = gm.subgraph_pair_optimize_and_categorize_chi2(sweep[run], subgraphs,
+                                                                          subgraph_1_weights='trust_tags')
             else:
                 run_chi2s = graph.get_chi2_by_edge_type(optimizer, False)
             print(f'odom:tag of e^{np.log(sweep[run]):.1f} gives: {run_chi2s}')

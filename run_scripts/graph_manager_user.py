@@ -19,9 +19,6 @@ Notes:
 import os
 import sys
 
-# Ensure that the map_processing module is imported
-import map_processing
-
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
 
 import argparse
@@ -44,7 +41,15 @@ def make_parser():
         help="Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., "
              "'-g *Living_Room*' will plot any cached map with 'Living_Room' in its name); if no pattern is specified, "
              "then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is searched "
-             "recursively, and '**/' is automatically prepended to the pattern"
+             "recursively, and '**/' is automatically prepended to the pattern. If the -u flag is not given, then "
+             "the root of the search is the unprocessed_maps/ sub-directory of the cache; if it is given, then the "
+             "root of the search is the cache folder itself."
+    )
+    p.add_argument(
+        "-u",
+        action="store_true",
+        help="Specifies the recursive search (with the pattern given by the -p argument) to be rooted in the cache "
+             "folder's root (default is to be rooted in the unprocessed_maps/ sub-directory of the cache)."
     )
     p.add_argument(
         "--pso",
@@ -117,6 +122,12 @@ def make_parser():
              "A negative value performs no filtering.",
         default=-1.0
     )
+    p.add_argument(
+        "-g",
+        action="store_true",
+        help="Search for a matching ground truth data set and, if one is found, compute and print the ground truth "
+             "metric."
+    )
     return p
 
 
@@ -135,7 +146,7 @@ if __name__ == "__main__":
     # Fetch the service account key JSON file contents
     cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
     cms = CacheManagerSingleton(cred, max_listen_wait=0)
-    graph_manager = GraphManager(args.w, cms, pso=args.pso)
+    graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso)
 
     if args.f:
         cms.download_all_maps()
@@ -150,13 +161,32 @@ if __name__ == "__main__":
         elif tag_type == 2:
             fixed_tags.add(graph.VertexType.WAYPOINT)
 
-    graph_manager.process_maps(
-        map_pattern,
-        visualize=args.v,
-        upload=args.F,
-        compare=args.c,
-        new_pso=args.pso,
-        new_weights_specifier=args.w,
-        fixed_vertices=tuple(fixed_tags),
-        obs_chi2_filter=args.filter
-    )
+    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
+    if len(matching_maps) == 0:
+        print("No matches for {} in recursive search of {}".format(map_pattern, cms.cache_path))
+        exit(-1)
+
+    for map_info in matching_maps:
+        if args.c:
+            graph_manager.compare_weights(map_info, args.v)
+        else:
+            opt_results = graph_manager.process_map(
+                map_info=map_info,
+                visualize=args.v,
+                upload=args.F,
+                fixed_vertices=tuple(fixed_tags),
+                obs_chi2_filter=args.filter
+            )
+            if not args.g:
+                continue
+
+            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
+            if gt_data is None:
+                print(f"Could not find any ground truth for the map {map_info.map_name}")
+                continue
+            ground_truth_metric = graph_manager.ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[0]),
+                ground_truth_tags=gt_data,
+                verbose=False
+            )
+            print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric}")

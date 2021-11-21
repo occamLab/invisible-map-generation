@@ -3,10 +3,10 @@ Contains the UGJsonEncoder class and the necessary dependencies.
 """
 
 import json
-from typing import *
+from typing import List, Tuple, Type, Optional
 import numpy as np
 
-from type_checking_json_encoder import TypeCheckingJSONEncoder
+from map_processing.dataset_generation.type_checking_json_encoder import TypeCheckingJSONEncoder
 
 Flattened4x4MatrixTuple = Tuple[
     float, float, float, float,
@@ -29,6 +29,7 @@ Flattened4x2MatrixTuple = Tuple[
     float, float,
     float, float
 ]
+Length7VectorTuple = Tuple[float, float, float, float, float, float, float]
 Length4VectorTuple = Tuple[float, float, float, float]
 Length3VectorTuple = Tuple[float, float, float]
 
@@ -46,7 +47,7 @@ class UGPoseDatum(TypeCheckingJSONEncoder):
                  planes: Optional[List] = None, pose_id: Optional[int] = None):
         self.pose: Flattened4x4MatrixTuple = pose if pose is not None else (0.0,) * 16
         self.timestamp: float = timestamp if timestamp is not None else 0.0
-        self.planes: List = planes if planes is not None else []
+        self.planes: List = list(planes) if planes is not None else []
         self.id: int = pose_id if pose_id is not None else -1
         super().__init__()
 
@@ -144,11 +145,12 @@ class UGJsonEncoder(TypeCheckingJSONEncoder):
     def __init__(self, location_data: Optional[List] = None, map_id: Optional[str] = None,
                  plane_data: Optional[List] = None, pose_data: Optional[List[UGPoseDatum]] = None,
                  tag_data: Optional[List[List[UGTagDatum]]] = None):
-        self.location_data: List = location_data if location_data is not None else []
+        self.location_data: List = list(location_data) if location_data is not None else []
         self.map_id: str = map_id if map_id is not None else -1
-        self.plane_data: List = plane_data if plane_data is not None else []
-        self.pose_data: List[UGPoseDatum] = pose_data if pose_data is not None else [UGPoseDatum()]
-        self.tag_data: List[List[UGTagDatum]] = tag_data if tag_data is not None else [[UGTagDatum()]]
+        self.plane_data: List = list(plane_data) if plane_data is not None else []
+        self.pose_data: List[UGPoseDatum] = list(pose_data) if pose_data is not None else [UGPoseDatum()]
+        self.tag_data: List[List[UGTagDatum]] = [list(datum) for datum in tag_data] if tag_data is not None else \
+            [[UGTagDatum()]]
         super().__init__()
 
     @property
@@ -161,6 +163,24 @@ class UGJsonEncoder(TypeCheckingJSONEncoder):
 
     def __repr__(self):
         return f"<map_id={self.map_id} pose_data_len={self.pose_data_len} tag_data_len={self.tag_data_len}>"
+
+
+class GTTagPose(TypeCheckingJSONEncoder):
+    type_tag_id: Type = int
+    type_pose: Type = Length7VectorTuple
+
+    def __init__(self, tag_id: int, pose: Length7VectorTuple):
+        self.tag_id: int = tag_id
+        self.pose: Length7VectorTuple = pose
+        super().__init__()
+
+
+class GTJsonEncoder(TypeCheckingJSONEncoder):
+    type_poses: Type = List[GTTagPose]
+
+    def __init__(self, poses: List[GTTagPose]):
+        self.poses: List[GTTagPose] = list(poses)
+        super().__init__()
 
 
 if __name__ == "__main__":

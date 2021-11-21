@@ -107,8 +107,6 @@ class Graph:
         # This is populated in graph_to_optimizer and is currently no updated anywhere else
         self.our_edges_to_g2o_edges: Dict[int, Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]] = {}
 
-    # -- Optimization-related methods --
-
     def generate_unoptimized_graph(self) -> None:
         """Generate the unoptimized g2o graph from the current vertex and edge assignments.
 
@@ -307,6 +305,8 @@ class Graph:
 
         return optimizer
 
+    # -- Utility methods --
+
     def delete_tag_vertex(self, vertex_uid: int):
         """Deletes a tag vertex from relevant attributes.
 
@@ -344,7 +344,7 @@ class Graph:
         # Delete vertex
         self._verts_to_edges.__delitem__(vertex_uid)
         self.vertices.__delitem__(vertex_uid)
-    
+
     def remove_edge(self, edge_id: int):
         """
         Removes the specified edge from this graph
@@ -353,7 +353,7 @@ class Graph:
         self._verts_to_edges[edge.startuid].remove(edge_id)
         self._verts_to_edges[edge.enduid].remove(edge_id)
         del self.edges[edge_id]
-        
+
     def filter_out_high_chi2_observation_edges(self, filter_std_dv_multiple: float) -> None:
         """Calls remove_edge on every edge whose associated chi2 value in the optimized_graph attribute is above the
         specified threshold.
@@ -388,8 +388,6 @@ class Graph:
                 print(f'Removing edge {edge_id} - chi2 is {chi2}. Goes to Tag '
                       f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
                 self.remove_edge(edge_id)
-
-    # -- Utility methods --
 
     def update_edge_information(self) -> None:
         """Populates the information attribute of each of the edges.
@@ -513,21 +511,35 @@ class Graph:
         return np.array(poses)
 
     # -- Getters & Setters --
-    
-    def set_weights(self, weights: Dict[str, np.ndarray], scale_by_edge_amount: bool = True):
-        if scale_by_edge_amount:
-            odom_edges = 0
-            tag_edges = 0
-            for edge_id, edge in self.edges.items():
-                if edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
-                    odom_edges += 1
-                elif edge.get_end_vertex_type(self.vertices) in (VertexType.TAG, VertexType.TAGPOINT):
-                    tag_edges += 1
-            weights['odom_tag_ratio'] = weights.get('odom_tag_ratio', 1) * tag_edges / odom_edges
-            self._weights = map_processing.graph_opt_utils.normalize_weights(weights,
-                                                                             is_sba=self.is_sparse_bundle_adjustment)
-        else:
-            self._weights = weights
+
+    def set_weights(self, weights: Dict[str, np.ndarray], scale_by_edge_amount: bool = True) -> None:
+        """Sets the weights for the graph representation within this instance (i.e., does not apply the weights to the
+        optimizer object; this must be done through the update_edge_information instance method of the Graph class).
+
+        Args:
+            weights:
+            scale_by_edge_amount: If true, then the weights dictionary used is modified by computing the ratio
+             of odometry to tag edges and then applying the weight normalization function (see
+             map_processing.graph_opt_utils.normalize_weights). If false, then the weights set are simply equal to the
+             provided weights.
+        """
+        if not scale_by_edge_amount:
+            self._weights = dict(weights)
+            return
+
+        # Count the number of odometry and tag edges
+        num_odom_edges = 0
+        num_tag_edges = 0
+        for edge_id, edge in self.edges.items():
+            if edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
+                num_odom_edges += 1
+            elif edge.get_end_vertex_type(self.vertices) in (VertexType.TAG, VertexType.TAGPOINT):
+                num_tag_edges += 1
+
+        # Compute the ratio and normalize
+        weights['odom_tag_ratio'] = weights.get('odom_tag_ratio', 1) * num_tag_edges / num_odom_edges
+        self._weights = map_processing.graph_opt_utils.normalize_weights(weights,
+                                                                         is_sba=self.is_sparse_bundle_adjustment)
 
     def get_weights(self):
         return self._weights
@@ -599,11 +611,13 @@ class Graph:
                           damping_status=self.damping_status)
         return ret_graph
 
-    def get_tag_verts(self):
-        """Return a list of of the tag vertices
+    def get_tag_verts(self) -> List[int]:
+        """
+        Returns:
+            A list of of the tag vertices' UIDs
         """
         tag_verts = []
-        for vertex in self.vertices:
+        for vertex in self.vertices.keys():
             if self.vertices[vertex].mode == VertexType.TAG:
                 tag_verts.append(vertex)
         return tag_verts
@@ -656,6 +670,31 @@ class Graph:
             elif not (start_found or end_found):
                 segments.append([uid])
         return segments
+
+    def get_optimizer_vertices_dict_by_types(self, types: Optional[Set[VertexType]] = None) -> Dict[int, Vertex]:
+        """
+        Args:
+            types: Vertex types to filter by. If None is passed, then the default filtering is only TAG vertices.
+
+        Returns:
+            UID to Vertex mapping of vertices from the optimized graph where the vertices are filtered by type.
+        """
+        if types is None:
+            types = {VertexType.TAG, }
+        return {
+            uid: Vertex(
+                self.vertices[uid].mode,
+                self.optimized_graph.vertex(uid).estimate().vector(),
+                self.vertices[uid].fixed,
+                self.vertices[uid].meta_data
+            ) for uid in self.optimized_graph.vertices() if self.vertices[uid].mode in types
+        }
+
+    def get_map_tag_id_to_optimizer_pose_estimate(self) -> Dict[int, np.ndarray]:
+        return {
+            self.vertices[uid].meta_data["tag_id"]: self.optimized_graph.vertex(uid).estimate().vector()
+                for uid in self.optimized_graph.vertices() if self.vertices[uid].mode == VertexType.TAG
+        }
 
     # -- Expectation maximization-related methods  --
 
@@ -749,8 +788,8 @@ class Graph:
         self.update_edge_information()
         return self._weights
 
-    @classmethod
-    def as_graph(cls, dct: Dict, fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
+    @staticmethod
+    def as_graph(dct: Dict, fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
                  prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -759,7 +798,7 @@ class Graph:
             fixed_vertices (tuple): Determines which vertex types to set to fixed. Dummy and Tagpoints are always fixed
                 regardless of their presence in the tuple.
             prescaling_opt (PrescalingOptEnum): Selects which logical branches to use. If it is equal to
-            `PrescalingOptEnum.USE_SBA`, then sparse bundle adjustment is used; otherwise, the the outcome only differs
+            `PrescalingOptEnum.USE_SBA`, then sparse bundle adjustment is used; otherwise, the outcome only differs
              between the remaining enum values by how the tag edge prescaling matrix is selected. Read the
              PrescalingOptEnum class documentation for more information.
 
@@ -767,7 +806,7 @@ class Graph:
             A graph derived from the input dictionary.
 
         Raises:
-            Exception: if prescaling_opt is a enum_value that is not handled.
+            Exception: if prescaling_opt is an enum_value that is not handled.
             Exception: if no pose data was provided to the dictionary
             KeyError: exceptions from missing keys that are expected to be in dct (i.e., KeyErrors are not caught)
 
@@ -797,7 +836,7 @@ class Graph:
         camera_intrinsics_for_tag: Union[np.ndarray, None] = None
         tag_corners = None
         true_3d_tag_center: Union[None, np.ndarray] = None
-        true_3d_points: Union[None, np.ndarray] = None
+        true_3d_tag_points: Union[None, np.ndarray] = None
         tag_transform_estimates = None
         tag_corner_ids_by_tag_vertex_id = None
         initialize_with_averages = None
@@ -806,7 +845,7 @@ class Graph:
             fixed_vertices = (fixed_vertices,)
 
         if use_sba:
-            true_3d_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
+            true_3d_tag_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
 
         frame_ids = [pose['id'] for pose in dct['pose_data']]
         if len(dct['pose_data']) == 0:
@@ -982,7 +1021,7 @@ class Graph:
                             fixed=VertexType.TAG in fixed_vertices,
                             meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
 
-                        for idx, true_point_3d in enumerate(true_3d_points):
+                        for idx, true_point_3d in enumerate(true_3d_tag_points):
                             vertices[tag_corner_ids_by_tag_vertex_id[tag_vertex_id][idx]] = Vertex(
                                 mode=VertexType.TAGPOINT,
                                 estimate=np.hstack((true_point_3d, [0, 0, 0, 1])),
@@ -995,7 +1034,7 @@ class Graph:
 
                     # Commented-out (unused):
                     # TODO: create proper subclasses
-                    # for k, point in enumerate(true_3d_points):
+                    # for k, point in enumerate(true_3d_tag_points):
                     #     point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * \
                     #                                     (point - np.array([0, 0, 1]))
                     #     cam = CameraParameters(camera_intrinsics_for_tag[tag_index][0],
@@ -1040,8 +1079,8 @@ class Graph:
                         estimate_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse() * SE3Quat(
                             waypoint_edge_measurements[waypoint_index])).to_vector()
                     else:
-                        estimate_arg = transform_matrix_to_vector(pose_matrices[i].dot(waypoint_edge_measurements_matrix[
-                                                                                   waypoint_index]))
+                        estimate_arg = transform_matrix_to_vector(pose_matrices[i].dot(
+                            waypoint_edge_measurements_matrix[waypoint_index]))
                     vertices[waypoint_vertex_id] = Vertex(
                         mode=VertexType.WAYPOINT,
                         estimate=estimate_arg,
@@ -1070,7 +1109,8 @@ class Graph:
                         vertices[previous_vertex].estimate).inverse()).to_vector()
                 else:
                     # TODO: might want to consider prescaling based on the magnitude of the change
-                    measurement_arg = transform_matrix_to_vector(np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
+                    measurement_arg = transform_matrix_to_vector(
+                        np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
 
                 edges[edge_counter] = Edge(
                     startuid=previous_vertex,
@@ -1113,3 +1153,23 @@ class Graph:
         resulting_graph = Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=use_sba,
                                 use_huber=False, huber_delta=None, damping_status=True)
         return resulting_graph
+
+    @staticmethod
+    def transfer_vertex_estimates(graph_from: Graph, graph_to: Graph, filter_by: Optional[Set[VertexType]] = None) -> None:
+        """Transfer vertex estimates from one graph to another.
+
+        Args:
+            graph_from: Graph to transfer vertex estimates from
+            graph_to: Graph to transfer vertex estimates to
+            filter_by: Only transfer vertex estimates when vertices are of these types. Default behavior when argument
+             is None is to apply to no filter.
+
+        Notes:
+            Any vertices in graph_to that are not in graph_from are ignored.
+        """
+        if filter_by is None:
+            filter_by = {t for t in VertexType}
+        tag_vertices_dict = graph_from.get_optimizer_vertices_dict_by_types(types=filter_by)
+        for uid, vertex in tag_vertices_dict.items():
+            if uid in graph_to.vertices:
+                graph_to.vertices[uid].estimate = vertex.estimate

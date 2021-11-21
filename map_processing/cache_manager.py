@@ -8,11 +8,15 @@ import os
 from threading import Semaphore, Thread, Timer
 from typing import *
 from typing import Dict, Union
+import re
+import numpy as np
 
 import firebase_admin
 from firebase_admin import db
 from firebase_admin import storage
 from varname import nameof
+
+from map_processing.dataset_generation.map_processing_json_encoders import GTJsonEncoder
 
 
 class MapInfo:
@@ -60,7 +64,7 @@ class CacheManagerSingleton:
          of this class (only initialized once).
         __bucket: Handle to the Google Cloud Storage __bucket
         __db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute _selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
+         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
         __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every time an event is raised
          by the listener.
         __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one thread to access the
@@ -75,10 +79,23 @@ class CacheManagerSingleton:
         "storageBucket": "invisible-map.appspot.com"
     }
 
+    GROUND_TRUTH_MAPPING_STARTING_PT: Dict[str, List[str]] = {
+        "occam": ["duncan-occam-room-10-1-21-2-38 267139330396791",
+                  "duncan-occam-room-10-1-21-2-48 26773176629225"]
+    }
+    """
+    This dictionary is used as the default ground truth dataset-to-map-name mapping when one does not already exist
+    in the ground_truth/ sub-directory of the cache.
+    """
+
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
     PROCESSED_UPLOAD_TO: str = "TestProcessed"
+    GROUND_TRUTH_PARENT: str = "ground_truth"
+    GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
+    GROUND_TRUTH_MAPPING_FILE_NAME = "ground_truth_mapping.json"
+    GROUND_TRUTH_MAPPING_PATH = os.path.join(GROUND_TRUTH_PATH, GROUND_TRUTH_MAPPING_FILE_NAME)
 
     def __init__(self, firebase_creds: Optional[firebase_admin.credentials.Certificate] = None,
                  max_listen_wait: int = -1):
@@ -385,6 +402,89 @@ class CacheManagerSingleton:
         except Exception as ex:
             print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
             return False
+
+    @staticmethod
+    def find_ground_truth_data_from_map_info(map_info: MapInfo) -> Optional[Dict]:
+        """Uses the ground truth mapping to find the dataset matching the map_info object.
+
+        Args:
+            map_info: Specifies the ground truth dataset to look for with its map_name attribute.
+
+        Returns:
+            None if there is not exactly 1 match found; if there is exactly 1 match found, the deserialized object
+             of the ground truth data is parsed and returned as a dictionary that maps tag IDs to their poses as
+             7-element vectors.
+        """
+        matching_datasets = []
+        gt_mapping_dict: dict
+        if os.path.exists(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH):
+            with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "r") as f:
+                gt_mapping_dict = json.load(f)
+        else:
+            gt_mapping_dict = CacheManagerSingleton.GROUND_TRUTH_MAPPING_STARTING_PT
+
+        for item in gt_mapping_dict.items():
+            for map_name in item[1]:
+                if map_info.map_name == map_name:
+                    matching_datasets.append(item[0])
+        if len(matching_datasets) != 1:
+            return None
+        else:
+            ret = {}
+            unprocessed = CacheManagerSingleton.find_ground_truth_data_from_dataset_name(matching_datasets[0])
+            for pose_dict in unprocessed["poses"]:
+                ret[pose_dict["tag_id"]] = np.array(pose_dict["pose"])
+            return ret
+
+    @staticmethod
+    def find_ground_truth_data_from_dataset_name(dataset_name: str) -> Optional[Dict]:
+        """Look for a ground truth dataset stored in the ground truth directory of the cache that matches the dataset
+        name. Specifically, a file is searched for whose name is given by gt_{dataset_name}.json. If the file is found,
+        then the object given by json.load(.) is returned.
+        """
+        file_path = os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, "gt_" + dataset_name + ".json")
+        if not os.path.exists(file_path):
+            return None
+        ret: Dict
+        with open(file_path, "r") as f:
+            ret = json.load(f)
+        return ret
+
+    @staticmethod
+    def cache_ground_truth_data(gt_data: GTJsonEncoder, dataset_name: str, corresponding_map_names: List[str]) -> None:
+        """Serialize the ground truth data object and save it in the ground truth directory under the name
+        gt_{dataset_name}.json.
+
+        # TODO: update documentation with more information about the corresponding_map_names parameter
+
+        Args:
+            gt_data:
+            dataset_name:
+            corresponding_map_names:
+
+        Returns:
+
+        """
+        if not os.path.exists(CacheManagerSingleton.GROUND_TRUTH_PATH):
+            os.mkdir(CacheManagerSingleton.GROUND_TRUTH_PATH)
+        gt_dict = gt_data.default(gt_data)
+        file_name = "gt_" + dataset_name + ".json"
+        with open(os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, file_name), "w") as f:
+            json.dump(gt_dict, f, indent=2)
+
+        ground_truth_mapping_dict: Dict[str, List[str]]
+        if os.path.exists(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH):
+            with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "r") as f:
+                ground_truth_mapping_dict = json.load(f)
+        else:
+            ground_truth_mapping_dict = dict(CacheManagerSingleton.GROUND_TRUTH_MAPPING_STARTING_PT)
+
+        if dataset_name in ground_truth_mapping_dict:
+            ground_truth_mapping_dict[dataset_name].extend(corresponding_map_names)
+        else:
+            ground_truth_mapping_dict[dataset_name] = list(corresponding_map_names)
+        with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "w") as f:
+            json.dump(ground_truth_mapping_dict, f, indent=2)
 
     # -- Private instance methods --
 
