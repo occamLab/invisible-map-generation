@@ -71,10 +71,10 @@ class Graph:
         """
         if weights is None:
             weights = {
-                'odometry': np.zeros(6),
-                'tag_sba': np.zeros(2),
-                'tag': np.zeros(6),
-                'dummy': np.zeros(3)
+                'odometry': np.ones(6),
+                'tag_sba':  np.ones(2),
+                'tag':      np.ones(6),
+                'dummy':    np.ones(3)
             }
 
         self.edges: Dict[int, Edge] = copy.deepcopy(edges)
@@ -390,7 +390,8 @@ class Graph:
                 self.remove_edge(edge_id)
 
     def update_edge_information(self) -> None:
-        """Populates the information attribute of each of the edges.
+        """Sets the information attribute of each of the edges. Values in the _weights dictionary are used to scale
+        the information values that are computed.
 
         Raises:
             Exception if an edge is encountered whose start mode is not an odometry node
@@ -400,43 +401,43 @@ class Graph:
             edge = self.edges[uid]
             start_mode = self.vertices[edge.startuid].mode
             end_mode = self.vertices[edge.enduid].mode
-            if start_mode == VertexType.ODOMETRY:
-                if end_mode == VertexType.ODOMETRY:
-                    self.edges[uid].information = np.diag(np.exp(-self._weights['odometry']))
-                elif end_mode == VertexType.TAG:
-                    if self.is_sparse_bundle_adjustment:
-                        self.edges[uid].information = np.diag(np.exp(-self._weights['tag_sba']))
-                    else:
-                        self.edges[uid].information = np.diag(np.exp(-self._weights['tag']))
-                elif end_mode == VertexType.DUMMY:
-                    # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
-                    #  to work though)
-                    basis = self._basis_matrices[uid][3:6, 3:6]
-                    cov = np.diag(np.exp(-self._weights['dummy']))
-                    information = basis.dot(cov).dot(basis.T)
-                    template = np.zeros([6, 6])
-
-                    if self.is_sparse_bundle_adjustment:
-                        template[:3, :3] = information
-                    else:
-                        template[3:6, 3:6] = information
-
-                    if self.damping_status:
-                        self.edges[uid].information = template
-                    else:
-                        self.edges[uid].information = np.zeros_like(template)
-                elif end_mode == VertexType.WAYPOINT:
-                    # TODO: not sure what this should be
-                    self.edges[uid].information = np.eye(6, 6)
-                else:
-                    raise Exception("Edge of end type {} not recognized.".format(end_mode))
-                if self.edges[uid].information_prescaling is not None:
-                    prescaling_matrix = self.edges[uid].information_prescaling
-                    if prescaling_matrix.ndim == 1:
-                        prescaling_matrix = np.diag(prescaling_matrix)
-                    self.edges[uid].information = prescaling_matrix * self.edges[uid].information
-            else:
+            if start_mode != VertexType.ODOMETRY:
                 raise Exception("Edge of start type {} not recognized.".format(start_mode))
+
+            if end_mode == VertexType.ODOMETRY:
+                self.edges[uid].information = np.diag(self._weights['odometry'])
+            elif end_mode == VertexType.TAG:
+                if self.is_sparse_bundle_adjustment:
+                    self.edges[uid].information = np.diag(self._weights['tag_sba'])
+                else:
+                    self.edges[uid].information = np.diag(self._weights['tag'])
+            elif end_mode == VertexType.DUMMY:
+                # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
+                #  to work though)
+                basis = self._basis_matrices[uid][3:6, 3:6]
+                cov = np.diag(self._weights['dummy'])
+                information = basis.dot(cov).dot(basis.T)
+                template = np.zeros([6, 6])
+
+                if self.is_sparse_bundle_adjustment:
+                    template[:3, :3] = information
+                else:
+                    template[3:6, 3:6] = information
+
+                if self.damping_status:
+                    self.edges[uid].information = template
+                else:
+                    self.edges[uid].information = np.zeros_like(template)
+            elif end_mode == VertexType.WAYPOINT:
+                self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
+            else:
+                raise Exception("Edge of end type {} not recognized.".format(end_mode))
+
+            if self.edges[uid].information_prescaling is not None:
+                prescaling_matrix = self.edges[uid].information_prescaling
+                if prescaling_matrix.ndim == 1:
+                    prescaling_matrix = np.diag(prescaling_matrix)
+                self.edges[uid].information *= prescaling_matrix
 
     def update_vertices_estimates(self) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.

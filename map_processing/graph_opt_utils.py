@@ -85,12 +85,9 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
     # Put lower limit to prevent rounding causing division by 0
     odom_tag_ratio = max(0.00001, weights.get('odom_tag_ratio', 1))
 
-    # TODO: explain what these do
-    odom_scale = 1 / (1 + 1 / odom_tag_ratio ** 2) ** 0.5
-    tag_scale = 1 / (1 + odom_tag_ratio ** 2) ** 0.5
-
+    tag_scale = 1 / odom_tag_ratio
     if is_sba:
-        tag_scale = tag_scale / ASSUMED_FOCAL_LENGTH
+        tag_scale *= 1 / ASSUMED_FOCAL_LENGTH
 
     normal_weights = {
         'dummy': weights['dummy'],
@@ -98,22 +95,26 @@ def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> D
     }
 
     for weight_type in ('odometry', 'tag', 'tag_sba'):
-        target_len = 2 if weight_type == 'tag_sba' else 6
-        weight = weights.get(weight_type, np.ones(target_len))
+        weight_len = 2 if weight_type == 'tag_sba' else 6
+        weight = weights.get(weight_type, np.ones(weight_len))
+        weight_mag = np.linalg.norm(weight)
+        if weight_mag == 0:
+            normal_weights = np.zeros(weight_len)
+        else:
+            normal_weights[weight_type] = (tag_scale if weight_type != "odometry" else odom_tag_ratio) * weight / \
+                                          weight_mag
 
-        weight_mag = np.linalg.norm(np.exp(-weight))
-        if weight.size < target_len and weight_mag >= 1:
-            raise ValueError(
-                f'Could not fill in weights of type {weight_type}, magnitude is already 1 or more ({weight_mag})')
-        if weight.size > target_len:
-            raise ValueError(f'{weight.size} weights for {weight_type} is too many - max is {target_len}')
-        needed_weights = target_len - weight.size
-        if needed_weights > 0:
-            extra_weights = np.ones(needed_weights) * -0.5 * np.log((1 - weight_mag ** 2) / needed_weights)
-            weight = np.hstack((weight, extra_weights))
-            weight_mag = 1
-        scale = odom_scale if weight_type == 'odometry' else tag_scale
-        normal_weights[weight_type] = -(np.log(scale) - weight - np.log(weight_mag))
+        # Archive (appears to be not needed any more):
+        # if weight.size < target_len and weight_mag >= 1:
+        #     raise ValueError(
+        #         f'Could not fill in weights of type {weight_type}, magnitude is already 1 or more ({weight_mag})')
+        # if weight.size > target_len:
+        #     raise ValueError(f'{weight.size} weights for {weight_type} is too many - max is {target_len}')
+        # needed_weights = target_len - weight.size
+        # if needed_weights > 0:
+        #     extra_weights = np.ones(needed_weights) * -0.5 * np.log((1 - weight_mag ** 2) / needed_weights)
+        #     weight = np.hstack((weight, extra_weights))
+        #     weight_mag = 1
     return normal_weights
 
 

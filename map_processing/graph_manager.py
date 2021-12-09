@@ -53,39 +53,39 @@ class GraphManager:
     Used as a type alias for the weights argument polymorphism.
     """
 
-    _default_dummy_weights = np.array([-1, 1e2, -1])
+    _default_dummy_weights = np.exp(-np.array([-1, 1e2, -1]))
     _weights_dict: Dict[WeightSpecifier, Dict[str, np.ndarray]] = {
         WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.array([-6., -6., -6., -6., -6., -6.]),
-            'tag_sba': np.array([18, 18]),
-            'tag': np.array([18, 18, 0, 0, 0, 0]),
-            'dummy': np.array([-1, 1e2, -1]),
+            'odometry': np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),
+            'tag_sba':  np.exp(-np.array([18, 18])),
+            'tag':      np.exp(-np.array([18, 18, 0, 0, 0, 0])),
+            'dummy':    _default_dummy_weights,
         }),
         WeightSpecifier.TRUST_ODOM: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.array([-3., -3., -3., -3., -3., -3.]),
-            'tag_sba': np.array([10.6, 10.6]),
-            'tag': np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
-            'dummy': _default_dummy_weights,
+            'odometry': np.exp(-np.array([-3., -3., -3., -3., -3., -3.])),
+            'tag_sba':  np.exp(-np.array([10.6, 10.6])),
+            'tag':      np.exp(-np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6])),
+            'dummy':    _default_dummy_weights,
         }),
         WeightSpecifier.TRUST_TAGS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.array([10, 10, 10, 10, 10, 10]),
-            'tag_sba': np.array([-10.6, -10.6]),
-            'tag': np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
-            'dummy': _default_dummy_weights,
+            'odometry': np.exp(-np.array([10, 10, 10, 10, 10, 10])),
+            'tag_sba':  np.exp(-np.array([-10.6, -10.6])),
+            'tag':      np.exp(-np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6])),
+            'dummy':    _default_dummy_weights,
         }),
         # Only used for SBA - no non-SBA tag weights
         WeightSpecifier.GENETIC_RESULTS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08]),
-            'tag_sba': np.array([9.91, 8.88]),
-            'dummy': _default_dummy_weights,
+            'odometry': np.exp(-np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08])),
+            'tag_sba':  np.exp(-np.array([9.91, 8.88])),
+            'dummy':   _default_dummy_weights,
         }),
         WeightSpecifier.BEST_SWEEP:
             map_processing.graph_opt_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
         WeightSpecifier.COMPARISON_BASELINE: map_processing.graph_opt_utils.normalize_weights({
             'odometry': np.ones(6),
-            'tag_sba': np.ones(2),
-            'tag': np.ones(6),
-            'dummy': _default_dummy_weights,
+            'tag_sba':  np.ones(2),
+            'tag':      np.ones(6),
+            'dummy':    _default_dummy_weights,
         })
     }
     _comparison_graph1_subgraph_weights: List[WeightSpecifier] = [
@@ -445,7 +445,7 @@ class GraphManager:
         Creates then splits a graph in half, as required for weight comparison
 
         Specifically, this will create the graph based off the information in dct with the given prescaling option. It 
-        will then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary, 
+        will then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary,
         while the second does not.
 
         Args:
