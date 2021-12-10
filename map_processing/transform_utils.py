@@ -198,15 +198,15 @@ def pose2diffs(poses):
 
 
 def make_sba_tag_arrays(tag_size) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate tag coordinates given a specified tag size (assuming relative to a reference frame 1m in front of the
+    """Generate tag coordinates given a specified tag size (assuming relative to a reference frame 1 m in front of the
     tag).
 
     Args:
         tag_size: Size of the square tag's side length.
 
     Returns:
-        true_3d_tag_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the center
-         of the tag by -1 in the Z axis. Order of tags is bottom-left, bottom-right, top-right, and top-left.
+        true_3d_tag_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the
+         center of the tag by -1 in the Z axis. Order of tags is bottom-left, bottom-right, top-right, and top-left.
         true_tag_center: The length-3 vector containing (0, 0, 1).
     """
     pos_tag_sz_div_2 = tag_size / 2

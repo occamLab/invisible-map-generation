@@ -2,7 +2,7 @@ import inspect
 import re
 import typing
 from abc import ABC, abstractmethod
-from json import JSONEncoder, JSONDecoder
+from json import JSONEncoder
 from typing import Dict, Any, Tuple, Iterable, List, Optional, Set, Union
 
 
@@ -37,7 +37,7 @@ class SubscriptedTypeChecker(ABC):
              instance's attributes to check the types of.
 
         Raises:
-             CouldNotCheckTypeException: An error occurred when trying to verify the type of an object.
+             CouldNotCheckTypeException: An error occurred when trying to verify an object's type.
              InvalidInstanceVariableType: One of the instance attributes was incorrect.
         """
         all_class_attrs = inspect.getmembers(self.__class__, lambda a: not (inspect.isroutine(a)))
@@ -237,8 +237,8 @@ class TypeCheckingJSONEncoder(JSONEncoder, SubscriptedTypeChecker, ABC):
                  attrs_to_set: Optional[Dict[str, object]] = None):
         """Abstract initializer intended to be extended.
 
-        If invoked at the end of the child class's initialization, checks the type-correctness of all of the child
-        class's instance attributes (with the exception of those specified by the attrs_to_skip_checking_of argument).
+        If invoked at the end of the child class's initialization, checks the type-correctness of all the child
+        class's instance attributes (except those specified by the attrs_to_skip_checking_of argument).
 
         Args:
             attrs_to_skip_checking_of: A set of strings specifying instance attributes to exclude from the type checking
@@ -302,7 +302,7 @@ class TypeCheckingJSONEncoder(JSONEncoder, SubscriptedTypeChecker, ABC):
 if __name__ == "__main__":
     # Following is an example that does not produce any errors. You will notice that an exception is raised in one of
     # two cases:
-    # 1. You change the type of an instance attribute such that it no longer matches the type specified by the
+    # 1. You change the instance attribute's type such that it no longer matches the type specified by the
     #    corresponding class attribute.
     # 2. (and/or) You create a scenario that is not capable of being successfully checked (e.g., type checking of
     #    dictionaries is not currently supported).
@@ -326,7 +326,7 @@ if __name__ == "__main__":
             self.test_2 = [[1, 2], ["a", "b"]]
             self.test_3 = (0.2, 0.2, 0.2)
 
-            # Test composition of other sub-classes of TypeCheckingJSONEncoder
+            # Test composition of other subclasses of TypeCheckingJSONEncoder
             self.test_recur = (ComposedExample(), ComposedExample())
 
             self.exception = "exception"  # Skip type checks on this

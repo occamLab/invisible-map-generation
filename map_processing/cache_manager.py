@@ -6,9 +6,7 @@ import glob
 import json
 import os
 from threading import Semaphore, Thread, Timer
-from typing import *
-from typing import Dict, Union
-import re
+from typing import Dict, Union, List, Optional, Set, Callable
 import numpy as np
 
 import firebase_admin
@@ -192,11 +190,11 @@ class CacheManagerSingleton:
         directory.
 
         Notes:
-            Prepends "**" to the pattern and calls glob.glob with recursive=True
+            Prepends "**" to the pattern and calls `glob.glob` with recursive=True
 
         Args:
-            pattern: Pattern to match map file paths in any sub-directory of the cache to.
-            search_only_unprocessed: Only search in the cache sub-directory specified by the UNPROCESSED_MAPS_PARENT
+            pattern: Pattern to match map file paths in any subdirectory of the cache to.
+            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
              class attribute.
 
         Returns:
@@ -314,7 +312,7 @@ class CacheManagerSingleton:
              of unprocessed maps (event.data is a dictionary).
             map_info_callback: For every MapInfo object created, invoke this callback and pass the MapInfo object as the
              argument.
-            ignore_dict: If true, no action is taken if event.data is a dictionary.
+            ignore_dict: If true, no action is taken if `event.data` is a dictionary.
         """
         if type(event.data) == str:
             # A single new map just got added
@@ -341,11 +339,11 @@ class CacheManagerSingleton:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
-        appropriate diagnostic message if one is caught. All of the arguments are checked to ensure that they are, in
+        appropriate diagnostic message if one is caught. All the arguments are checked to ensure that they are, in
         fact strings; if any are not, then a diagnostic message is printed and False is returned.
 
         Arguments:
-            parent_folder (str): Specifies the sub-directory of the cache directory that the map is cached in
+            parent_folder (str): Specifies the subdirectory of the cache directory that the map is cached in
             map_info (MapInfo): Contains the map name and map json path in the map_name and map_json_blob_name
              fields respectively. If the last 5 characters of this string do not form the substring ".json",
              then ".json" will be appended automatically.

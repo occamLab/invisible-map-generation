@@ -254,9 +254,12 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> 
     elif isinstance(edge, EdgeSE3Expmap):
         error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
         chi2 = error.log().T.dot(edge.information()).dot(error.log())
+        # noinspection SpellCheckingInspection
         if math.isnan(chi2):
-            # print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}\nfull:\n{edge.vertex(0).estimate().adj()}')
-            # print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}\nfull:\n{edge.vertex(1).estimate().adj()}')
+            # print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}'
+            #       f'\nfull:\n{edge.vertex(0).estimate().adj()}')
+            # print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}'
+            #       f'\nfull:\n{edge.vertex(1).estimate().adj()}')
             # print(f'transform_vector:\n{edge.transform_vector().matrix()}\nfull:\n{edge.transform_vector().adj()}')
             # print(f'calc. error:\n{error.matrix()}\nfull:{error.adj()}')
             # print(f'omega:\n{edge.information()}')
@@ -273,11 +276,11 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> 
 
 
 def sum_optimized_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True) -> float:
-    """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all of the edges.
+    """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.
 
     Args:
         optimizer: A SparseOptimizer object
-        verbose (bool): Boolean for whether or not to print the total chi2 value
+        verbose (bool): Boolean for whether to print the total chi2 value
 
     Returns:
         Sum of the chi2 values associated with each edge

@@ -54,7 +54,7 @@ def plot_optimization_result(
         plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
                  label="Tag Vertices Original")
 
-    # Fix the 1 meter offset on the tag anchors
+    # Fix the 1-meter offset on the tag anchors
     if is_sba:
         tag_verts = np.array(tag_verts)  # Copy to avoid modifying input
         transform_utils.apply_z_translation_to_lhs_of_se3_vectors(tag_verts)
@@ -124,11 +124,11 @@ def axis_equal(ax: plt.Axes):
     max_range = np.max(np.array([axis_range_from_limits(ax.get_xlim()), axis_range_from_limits(ax.get_ylim()),
                                  axis_range_from_limits(ax.get_zlim())]))
     Xb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][0].flatten() + 0.5 * \
-         (ax.get_xlim()[1] + ax.get_xlim()[0])
+        (ax.get_xlim()[1] + ax.get_xlim()[0])
     Yb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][1].flatten() + 0.5 * \
-         (ax.get_ylim()[1] + ax.get_ylim()[0])
+        (ax.get_ylim()[1] + ax.get_ylim()[0])
     Zb = 0.5 * max_range * np.mgrid[-1:2:2, -1:2:2, -1:2:2][2].flatten() + 0.5 * \
-         (ax.get_zlim()[1] + ax.get_zlim()[0])
+        (ax.get_zlim()[1] + ax.get_zlim()[0])
 
     # Comment or uncomment following both lines to test the fake bounding box:
     for xb, yb, zb in zip(Xb, Yb, Zb):

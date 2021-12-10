@@ -29,7 +29,7 @@ class GraphGenerator:
     """Generates synthetic datasets simulating tag observations.
 
     Attributes:
-        _path: Defines a parameterized path. Takes as input a N-length vector of parameters to evaluate the curve at,
+        _path: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve at,
          and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
         _t_max: Max parameter value to use when evaluating the path
         _n_poses: Number of poses to sample the path at (referenced as N in the array dimensions described for other
@@ -61,6 +61,7 @@ class GraphGenerator:
                        GraphGenerator.OdomNoiseDims.RVert]
             return ordered
 
+    # noinspection GrazieInspection
     TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
         "3line": {
             0: np.array([
@@ -84,7 +85,7 @@ class GraphGenerator:
         },
         "occam": {
             # The ground truth tags for the 6-17-21 OCCAM Room. Keyed by tag ID. Measurements in meters (measurements
-            # taken in inches and converted to meters by multiplying by 0.0254. Measurements are in a right-handed
+            # were taken in inches and converted to meters by multiplying by 0.0254). Measurements are in a right-handed
             # coordinate system with its origin at the floor beneath tag id=0 (+Z pointing out of the wall and +X
             # pointing to the right).
             0: transform_vector_to_matrix(SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]).to_vector()),
@@ -156,8 +157,8 @@ class GraphGenerator:
         """Initializes a GraphGenerator instance and automatically invokes generate.
 
         Args:
-            path: Defines a parameterized path. Takes as input a N-length vector of parameters to evaluate the curve at,
-             and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
+            path: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve
+             at, and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
             dataset_name: String used as the name for the dataset when caching the ground truth data.
             t_max: Max parameter value to use when evaluating the path
             n_poses: Number of poses to sample the path at.
@@ -296,7 +297,7 @@ class GraphGenerator:
             ),
             json_string=map_str
         )
-        self._cms.cache_ground_truth_data(gt_obj, dataset_name=self._dataset_name, corresponding_map_names=[map_name,])
+        self._cms.cache_ground_truth_data(gt_obj, dataset_name=self._dataset_name, corresponding_map_names=[map_name])
 
     def visualize(self, plus_minus_lim=5) -> None:
         """Visualizes the generated graph by plotting the path, the poses on the path, the tags, and the observations of
@@ -467,7 +468,7 @@ class GraphGenerator:
              space.
             pixel_vals: If not none, then the array provided by this argument is expected to be a 2xN array (must be a
              2-D array; cannot be a 1-D array). The columns of this array will be populated with the pixel coordinates
-             of the resulting projection of the points into pixel space. Row order for coordinates is x then y.
+             of the resulting projection of the points into pixel space. Row-order for coordinates is x then y.
         Returns:
             True if all points are visible according to the camera intrinsics.
         """

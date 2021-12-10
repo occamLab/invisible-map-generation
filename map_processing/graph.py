@@ -57,7 +57,7 @@ class Graph:
         """The graph class
 
         The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
-        in each edge refer to the vertices in the vertices dictionary.
+        in each edge refer to the vertices in the `vertices` dictionary.
 
         Args:
             vertices: A dictionary of vertices indexed by UIDs. The UID-vertices associations are referred to by the
@@ -132,7 +132,7 @@ class Graph:
 
         Args:
             graph: a SparseOptimizer object
-            verbose (bool): Boolean for whether or not to print the chi2 values
+            verbose (bool): Boolean for whether to print the chi2 values
 
         Returns:
             A dict mapping 'odometry', 'tag', and 'dummy' to the chi2s corresponding to that edge type
@@ -202,7 +202,7 @@ class Graph:
 
     def optimize_graph(self) -> float:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
-        optimized_graph attribute). The g2o_status attribute is set to to the g2o success output.
+        optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
 
         Returns:
             Chi2 sum of optimized graph as returned by the call to `self.sum_optimized_edges_chi2(self.optimized_graph)`
@@ -223,7 +223,7 @@ class Graph:
         """Convert a :class: graph to a :class: SparseOptimizer.  Only the edges and vertices fields need to be
         filled out.
 
-        Vertices' ids in the resulting SparseOptimizer match their UIDs in the self.vertices attribute.
+        Vertices' ids in the resulting SparseOptimizer match their UIDs in the `self.vertices` attribute.
 
         Returns:
             A :class: SparseOptimizer that can be optimized via its optimize class method.
@@ -246,7 +246,7 @@ class Graph:
                 cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
             cam_idx = 0
             for i in self.edges:
-                if self.edges[i].corner_ids is None:
+                if self.edges[i].corner_ids is None:  # If is none, then this is not an edge connecting to a tagpoint
                     edge = EdgeSE3Expmap()
                     for j, k in enumerate([self.edges[i].startuid,
                                            self.edges[i].enduid]):
@@ -322,10 +322,10 @@ class Graph:
         No edges or vertices are modified in either of the attributes that are g2o graphs.
 
         Arguments:
-            vertex_uid (int): UID of vertex to delete which must be of a VertexType.TAG type.
+            vertex_uid (int): UID of vertex to delete which must be of a `VertexType.TAG` type.
 
         Raises:
-            ValueError if the specified vertex to delete is not of a VertexType.TAG type.
+            ValueError if the specified vertex to delete is not of a `VertexType.TAG` type.
         """
         if self.vertices[vertex_uid].mode != VertexType.TAG:
             raise ValueError("Specified vertex for deletion is not a tag vertex")
@@ -615,7 +615,7 @@ class Graph:
     def get_tag_verts(self) -> List[int]:
         """
         Returns:
-            A list of of the tag vertices' UIDs
+            A list of the tag vertices' UIDs
         """
         tag_verts = []
         for vertex in self.vertices.keys():
@@ -826,14 +826,14 @@ class Graph:
         # Pull out this equality from the enum (this equality is checked many times)
         use_sba = prescaling_opt == PrescalingOptEnum.USE_SBA
 
-        # Used only if use_sba is false:
+        # Used only if `use_sba` is false:
         tag_joint_covar = None
         tag_position_variances = None
         tag_orientation_variances = None
         tag_edge_prescaling = None
         previous_pose_matrix = None
 
-        # Used only if use_sba is true:
+        # Used only if `use_sba` is true:
         camera_intrinsics_for_tag: Union[np.ndarray, None] = None
         tag_corners = None
         true_3d_tag_center: Union[None, np.ndarray] = None
@@ -1033,8 +1033,7 @@ class Graph:
                     tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - \
                         tag_corners[tag_index][::2]
 
-                    # Commented-out (unused):
-                    # TODO: create proper subclasses
+                    # Archive:
                     # for k, point in enumerate(true_3d_tag_points):
                     #     point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * \
                     #                                     (point - np.array([0, 0, 1]))
@@ -1104,6 +1103,7 @@ class Graph:
                     measurement=measurement_arg)
                 edge_counter += 1
 
+            # Connect odometry nodes
             if previous_vertex:
                 if use_sba:
                     measurement_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate) * SE3Quat(

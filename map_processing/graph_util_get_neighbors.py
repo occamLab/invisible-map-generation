@@ -34,8 +34,8 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
     nvertices = vertices.shape[0]
     if vertex_ids is None:
         vertex_ids = list(range(nvertices))
-    neighbors = [[vertex_ids[1]]] + [[vertex_ids[i - 1], vertex_ids[i + 1]] for i in range(1, nvertices - 1)]\
-                + [[vertex_ids[-2]]]
+    neighbors = [[vertex_ids[1]]] + [[vertex_ids[i - 1], vertex_ids[i + 1]] for i in range(1, nvertices - 1)] \
+        + [[vertex_ids[-2]]]
     curr_id = max(vertex_ids) + 1
     intersections = []
 

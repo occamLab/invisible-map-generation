@@ -123,7 +123,7 @@ class GraphManager:
 
         Args:
             map_info: Graph to process.
-            visualize: Value passed as the visualize argument to the invocation of the _process_map method.
+            visualize: Value passed as the `visualize` argument to the invocation of the _process_map method.
             upload: Value passed as the upload argument to the invocation of the _process_map method.
             fixed_vertices: Parameter to pass to the Graph.as_graph class method (see more there)
             obs_chi2_filter: Parameter to pass to the optimize_graph method (see more there)
@@ -164,10 +164,10 @@ class GraphManager:
         See more at the documentation for process_map.
 
         Args:
-            pattern: Pattern to find matching cached graphs (which are stored as .json files. The cache
+            pattern: Pattern to find matching cached graphs (which are stored as .json files). The cache
              directory (specified by the _cache_path attribute) via the find_maps instance method of the
              CacheManagerSingleton class.
-            visualize: Value passed as the visualize argument to the invocation of the _process_map method.
+            visualize: Value passed as the `visualize` argument to the invocation of the _process_map method.
             upload: Value passed as the upload argument to the invocation of the _process_map method.
             compare: If true, run the routine for comparing graph optimization (invokes the compare_weights
              method).
@@ -202,7 +202,7 @@ class GraphManager:
                 )
 
     def compare_weights(self, map_info: MapInfo, visualize: bool = True, obs_chi2_filter: float = -1) -> None:
-        """Invocation results in the weights comparison routine.
+        """Invocation results in the weight vectors comparison routine.
 
         Iterate through the different weight vectors (using the iter_weights variable) and, for each, do the
         following:
@@ -218,7 +218,7 @@ class GraphManager:
 
         Args:
             map_info: Map to use for weights comparison
-            visualize: Used as the visualize argument for the _process_map method invocation.
+            visualize: Used as the `visualize` argument for the _process_map method invocation.
             obs_chi2_filter: Passed to the optimize_graph function (read more there)
         """
         results = "\n### Results ###\n\n"
@@ -318,6 +318,7 @@ class GraphManager:
                                                         g2sg_chi_sqr, abs(g1sg_chi_sqr - g2sg_chi_sqr))
         print(results)
 
+    # noinspection PyUnreachableCode,PyUnusedLocal
     def optimize_weights(self, map_json_path: str, verbose: bool = True) -> np.ndarray:
         """
         Determines the best weights to optimize a graph with
@@ -329,6 +330,8 @@ class GraphManager:
         Returns:
             A list of the best weights
         """
+        raise NotImplementedError("This function has not been updated to work with the new way that ground truth data"
+                                  "is being handled")
         map_dct = self._cms.map_info_from_path(map_json_path).map_dct
         graph = Graph.as_graph(map_dct)
 
@@ -445,7 +448,7 @@ class GraphManager:
         Creates then splits a graph in half, as required for weight comparison
 
         Specifically, this will create the graph based off the information in dct with the given prescaling option. It 
-        will then exactly halve this graph's vertices into two graphs. The first will allows the tag vertices to vary,
+        will then exactly halve this graph's vertices into two graphs. The first will allow the tag vertices to vary,
         while the second does not.
 
         Args:
@@ -496,7 +499,7 @@ class GraphManager:
         Args:
             graph: A Graph instance to optimize.
             tune_weights: A boolean for whether expectation_maximization_once is called on the graph instance.
-            visualize: A boolean for whether the visualize static method of this class is called.
+            visualize: A boolean for whether the `visualize` static method of this class is called.
             weights: If of the WeightSpecifier type: Specifies the weight vector to set the weights attribute
              of the graph instance to from one of the weight vectors in GraphManager._weights_dict. If a dictionary:
              argument is used directly to set weights. If None, then the weight vector corresponding to

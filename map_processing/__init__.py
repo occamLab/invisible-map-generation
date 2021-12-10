@@ -3,9 +3,6 @@
 
 from enum import Enum
 
-import numpy as np
-from g2o import SE3Quat
-
 ASSUMED_FOCAL_LENGTH = 1464
 
 # TODO: send tag size with the tag detection
