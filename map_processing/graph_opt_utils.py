@@ -4,125 +4,139 @@ Utility functions for graph optimization
 
 import json
 import math
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Dict, Tuple, Optional
 
 import g2o
 import numpy as np
 from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3
 
-from . import ASSUMED_FOCAL_LENGTH, graph_util_get_neighbors
+from . import graph_util_get_neighbors
 from .graph_vertex_edge_classes import VertexType
 
 
-def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, np.ndarray]:
-    """
-    Constructs a normalized weight dictionary from a given array of values
-    """
-    weights = {
-        'dummy': np.array([-1, 1e2, -1]),
-        'odometry': np.ones(6),
-        'tag': np.ones(6),
-        'tag_sba': np.ones(2),
-        'odom_tag_ratio': 1
-    }
+class Weights:
+    def __init__(self, odometry: Optional[np.ndarray] = None, tag: Optional[np.ndarray] = None,
+                 tag_sba: Optional[np.ndarray] = None, dummy: Optional[np.ndarray] = None,
+                 odom_tag_ratio: Optional[Union[np.ndarray, float]] = None):
+        self.dummy: np.ndarray = np.array(dummy) if dummy is not None else np.exp(np.array([-1, 1e2, -1]))
+        self.odometry: np.ndarray = np.array(odometry) if odometry is not None else np.ones(6)
+        self.tag: np.ndarray = np.array(tag) if tag is not None else np.ones(6)
+        self.tag_sba: np.ndarray = np.array(tag_sba) if tag is not None else np.ones(2)
 
-    length = array.size if isinstance(array, np.ndarray) else len(array)
-    half_len = length // 2
-    has_ratio = length % 2 == 1
-
-    if length == 1:  # ratio
-        weights['odom_tag_ratio'] = array[0]
-    elif length == 2:  # tag/odom pose:rot/tag-sba x:y, ratio
-        weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
-        weights['tag'] = np.array([array[0]] * 3 + [1] * 3)
-        weights['tag_sba'] = np.array([array[0], 1])
-        weights['odom_tag_ratio'] = array[1]
-    elif length == 3:  # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
-        weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
-        weights['tag'] = np.array([array[1]] * 3 + [1] * 3)
-        weights['tag_sba'] = np.array([array[1], 1])
-        weights['odom_tag_ratio'] = array[2]
-    elif half_len == 2:  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
-        weights['odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
-        weights['tag'] = np.array([array[2]] * 3 + [array[3]] * 3)
-        weights['tag_sba'] = np.array(array[2:])
-        weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
-    elif half_len == 3:  # odom x y z qx qy, tag-sba x, (ratio)
-        weights['odometry'] = np.array(array[:5])
-        weights['tag_sba'] = np.array([array[5]])
-        weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
-    elif length == 4:  # odom, tag-sba, (ratio)
-        weights['odometry'] = np.array(array[:6])
-        weights['tag_sba'] = np.array(array[6:])
-        weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
-    elif length == 5:  # odom x y z qx qy, tag x y z qx qy, (ratio)
-        weights['odometry'] = np.array(array[:5])
-        weights['tag'] = np.array(array[5:])
-        weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
-    elif length == 6:  # odom, tag, (ratio)
-        weights['odometry'] = np.array(array[:6])
-        weights['tag'] = np.array(array[6:])
-        weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
-    else:
-        raise Exception(f'Weight length of {length} is not supported')
-    return normalize_weights(weights)
-
-
-def normalize_weights(weights: Dict[str, np.ndarray], is_sba: bool = False) -> Dict[str, np.ndarray]:
-    """Normalizes the weights so that the resultant tag and odom weights in g2o will have a magnitude of 1, in ratio of
-    weights['odom_tag_ratio'].
-
-    If the provided array for each type is shorter than it should be, this will add elements to it until it is the
-    right length. These elements will all be the same and chosen to get the correct overall magnitude for that weight
-    set.
-
-    Args:
-        weights (dict): a dict mapping weight types to weight values, the set of weights to normalize.
-        is_sba (bool): whether SBA is being used - if so, will scale tags so odom and tags are approx. the same units
-    Returns:
-        A new dict of weights where each value is normalized as said above, keeping dummy weights constant
-    """
-    # Put lower limit to prevent rounding causing division by 0
-    odom_tag_ratio = max(0.00001, weights.get('odom_tag_ratio', 1))
-
-    tag_scale = 1 / odom_tag_ratio
-    if is_sba:
-        tag_scale *= 1 / ASSUMED_FOCAL_LENGTH
-
-    normal_weights = {
-        'dummy': weights['dummy'],
-        'odom_tag_ratio': odom_tag_ratio
-    }
-
-    for weight_type in ('odometry', 'tag', 'tag_sba'):
-        weight_len = 2 if weight_type == 'tag_sba' else 6
-        weight = weights.get(weight_type, np.ones(weight_len))
-        weight_mag = np.linalg.norm(weight)
-        if weight_mag == 0:
-            normal_weights = np.zeros(weight_len)
+        # Put lower limit of 0.00001 to prevent rounding causing division by 0
+        self.odom_tag_ratio: float
+        if isinstance(odom_tag_ratio, float):
+            self.odom_tag_ratio = max(0.00001, odom_tag_ratio)
+        elif isinstance(odom_tag_ratio, np.ndarray):
+            self.odom_tag_ratio = max(0.00001, odom_tag_ratio[0])
         else:
-            normal_weights[weight_type] = (tag_scale if weight_type != "odometry" else odom_tag_ratio) * weight / \
-                                          weight_mag
+            self.odom_tag_ratio = 1
+        # self.normalize_tag_and_odom_weights()
 
-        # Archive (appears to be not needed any more):
-        # if weight.size < target_len and weight_mag >= 1:
-        #     raise ValueError(
-        #         f'Could not fill in weights of type {weight_type}, magnitude is already 1 or more ({weight_mag})')
-        # if weight.size > target_len:
-        #     raise ValueError(f'{weight.size} weights for {weight_type} is too many - max is {target_len}')
-        # needed_weights = target_len - weight.size
-        # if needed_weights > 0:
-        #     extra_weights = np.ones(needed_weights) * -0.5 * np.log((1 - weight_mag ** 2) / needed_weights)
-        #     weight = np.hstack((weight, extra_weights))
-        #     weight_mag = 1
-    return normal_weights
+    @property
+    def tag_odom_ratio(self):
+        return 1 / self.odom_tag_ratio
+
+    @classmethod
+    def legacy_from_array(cls, array: Union[np.ndarray, List[float]]) -> "Weights":
+        return cls.legacy_from_dict(cls.weight_dict_from_array(array))
+
+    @classmethod
+    def legacy_from_dict(cls, dct: Dict[str, Union[np.ndarray, float]]) -> "Weights":
+        return cls(**dct)
+
+    def to_dict(self) -> Dict[str, Union[float, np.ndarray]]:
+        return {
+            "dummy": np.array(self.dummy),
+            "odometry": np.array(self.odometry),
+            "tag": np.array(self.tag),
+            "tag_sba": np.array(self.tag_sba),
+            "odom_tag_ratio": self.odom_tag_ratio
+        }
+
+    @staticmethod
+    def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
+        """
+        Constructs a normalized weight dictionary from a given array of values
+        """
+        weights = {
+            'dummy': np.array([-1, 1e2, -1]),
+            'odometry': np.ones(6),
+            'tag': np.ones(6),
+            'tag_sba': np.ones(2),
+            'odom_tag_ratio': 1
+        }
+
+        length = array.size if isinstance(array, np.ndarray) else len(array)
+        half_len = length // 2
+        has_ratio = length % 2 == 1
+
+        if length == 1:  # ratio
+            weights['odom_tag_ratio'] = array[0]
+        elif length == 2:  # tag/odom pose:rot/tag-sba x:y, ratio
+            weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['tag'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['tag_sba'] = np.array([array[0], 1])
+            weights['odom_tag_ratio'] = array[1]
+        elif length == 3:  # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
+            weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['tag'] = np.array([array[1]] * 3 + [1] * 3)
+            weights['tag_sba'] = np.array([array[1], 1])
+            weights['odom_tag_ratio'] = array[2]
+        elif half_len == 2:  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
+            weights['odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
+            weights['tag'] = np.array([array[2]] * 3 + [array[3]] * 3)
+            weights['tag_sba'] = np.array(array[2:])
+            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        elif half_len == 3:  # odom x y z qx qy, tag-sba x, (ratio)
+            weights['odometry'] = np.array(array[:5])
+            weights['tag_sba'] = np.array([array[5]])
+            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        elif length == 4:  # odom, tag-sba, (ratio)
+            weights['odometry'] = np.array(array[:6])
+            weights['tag_sba'] = np.array(array[6:])
+            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        elif length == 5:  # odom x y z qx qy, tag x y z qx qy, (ratio)
+            weights['odometry'] = np.array(array[:5])
+            weights['tag'] = np.array(array[5:])
+            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        elif length == 6:  # odom, tag, (ratio)
+            weights['odometry'] = np.array(array[:6])
+            weights['tag'] = np.array(array[6:])
+            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        else:
+            raise Exception(f'Weight length of {length} is not supported')
+
+        w = Weights.legacy_from_dict(weights)
+        w.normalize_tag_and_odom_weights()
+        return w.to_dict()
+
+    def normalize_tag_and_odom_weights(self):
+        """Normalizes the tag and odometry weights' magnitudes, then applies the odom-to-tag ratio as a scaling factor.
+        """
+        odom_mag = np.linalg.norm(self.odometry)
+        if odom_mag == 0:  # Avoid divide by zero error
+            odom_mag = 1
+        self.odometry *= self.odom_tag_ratio / odom_mag
+
+        # TODO: The below implements what was previously in place for SBA weighting. Should it be changed? Why is
+        #  such a low weighting so effective?
+        sba_mag = np.linalg.norm(self.tag_sba)
+        if sba_mag == 0:
+            sba_mag = 1  # Avoid divide by zero error
+        self.tag_sba *= 1 / (sba_mag * 1464)
+
+        tag_mag = np.linalg.norm(self.tag)
+        if tag_mag == 0:  # Avoid divide by zero error
+            tag_mag = 1
+        self.tag *= self.tag_odom_ratio / tag_mag
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> Dict[str, Union[List, np.ndarray]]:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
     Args:
-        vertices: A dictionary of vertices. This is used to lookup the type of vertex pulled from the optimizer.
+        vertices: A dictionary of vertices. This is used to look up the type of vertex pulled from the optimizer.
         optimizer: a :class: g2o.SparseOptimizer containing a map.
         is_sba: Set to True if the optimizer is based on sparse bundle adjustment and False
          otherwise. If true, the odometry locations and the tag vertices' poses are inverted. In the case of the tag

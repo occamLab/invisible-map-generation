@@ -42,6 +42,26 @@ def se3_quat_average(transforms: List[SE3Quat]) -> SE3Quat:
     return SE3Quat(average_as_quat, translation_average)
 
 
+def quat_to_angle_axis(quat: Quaternion) -> Tuple[float, np.ndarray]:
+    """Note: Converts a quaternion to its angle-axis representation.
+
+    Notes:
+        The identity quaternion results in the axis returned being [0, 0, 1].
+
+    Args:
+        quat: A Quaternion object.
+
+    Returns:
+        A tuple whose first element contains the angle of rotation and the second element contains the axis of the
+         rotation as a 3-element numpy array.
+    """
+    half_theta = np.arccos(quat.w())
+    if half_theta == 0:
+        return 0, np.array([0, 0, 1])
+    divisor = np.sin(half_theta)
+    return 2 * half_theta, np.array([quat.x(), quat.y(), quat.z()]) / divisor
+
+
 def transform_vector_to_matrix(transform_vector: np.ndarray) -> np.ndarray:
     """Convert a vectorized transform into a transform matrix.
 

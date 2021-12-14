@@ -14,6 +14,7 @@ from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, Edge
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
+from .graph_opt_utils import Weights
 import map_processing.graph_opt_utils
 from expectation_maximization.maximization_model import maxweights
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
@@ -43,17 +44,9 @@ class Graph:
         },
     }
 
-    def __init__(
-            self,
-            vertices: Dict[int, Vertex],
-            edges: Dict[int, Edge],
-            weights: Optional[Dict[str, np.ndarray]] = None,
-            gravity_axis: str = "y",
-            is_sparse_bundle_adjustment: bool = False,
-            use_huber: bool = False,
-            huber_delta=None,
-            damping_status: bool = False
-    ):
+    def __init__(self, vertices: Dict[int, Vertex], edges: Dict[int, Edge], weights: Optional[Weights] = None,
+                 gravity_axis: str = "y", is_sparse_bundle_adjustment: bool = False, use_huber: bool = False,
+                 huber_delta=None, damping_status: bool = False):
         """The graph class
 
         The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
@@ -69,13 +62,6 @@ class Graph:
              and qz measurements for odometry edges, tag edges, and dummy edges and has 18 elements [odometry x,
              odometry y, ..., dummy qz]. The weights are related to variance by variance = exp(w).
         """
-        if weights is None:
-            weights = {
-                'odometry': np.ones(6),
-                'tag_sba':  np.ones(2),
-                'tag':      np.ones(6),
-                'dummy':    np.ones(3)
-            }
 
         self.edges: Dict[int, Edge] = copy.deepcopy(edges)
         self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
@@ -86,8 +72,7 @@ class Graph:
         self.damping_status: bool = damping_status
         self.use_huber: bool = use_huber
 
-        self._weights: Dict[str, np.ndarray] = {}
-        self.set_weights(copy.deepcopy(weights))
+        self._weights = copy.deepcopy(weights) if weights is not None else Weights()
         
         self._verts_to_edges: Dict[int, Set[int]] = {}
         self._generate_verts_to_edges_mapping()
@@ -97,7 +82,7 @@ class Graph:
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
-        self.observations = np.reshape([], [0, len(weights) * 6])  # TODO ensure the shape is right
+        self.observations = np.reshape([], [0, 18])
         self.maximization_success: bool = False
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[SparseOptimizer, None] = None
@@ -390,8 +375,8 @@ class Graph:
                 self.remove_edge(edge_id)
 
     def update_edge_information(self) -> None:
-        """Sets the information attribute of each of the edges. Values in the _weights dictionary are used to scale
-        the information values that are computed.
+        """Invokes the compute_information method on each edge in the graph with the corresponding weights vector as
+        the weights_vec argument.
 
         Raises:
             Exception if an edge is encountered whose start mode is not an odometry node
@@ -403,33 +388,32 @@ class Graph:
             end_mode = self.vertices[edge.enduid].mode
             if start_mode != VertexType.ODOMETRY:
                 raise Exception("Edge of start type {} not recognized.".format(start_mode))
-
             if end_mode == VertexType.ODOMETRY:
-                self.edges[uid].information = np.diag(self._weights['odometry'])
+                edge.compute_information(self._weights.odometry)
             elif end_mode == VertexType.TAG:
                 if self.is_sparse_bundle_adjustment:
-                    self.edges[uid].information = np.diag(self._weights['tag_sba'])
+                    edge.compute_information(self._weights.tag_sba)
                 else:
-                    self.edges[uid].information = np.diag(self._weights['tag'])
+                    edge.compute_information(self._weights.tag)
             elif end_mode == VertexType.DUMMY:
                 # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
                 #  to work though)
-                basis = self._basis_matrices[uid][3:6, 3:6]
-                cov = np.diag(self._weights['dummy'])
-                information = basis.dot(cov).dot(basis.T)
-                template = np.zeros([6, 6])
+                if not self.damping_status:
+                    edge.information = np.zeros([6, 6])
+                    continue
 
+                dummy_basis = self._basis_matrices[uid][3:6, 3:6]
+                dummy_weight_diag = np.diag(self._weights.dummy)
+                dummy_weight_quadrant = dummy_basis.dot(dummy_weight_diag).dot(dummy_basis.T)
+                dummy_weight_matrix = np.zeros([6, 6])
                 if self.is_sparse_bundle_adjustment:
-                    template[:3, :3] = information
+                    dummy_weight_matrix[:3, :3] = dummy_weight_quadrant
                 else:
-                    template[3:6, 3:6] = information
-
-                if self.damping_status:
-                    self.edges[uid].information = template
-                else:
-                    self.edges[uid].information = np.zeros_like(template)
+                    dummy_weight_matrix[3:6, 3:6] = dummy_weight_quadrant
+                edge.information = dummy_weight_matrix
             elif end_mode == VertexType.WAYPOINT:
-                self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
+                # self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
+                edge.compute_information(np.ones(6))
             else:
                 raise Exception("Edge of end type {} not recognized.".format(end_mode))
 
@@ -437,7 +421,7 @@ class Graph:
                 prescaling_matrix = self.edges[uid].information_prescaling
                 if prescaling_matrix.ndim == 1:
                     prescaling_matrix = np.diag(prescaling_matrix)
-                self.edges[uid].information *= prescaling_matrix
+                self.edges[uid].information = np.matmul(prescaling_matrix, self.edges[uid].information)
 
     def update_vertices_estimates(self) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.
@@ -513,22 +497,22 @@ class Graph:
 
     # -- Getters & Setters --
 
-    def set_weights(self, weights: Dict[str, np.ndarray], scale_by_edge_amount: bool = True) -> None:
+    def set_weights(self, weights: Weights, scale_by_edge_amount: bool = True) -> None:
         """Sets the weights for the graph representation within this instance (i.e., does not apply the weights to the
         optimizer object; this must be done through the update_edge_information instance method of the Graph class).
 
+        Notes:
+            The `weights` argument is deep-copied before being set to the _weights attribute.
+
         Args:
             weights:
-            scale_by_edge_amount: If true, then the weights dictionary used is modified by computing the ratio
-             of odometry to tag edges and then applying the weight normalization function (see
-             map_processing.graph_opt_utils.normalize_weights). If false, then the weights set are simply equal to the
-             provided weights.
+            scale_by_edge_amount: If true, then the odom:tag ratio is scaled by the ratio of tag edges to odometry edges
         """
+        self._weights = copy.deepcopy(weights)
         if not scale_by_edge_amount:
-            self._weights = dict(weights)
+            self._weights = self._weights.normalize_tag_and_odom_weights()
             return
 
-        # Count the number of odometry and tag edges
         num_odom_edges = 0
         num_tag_edges = 0
         for edge_id, edge in self.edges.items():
@@ -538,9 +522,9 @@ class Graph:
                 num_tag_edges += 1
 
         # Compute the ratio and normalize
-        weights['odom_tag_ratio'] = weights.get('odom_tag_ratio', 1) * num_tag_edges / num_odom_edges
-        self._weights = map_processing.graph_opt_utils.normalize_weights(weights,
-                                                                         is_sba=self.is_sparse_bundle_adjustment)
+        self._weights.odom_tag_ratio *= num_tag_edges / num_odom_edges
+        self._weights.normalize_tag_and_odom_weights()
+
 
     def get_weights(self):
         return self._weights
@@ -694,7 +678,7 @@ class Graph:
     def get_map_tag_id_to_optimizer_pose_estimate(self) -> Dict[int, np.ndarray]:
         return {
             self.vertices[uid].meta_data["tag_id"]: self.optimized_graph.vertex(uid).estimate().vector()
-                for uid in self.optimized_graph.vertices() if self.vertices[uid].mode == VertexType.TAG
+            for uid in self.optimized_graph.vertices() if self.vertices[uid].mode == VertexType.TAG
         }
 
     # -- Expectation maximization-related methods  --
@@ -710,7 +694,7 @@ class Graph:
         self.optimize_graph()
         self.update_vertices_estimates()
         self.generate_maximization_params()
-        return self.tune_weights()
+        return self.tune_weights().to_dict()
 
     def expectation_maximization(self, maxiter=10, tol=1) -> int:
         """Run many iterations of expectation maximization.
@@ -722,11 +706,11 @@ class Graph:
         Returns:
             Number of iterations ran
         """
-        previous_weights = self._weights
+        previous_weights = self._weights.to_dict()
         i = 0
         while i < maxiter:
             self.expectation_maximization_once()
-            new_weights = self._weights
+            new_weights = self._weights.to_dict()
             for weight_type in new_weights:
                 if np.linalg.norm(new_weights[weight_type] - previous_weights[weight_type]) < tol:
                     return i
@@ -784,7 +768,7 @@ class Graph:
         """
         results = maxweights(self.observations, self.errors, self._weights)
         self.maximization_success = results.success
-        self._weights = map_processing.graph_opt_utils.weight_dict_from_array(results.x)
+        self._weights = map_processing.graph_opt_utils.Weights.legacy_from_array(results.x)
         self.maximization_results = results
         self.update_edge_information()
         return self._weights
@@ -848,7 +832,8 @@ class Graph:
         if use_sba:
             true_3d_tag_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
 
-        frame_ids = [pose['id'] for pose in dct['pose_data']]
+        frame_ids_to_timestamps = {pose['id']: pose['timestamp'] for pose in dct['pose_data']}
+
         if len(dct['pose_data']) == 0:
             raise Exception("No pose data in the provided dictionary")
 
@@ -985,7 +970,7 @@ class Graph:
         edges = {}
         counted_tag_vertex_ids = set()
         counted_waypoint_vertex_ids = set()
-        previous_vertex = None
+        previous_vertex_uid = None
         first_odom_processed = False
         if use_sba:
             vertex_counter = unique_tag_ids.size * 5 + num_unique_waypoint_names
@@ -994,13 +979,13 @@ class Graph:
             tag_transform_estimates = defaultdict(lambda: [])
         else:
             vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
-        for i, odom_frame in enumerate(frame_ids):
+        for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
             vertices[current_odom_vertex_uid] = Vertex(
                 mode=VertexType.ODOMETRY,
                 estimate=odom_vertex_estimates[i],
                 fixed=not first_odom_processed or VertexType.ODOMETRY in fixed_vertices,
-                meta_data={'pose_id': odom_frame})
+                meta_data={'pose_id': odom_frame, 'timestamp': frame_ids_to_timestamps[odom_frame]})
             first_odom_processed = True
             vertex_counter += 1
 
@@ -1011,8 +996,7 @@ class Graph:
                         SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * \
                         SE3Quat(tag_edge_measurements[tag_index]).inverse() * \
                         SE3Quat(vertices[current_odom_vertex_uid].estimate)
-                    # if(tag_vertex_id == 5):
-                    #     print(current_tag_transform_estimate.to_homogeneous_matrix())
+
                     # keep track of estimates in case we want to average them to initialize the graph
                     tag_transform_estimates[tag_vertex_id].append(current_tag_transform_estimate)
                     if tag_vertex_id not in counted_tag_vertex_ids:
@@ -1028,6 +1012,7 @@ class Graph:
                                 estimate=np.hstack((true_point_3d, [0, 0, 0, 1])),
                                 fixed=True)
                         counted_tag_vertex_ids.add(tag_vertex_id)
+
                     # adjust the x-coordinates of the detections to account for differences in coordinate systems
                     # induced by the FLIP_Y_AND_Z_AXES
                     tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - \
@@ -1042,15 +1027,13 @@ class Graph:
                     #     print("chi2", np.sum(np.square(tag_corners[tag_index][2*k : 2*k + 2] -
                     #                                    cam.cam_map(point_in_camera_frame))))
 
-                    edges[edge_counter] = Edge(
-                        startuid=current_odom_vertex_uid,
-                        enduid=tag_vertex_id,
-                        corner_ids=tag_corner_ids_by_tag_vertex_id[tag_vertex_id],
-                        information=np.eye(2),
-                        information_prescaling=None,
-                        camera_intrinsics=camera_intrinsics_for_tag[tag_index],
-                        measurement=tag_corners[tag_index]
-                    )
+                    edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=tag_vertex_id,
+                                               corner_ids=tag_corner_ids_by_tag_vertex_id[tag_vertex_id],
+                                               information_prescaling=None,
+                                               camera_intrinsics=camera_intrinsics_for_tag[tag_index],
+                                               measurement=tag_corners[tag_index],
+                                               start_end=(vertices[current_odom_vertex_uid],
+                                                          vertices[tag_vertex_id]))
                 else:
                     if tag_vertex_id not in counted_tag_vertex_ids:
                         vertices[tag_vertex_id] = Vertex(
@@ -1060,14 +1043,10 @@ class Graph:
                             fixed=VertexType.TAG in fixed_vertices,
                             meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
                         counted_tag_vertex_ids.add(tag_vertex_id)
-                    edges[edge_counter] = Edge(
-                        startuid=current_odom_vertex_uid,
-                        enduid=tag_vertex_id,
-                        information=np.eye(6),
-                        information_prescaling=tag_edge_prescaling[tag_index],
-                        measurement=tag_edge_measurements[tag_index],
-                        corner_ids=None,
-                        camera_intrinsics=None)
+                    edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=tag_vertex_id, corner_ids=None,
+                                               information_prescaling=tag_edge_prescaling[tag_index],
+                                               camera_intrinsics=None, measurement=tag_edge_measurements[tag_index],
+                                               start_end=(vertices[current_odom_vertex_uid], vertices[tag_vertex_id]))
 
                 num_tag_edges += 1
                 edge_counter += 1
@@ -1093,34 +1072,26 @@ class Graph:
                         vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
                 else:
                     measurement_arg = waypoint_edge_measurements[waypoint_index]
-                edges[edge_counter] = Edge(
-                    startuid=current_odom_vertex_uid,
-                    enduid=waypoint_vertex_id,
-                    corner_ids=None,
-                    information=np.eye(6),
-                    information_prescaling=None,
-                    camera_intrinsics=None,
-                    measurement=measurement_arg)
+                edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=waypoint_vertex_id, corner_ids=None,
+                                           information_prescaling=None, camera_intrinsics=None,
+                                           measurement=measurement_arg, start_end=(vertices[current_odom_vertex_uid],
+                                                                                   vertices[waypoint_vertex_id]))
                 edge_counter += 1
 
             # Connect odometry nodes
-            if previous_vertex:
+            if previous_vertex_uid:
                 if use_sba:
                     measurement_arg = (SE3Quat(vertices[current_odom_vertex_uid].estimate) * SE3Quat(
-                        vertices[previous_vertex].estimate).inverse()).to_vector()
+                        vertices[previous_vertex_uid].estimate).inverse()).to_vector()
                 else:
                     # TODO: might want to consider prescaling based on the magnitude of the change
                     measurement_arg = transform_matrix_to_vector(
                         np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
 
-                edges[edge_counter] = Edge(
-                    startuid=previous_vertex,
-                    enduid=current_odom_vertex_uid,
-                    corner_ids=None,
-                    information=np.eye(6),
-                    information_prescaling=None,
-                    camera_intrinsics=None,
-                    measurement=measurement_arg)
+                edges[edge_counter] = Edge(startuid=previous_vertex_uid, enduid=current_odom_vertex_uid,
+                                           corner_ids=None, information_prescaling=None, camera_intrinsics=None,
+                                           measurement=measurement_arg, start_end=(vertices[previous_vertex_uid],
+                                                                                   vertices[current_odom_vertex_uid]))
                 edge_counter += 1
 
             # Make dummy node
@@ -1132,16 +1103,12 @@ class Graph:
             vertex_counter += 1
 
             # Connect odometry to dummy node
-            edges[edge_counter] = Edge(
-                startuid=current_odom_vertex_uid,
-                enduid=dummy_node_uid,
-                information=np.eye(6),
-                information_prescaling=None,
-                measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
-                corner_ids=None,
-                camera_intrinsics=None)
+            edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=dummy_node_uid, corner_ids=None,
+                                       information_prescaling=None, camera_intrinsics=None,
+                                       measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
+                                       start_end=(vertices[current_odom_vertex_uid], vertices[dummy_node_uid]))
             edge_counter += 1
-            previous_vertex = current_odom_vertex_uid
+            previous_vertex_uid = current_odom_vertex_uid
 
             if not use_sba:
                 previous_pose_matrix = pose_matrices[i]
@@ -1156,7 +1123,8 @@ class Graph:
         return resulting_graph
 
     @staticmethod
-    def transfer_vertex_estimates(graph_from: Graph, graph_to: Graph, filter_by: Optional[Set[VertexType]] = None) -> None:
+    def transfer_vertex_estimates(graph_from: Graph, graph_to: Graph,
+                                  filter_by: Optional[Set[VertexType]] = None) -> None:
         """Transfer vertex estimates from one graph to another.
 
         Args:

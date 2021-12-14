@@ -12,7 +12,8 @@ import numpy as np
 from geneticalgorithm import geneticalgorithm as ga
 
 import map_processing
-from map_processing import graph_opt_utils, PrescalingOptEnum
+from map_processing import PrescalingOptEnum
+from map_processing.graph_opt_utils import Weights
 from . import graph_opt_utils, graph_opt_plot_utils
 from .cache_manager import CacheManagerSingleton, MapInfo
 from .graph import Graph
@@ -45,48 +46,37 @@ class GraphManager:
         TRUST_TAGS = 2
         GENETIC_RESULTS = 3
         BEST_SWEEP = 4
-        COMPARISON_BASELINE = 5
+        IDENTITY = 5
         VARIABLE = 6
 
-    WeightsTypes = float, WeightSpecifier, Dict[str, np.ndarray], np.ndarray
-    """
-    Used as a type alias for the weights argument polymorphism.
-    """
-
     _default_dummy_weights = np.exp(-np.array([-1, 1e2, -1]))
-    _weights_dict: Dict[WeightSpecifier, Dict[str, np.ndarray]] = {
-        WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),
-            'tag_sba':  np.exp(-np.array([18, 18])),
-            'tag':      np.exp(-np.array([18, 18, 0, 0, 0, 0])),
-            'dummy':    _default_dummy_weights,
-        }),
-        WeightSpecifier.TRUST_ODOM: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.exp(-np.array([-3., -3., -3., -3., -3., -3.])),
-            'tag_sba':  np.exp(-np.array([10.6, 10.6])),
-            'tag':      np.exp(-np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6])),
-            'dummy':    _default_dummy_weights,
-        }),
-        WeightSpecifier.TRUST_TAGS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.exp(-np.array([10, 10, 10, 10, 10, 10])),
-            'tag_sba':  np.exp(-np.array([-10.6, -10.6])),
-            'tag':      np.exp(-np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6])),
-            'dummy':    _default_dummy_weights,
-        }),
+    _weights_dict: Dict[WeightSpecifier, Weights] = {
+        WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(
+            odometry=np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),
+            tag_sba=np.exp(-np.array([18, 18])),
+            tag=np.exp(-np.array([18, 18, 0, 0, 0, 0])),
+            dummy=_default_dummy_weights,
+        ),
+        WeightSpecifier.TRUST_ODOM: Weights(
+            odometry=np.exp(-np.array([-3., -3., -3., -3., -3., -3.])),
+            tag_sba=np.exp(-np.array([10.6, 10.6])),
+            tag=np.exp(-np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6])),
+            dummy=_default_dummy_weights,
+        ),
+        WeightSpecifier.TRUST_TAGS: Weights(
+            odometry=np.exp(-np.array([10, 10, 10, 10, 10, 10])),
+            tag_sba=np.exp(-np.array([-10.6, -10.6])),
+            tag=np.exp(-np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6])),
+            dummy=_default_dummy_weights,
+        ),
         # Only used for SBA - no non-SBA tag weights
-        WeightSpecifier.GENETIC_RESULTS: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.exp(-np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08])),
-            'tag_sba':  np.exp(-np.array([9.91, 8.88])),
-            'dummy':   _default_dummy_weights,
-        }),
-        WeightSpecifier.BEST_SWEEP:
-            map_processing.graph_opt_utils.weight_dict_from_array(np.exp(np.array([8.5, 10]))),
-        WeightSpecifier.COMPARISON_BASELINE: map_processing.graph_opt_utils.normalize_weights({
-            'odometry': np.ones(6),
-            'tag_sba':  np.ones(2),
-            'tag':      np.ones(6),
-            'dummy':    _default_dummy_weights,
-        })
+        WeightSpecifier.GENETIC_RESULTS: Weights(
+            odometry=np.exp(-np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08])),
+            tag_sba=np.exp(-np.array([9.91, 8.88])),
+            dummy=_default_dummy_weights,
+        ),
+        WeightSpecifier.BEST_SWEEP: Weights.legacy_from_array(np.exp(np.array([8.5, 10]))),
+        WeightSpecifier.IDENTITY: Weights()
     }
     _comparison_graph1_subgraph_weights: List[WeightSpecifier] = [
         WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS,
@@ -116,7 +106,7 @@ class GraphManager:
 
     def process_map(self, map_info: MapInfo, visualize: bool = True, upload: bool = False,
                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = (), obs_chi2_filter: float = -1
-    ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
+                    ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         Additionally, save the optimized json in <cache directory>/GraphManager._processed_upload_to.
@@ -261,7 +251,7 @@ class GraphManager:
                     g1sg,
                     tune_weights=False,
                     visualize=visualize,
-                    weights=iter_weights,
+                    weights=GraphManager._weights_dict[iter_weights],
                     graph_plot_title=g1sg_plot_title,
                     chi2_plot_title=g1sg_chi2_plot_title,
                     obs_chi2_filter=obs_chi2_filter
@@ -481,7 +471,7 @@ class GraphManager:
 
     def optimize_graph(
             self, graph: Graph, tune_weights: bool = False, visualize: bool = False,
-            weights: Optional[Union[WeightSpecifier, Dict[str, np.ndarray]]] = None,
+            weights: Optional[Weights] = None,
             obs_chi2_filter: float = -1, graph_plot_title: Optional[str] = None,
             chi2_plot_title: Optional[str] = None
     ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
@@ -521,20 +511,15 @@ class GraphManager:
              vertices.
         """
         is_sba: bool = self.pso == PrescalingOptEnum.USE_SBA
-        if isinstance(weights, dict):
-            graph.set_weights(weights)
-        else:
-            graph.set_weights(GraphManager._weights_dict[weights if weights is not None else self.selected_weights])
+        graph.set_weights(GraphManager._weights_dict[weights if weights is not None else self.selected_weights])
+        graph.update_edge_information()
 
         if tune_weights:
             graph.expectation_maximization_once()
+            # The expectation_maximization_once invocation calls generate_unoptimized_graph
         else:
-            # The expectation_maximization_once invocation calls generate_unoptimized_graph, so avoid repeating this if
-            # tune_weights is true
             graph.generate_unoptimized_graph()
 
-        # Load these weights into the graph
-        graph.update_edge_information()
         opt_chi2 = graph.optimize_graph()
         if obs_chi2_filter > 0:
             graph.filter_out_high_chi2_observation_edges(obs_chi2_filter)
@@ -570,22 +555,22 @@ class GraphManager:
 
     # -- Instance Methods: wrappers on top of core functionality --
 
-    def optimize_and_give_chi2_metric(self, graph: Graph, weights: Optional[WeightsTypes] = None,
+    def optimize_and_give_chi2_metric(self, graph: Graph, weights: Optional[Weights] = None,
                                       verbose: bool = False):
         """Wrapper to optimize_graph that returns the summed chi2 value of the optimized graph
         """
-        self.optimize_graph(graph, weights=GraphManager.interpret_weights_specification(weights))
+        self.optimize_graph(graph, weights=weights)
         return graph_opt_utils.sum_optimized_edges_chi2(graph.optimized_graph, verbose=verbose)
 
-    def optimize_and_return_optimizer(self, graph: Graph, weights: Optional[WeightsTypes] = None):
+    def optimize_and_return_optimizer(self, graph: Graph, weights: Optional[Weights] = None):
         """Wrapper to optimize_graph that returns the optimized graph object.
         """
-        self.optimize_graph(graph, weights=GraphManager.interpret_weights_specification(weights))
+        self.optimize_graph(graph, weights=weights)
         return graph.optimized_graph
 
     def subgraph_pair_optimize_and_get_chi2_diff(
-            self, subgraph_0_weights: WeightsTypes, subgraphs: Union[Tuple[Graph, Graph], Dict],
-            subgraph_1_weights: WeightsTypes = WeightSpecifier.COMPARISON_BASELINE, verbose: bool = False) -> float:
+            self, subgraph_0_weights: Weights, subgraphs: Union[Tuple[Graph, Graph], Dict],
+            subgraph_1_weights: Weights = WeightSpecifier.IDENTITY, verbose: bool = False) -> float:
         """Perform the subgraph pair optimization routine and return the difference between the first subgraph's chi2
         metric value and the second subgraph's.
         
@@ -611,8 +596,8 @@ class GraphManager:
         return self.optimize_and_give_chi2_metric(subgraphs[1], weights=subgraph_1_weights, verbose=verbose)
 
     def subgraph_pair_optimize_and_categorize_chi2(
-            self, subgraph_0_weights: WeightsTypes, subgraphs: Union[Tuple[Graph, Graph], Dict],
-            subgraph_1_weights: WeightsTypes = WeightSpecifier.COMPARISON_BASELINE, verbose: bool = False
+            self, subgraph_0_weights: Weights, subgraphs: Union[Tuple[Graph, Graph], Dict],
+            subgraph_1_weights: Weights = WeightSpecifier.IDENTITY, verbose: bool = False
     ) -> Dict[str, Dict[str, float]]:
         """Perform the subgraph optimization routine and return the categorized chi2 metric for the second of the two 
         subgraphs.
@@ -708,28 +693,3 @@ class GraphManager:
         if verbose:
             print(metric)
         return metric
-
-    @staticmethod
-    def interpret_weights_specification(weights_specifier: WeightsTypes) -> Dict[str, np.ndarray]:
-        """Converts each possible of weights to a weight dictionary according to its type. If the provided weights
-        argument is a dictionary, then this function simply returns the input dictionary.
-
-        Args:
-            weights_specifier: Some weights specification that can be converted into a weights dictionary. Accepted types include:
-             1. GraphManager.WeightSpecifier (returns the weights dictionary in the GraphManager._weights_dict class
-             attribute), 2. float (interpreted as a ratio [see more at graph_opt_utils.weights_from_ratio), 3. numpy
-             array (see more at graph_opt_utils.weights_from_array), and 4. dict (returned without modification).
-
-        Raises:
-            ValueError: If the weights argument is not of a handled type.
-        """
-        if isinstance(weights_specifier, GraphManager.WeightSpecifier):
-            return GraphManager._weights_dict[weights_specifier]
-        elif isinstance(weights_specifier, float):
-            return map_processing.graph_opt_utils.weight_dict_from_array(np.array([weights_specifier]))
-        elif isinstance(weights_specifier, np.ndarray):
-            return map_processing.graph_opt_utils.weight_dict_from_array(weights_specifier)
-        elif isinstance(weights_specifier, dict):
-            return weights_specifier
-        else:
-            raise ValueError(f"Unhandled weights type of {type(weights_specifier)}")

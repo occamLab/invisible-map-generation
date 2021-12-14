@@ -64,20 +64,17 @@ def make_parser():
         default=0,
         choices={0, 1, 2, 3}
     )
+
+    weights_options = [f"{weight_option.value}-'{str(weight_option)[len(GraphManager.WeightSpecifier.__name__) + 1:]}'"
+                       for weight_option in GraphManager.WeightSpecifier]
     p.add_argument(
         "-w",
         type=int,
         required=False,
         help="Specifies which weight vector to be used (maps to a weight vector which is stored as a class attribute "
-             "of the GraphManager class). Viable options are: "
-             " 0-'sensible_default_weights',"
-             " 1-'trust_odom',"
-             " 2-'trust_tags',"
-             " 3-'genetic_results',"
-             " 4-'best_sweep'."
-             " 5-'comparison_baseline',",
+             "of the GraphManager class). Viable options are: " + ", ".join(weights_options),
         default=0,
-        choices={0, 1, 2, 3, 4, 5}
+        choices={weight_option.value for weight_option in GraphManager.WeightSpecifier}
     )
     p.add_argument(
         "-f",
