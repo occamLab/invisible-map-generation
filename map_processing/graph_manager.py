@@ -49,7 +49,8 @@ class GraphManager:
         IDENTITY = 5
         VARIABLE = 6
 
-    _default_dummy_weights = np.exp(-np.array([-1, 1e2, -1]))
+    # _default_dummy_weights = np.exp(-np.array([-1, 1e2, -1]))
+    _default_dummy_weights = np.array([0.1, 4, 0.1])
     _weights_dict: Dict[WeightSpecifier, Weights] = {
         WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(
             odometry=np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),

@@ -18,7 +18,7 @@ class Weights:
     def __init__(self, odometry: Optional[np.ndarray] = None, tag: Optional[np.ndarray] = None,
                  tag_sba: Optional[np.ndarray] = None, dummy: Optional[np.ndarray] = None,
                  odom_tag_ratio: Optional[Union[np.ndarray, float]] = None):
-        self.dummy: np.ndarray = np.array(dummy) if dummy is not None else np.exp(np.array([-1, 1e2, -1]))
+        self.dummy: np.ndarray = np.array(dummy) if dummy is not None else np.ones(3)
         self.odometry: np.ndarray = np.array(odometry) if odometry is not None else np.ones(6)
         self.tag: np.ndarray = np.array(tag) if tag is not None else np.ones(6)
         self.tag_sba: np.ndarray = np.array(tag_sba) if tag is not None else np.ones(2)
