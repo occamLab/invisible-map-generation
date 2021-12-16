@@ -107,7 +107,7 @@ class GraphManager:
 
     def process_map(self, map_info: MapInfo, visualize: bool = True, upload: bool = False,
                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = (), obs_chi2_filter: float = -1
-                    ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
+                    ) -> Tuple[float, Dict[str, Union[List, np.ndarray]], Dict[str, Union[List, np.ndarray]]]:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         Additionally, save the optimized json in <cache directory>/GraphManager._processed_upload_to.
@@ -120,7 +120,7 @@ class GraphManager:
             obs_chi2_filter: Parameter to pass to the optimize_graph method (see more there)
 
         Returns:
-            The output of optimize_map (see more detail there).
+            The output of the `GraphManager.optimize_map` method (see more detail there).
         """
         graph_plot_title = None
         chi2_plot_title = None
@@ -129,15 +129,10 @@ class GraphManager:
             chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
         graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=self.pso)
-        tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
-            self.optimize_graph(
-                graph, tune_weights=False, visualize=visualize, weights=None,
-                graph_plot_title=graph_plot_title, chi2_plot_title=chi2_plot_title, obs_chi2_filter=obs_chi2_filter
-            )
-        processed_map_json = map_processing.graph_opt_utils.make_processed_map_JSON(
-            tag_locations=tag_locations, odom_locations=odom_locations, waypoint_locations=waypoint_locations,
-            adj_chi2_arr=adj_chi2, visible_tags_count=visible_tags_count
-        )
+        opt_chi2, opt_result, before_opt = self.optimize_graph(
+            graph, tune_weights=False, visualize=visualize, weights=None, graph_plot_title=graph_plot_title,
+            chi2_plot_title=chi2_plot_title, obs_chi2_filter=obs_chi2_filter)
+        processed_map_json = map_processing.graph_opt_utils.make_processed_map_JSON(opt_result)
 
         print("Processed map: {}".format(map_info.map_name))
         if upload:
@@ -145,7 +140,7 @@ class GraphManager:
             print("Uploaded processed map: {}".format(map_info.map_name))
 
         self._cms.cache_map(self._cms.PROCESSED_UPLOAD_TO, map_info, processed_map_json)
-        return tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count
+        return opt_chi2, opt_result, before_opt
 
     def process_maps(self, pattern: str, visualize: bool = True, upload: bool = False, compare: bool = False,
                      fixed_vertices: Union[VertexType, Tuple[VertexType]] = (), obs_chi2_filter: float = -1,
@@ -247,21 +242,16 @@ class GraphManager:
                 g1sg_plot_title = None
                 g1sg_chi2_plot_title = None
 
-            g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs, g1sg_chi_sqr, g1sg_odom_adj_chi2, \
-                g1sg_visible_tags_count = self.optimize_graph(
-                    g1sg,
-                    tune_weights=False,
-                    visualize=visualize,
-                    weights=GraphManager._weights_dict[iter_weights],
-                    graph_plot_title=g1sg_plot_title,
-                    chi2_plot_title=g1sg_chi2_plot_title,
-                    obs_chi2_filter=obs_chi2_filter
-                )
-            processed_map_json_1 = map_processing.graph_opt_utils.make_processed_map_JSON(
-                tag_locations=g1sg_tag_locs, odom_locations=g1sg_odom_locs, waypoint_locations=g1sg_waypoint_locs,
-                adj_chi2_arr=g1sg_odom_adj_chi2, visible_tags_count=g1sg_visible_tags_count
+            g1sg_chi_sqr, g1sg_opt_result, _ = self.optimize_graph(
+                g1sg,
+                tune_weights=False,
+                visualize=visualize,
+                weights=GraphManager._weights_dict[iter_weights],
+                graph_plot_title=g1sg_plot_title,
+                chi2_plot_title=g1sg_chi2_plot_title,
+                obs_chi2_filter=obs_chi2_filter
             )
-            del g1sg_tag_locs, g1sg_odom_locs, g1sg_waypoint_locs
+            processed_map_json_1 = map_processing.graph_opt_utils.make_processed_map_JSON(g1sg_opt_result)
 
             self._cms.cache_map(self._cms.PROCESSED_UPLOAD_TO, map_info,
                                 processed_map_json_1, "-comparison-subgraph-1-with_weights-set{}".format(iter_weights))
@@ -281,21 +271,16 @@ class GraphManager:
                 g2sg_plot_title = None
                 g2sg_chi2_plot_title = None
 
-            g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs, g2sg_chi_sqr, g2sg_odom_adj_chi2, \
-                g2sg_visible_tags_count = self.optimize_graph(
-                    g2sg,
-                    tune_weights=False,
-                    visualize=visualize,
-                    weights=None,
-                    graph_plot_title=g2sg_plot_title,
-                    chi2_plot_title=g2sg_chi2_plot_title,
-                    obs_chi2_filter=obs_chi2_filter
-                )
-            processed_map_json_2 = map_processing.graph_opt_utils.make_processed_map_JSON(
-                tag_locations=g2sg_tag_locs, odom_locations=g2sg_odom_locs, waypoint_locations=g2sg_waypoint_locs,
-                adj_chi2_arr=g2sg_odom_adj_chi2, visible_tags_count=g2sg_visible_tags_count
+            g2sg_chi_sqr, g2sg_opt_result, _ = self.optimize_graph(
+                g2sg,
+                tune_weights=False,
+                visualize=visualize,
+                weights=None,
+                graph_plot_title=g2sg_plot_title,
+                chi2_plot_title=g2sg_chi2_plot_title,
+                obs_chi2_filter=obs_chi2_filter
             )
-            del g2sg_tag_locs, g2sg_odom_locs, g2sg_waypoint_locs
+            processed_map_json_2 = map_processing.graph_opt_utils.make_processed_map_JSON(g2sg_opt_result)
 
             self._cms.cache_map(
                 self._cms.PROCESSED_UPLOAD_TO, map_info, processed_map_json_2,
@@ -475,7 +460,7 @@ class GraphManager:
             weights: Optional[Weights] = None,
             obs_chi2_filter: float = -1, graph_plot_title: Optional[str] = None,
             chi2_plot_title: Optional[str] = None
-    ) -> Tuple[np.ndarray, np.ndarray, Tuple[List[Dict], np.ndarray], float, np.ndarray, np.ndarray]:
+    ) -> Tuple[float, Dict[str, Union[List, np.ndarray]], Dict[str, Union[List, np.ndarray]]]:
         """Optimizes the input graph.
 
         Notes:
@@ -502,14 +487,11 @@ class GraphManager:
             chi2_plot_title: Plot title argument to pass to the visualization routine for the chi2 plot.
 
         Returns:
-            A tuple containing in the following order: (1) The numpy array of tag vertices from the optimized graph. (2)
-             The numpy array of odometry vertices from the optimized graph. (3) The numpy array of waypoint vertices
-             from the optimized graph. (4) The total chi2 value of the optimized graph as returned by the
-             optimize_graph method of the graph instance. (5) A numpy array where each element corresponds to the chi2
-             value for each odometry node; each chi2 value is calculated as the sum of chi2 values of the (up to) two
-             incident edges to the odometry node that connects it to (up to) two other odometry nodes. (6) A numpy
-             array where each element corresponds to the number of visible tag vertices from the corresponding odometry
-             vertices.
+            A tuple containing in the following order: (1) The total chi2 value of the optimized graph as returned by
+             the optimize_graph method of the graph instance. (2) The dictionary returned by
+             `map_processing.graph_opt_utils.optimizer_to_map_chi2` when called on the optimized graph. (3) The
+             dictionary returned by `map_processing.graph_opt_utils.optimizer_to_map_chi2` when called on the
+             graph before optimization.
         """
         is_sba: bool = self.pso == PrescalingOptEnum.USE_SBA
         graph.set_weights(GraphManager._weights_dict[weights if weights is not None else self.selected_weights])
@@ -532,13 +514,10 @@ class GraphManager:
         resulting_map = map_processing.graph_opt_utils.optimizer_to_map_chi2(
             graph, graph.optimized_graph, is_sba=is_sba
         )
-        odom_chi2_adj_vec: np.ndarray = resulting_map["locationsAdjChi2"]
-        visible_tags_count_vec: np.ndarray = resulting_map["visibleTagsCount"]
-        locations = resulting_map["locations"]
-        tag_verts = resulting_map["tags"]
-        waypoint_verts = tuple(resulting_map["waypoints"])
-
         if visualize:
+            locations = resulting_map["locations"]
+            tag_verts = resulting_map["tags"]
+            waypoint_verts = tuple(resulting_map["waypoints"])
             tagpoint_positions = resulting_map["tagpoints"]
             graph_opt_plot_utils.plot_optimization_result(
                 locations=locations,
@@ -552,7 +531,7 @@ class GraphManager:
                 is_sba=is_sba
             )
             graph_opt_plot_utils.plot_adj_chi2(resulting_map, chi2_plot_title)
-        return tag_verts, locations, tuple(waypoint_verts), opt_chi2, odom_chi2_adj_vec, visible_tags_count_vec
+        return opt_chi2, resulting_map, prior_map
 
     # -- Instance Methods: wrappers on top of core functionality --
 
@@ -639,7 +618,7 @@ class GraphManager:
                                           obs_chi2_filter=obs_chi2_filter, graph_plot_title=graph_plot_title,
                                           chi2_plot_title=chi2_plot_title)
         return GraphManager.ground_truth_metric_with_tag_id_intersection(
-            optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[0]),
+            optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1]["tags"]),
             ground_truth_tags=ground_truth_tags,
             verbose=verbose
         )

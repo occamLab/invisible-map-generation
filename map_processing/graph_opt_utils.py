@@ -4,7 +4,7 @@ Utility functions for graph optimization
 
 import json
 import math
-from typing import Union, List, Dict, Tuple, Optional
+from typing import Union, List, Dict, Optional
 
 import g2o
 import numpy as np
@@ -340,12 +340,29 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     return avg
 
 
-def make_processed_map_JSON(tag_locations: np.ndarray, odom_locations: np.ndarray,
-                            waypoint_locations: Tuple[List[Dict], np.ndarray], calculate_intersections: bool = False,
-                            adj_chi2_arr: Union[None, np.ndarray] = None,
-                            visible_tags_count: Union[None, np.ndarray] = None) -> str:
-    """TODO: documentation
+def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calculate_intersections: bool = False) \
+        -> str:
+    """Serializes the result of an optimization into a JSON that is of an acceptable format for uploading to the
+    database.
+
+    Args:
+        opt_result: A dictionary containing the tag locations, odometry locations, waypoint locations,
+         odometry-adjacent chi2 array, and per-odometry-node visible tags count array in the keys 'tags', 'locations',
+         'waypoints', 'locationsAdjChi2', and 'visibleTagsCount', respectively. This is the format of dictionary that is
+         produced by the `map_processing.graph_opt_utils.optimizer_to_map_chi2` function and, subsequently, the
+         `GraphManager.optimize_graph` method.
+        calculate_intersections: If true, graph_util_get_neighbors.get_neighbors is called with the odometry nodes
+         as the argument. The results are appended to the resulting tag vertex map under the 'neighbors' key.
+
+    Returns:
+        Json string containing the serialized results.
     """
+    tag_locations = opt_result["tags"]
+    odom_locations = opt_result["locations"]
+    waypoint_locations = tuple(opt_result["waypoints"])
+    adj_chi2_arr = opt_result["locationsAdjChi2"]
+    visible_tags_count = opt_result["visibleTagsCount"]
+
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
         print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
 

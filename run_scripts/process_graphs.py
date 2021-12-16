@@ -31,12 +31,8 @@ def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
-    tag_locations, odom_locations, waypoint_locations, opt_chi2, adj_chi2, visible_tags_count = \
-        graph_manager.optimize_graph(graph, tune_weights=False)
-    json_str = make_processed_map_JSON(
-        tag_locations=tag_locations, odom_locations=odom_locations, waypoint_locations=waypoint_locations,
-        adj_chi2_arr=adj_chi2, visible_tags_count=visible_tags_count
-    )
+    opt_chi2, opt_result, _ = graph_manager.optimize_graph(graph, tune_weights=False)
+    json_str = make_processed_map_JSON(opt_result)
     cms.upload(map_info, json_str)
 
 
