@@ -4,7 +4,7 @@ Script that makes use of the GraphManager class.
 Print the usage instructions:
 >> python3 graph_manager_user.py -h
 
-Example usage that listens to the unprocessed maps database reference:
+Example usage that listens to the unprocessed maps' database reference:
 >> python3 graph_manager_user.py -f
 
 Example usage that optimizes and plots all graphs matching the pattern specified by the -p flag:
@@ -181,9 +181,14 @@ if __name__ == "__main__":
             if gt_data is None:
                 print(f"Could not find any ground truth for the map {map_info.map_name}")
                 continue
-            ground_truth_metric = graph_manager.ground_truth_metric_with_tag_id_intersection(
-                optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1]["tags"]),
-                ground_truth_tags=gt_data,
-                verbose=False
+
+            ground_truth_metric_pre = graph_manager.ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[2]["tags"]),
+                ground_truth_tags=gt_data, verbose=False
             )
-            print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric}")
+            ground_truth_metric_opt = graph_manager.ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1]["tags"]),
+                ground_truth_tags=gt_data, verbose=False
+            )
+            print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt} (delta of "
+                  f"{ground_truth_metric_opt - ground_truth_metric_pre} from pre-optimization)")
