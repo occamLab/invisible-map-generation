@@ -77,7 +77,8 @@ class Edge:
 
         self.information: np.ndarray = np.eye(6 if corner_ids is None else 2)
 
-    def compute_information(self, weights_vec: np.ndarray, **kwargs) -> None:
+    def compute_information(self, weights_vec: np.ndarray,
+                            compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] = None) -> None:
         """Computes the information matrix for the edge.
 
         Notes:
@@ -92,9 +93,10 @@ class Edge:
         Args:
             weights_vec: A vector of weights that is used to scale the information matrix. Passed as the argument to the
              corresponding downstream `compute_information*` method.
-            kwargs: If the start and end vertices of this edge are both odometry, then the keyword arguments
-             'ang_vel_var' and 'lin_vel_var' can be used to specify the angular velocity variance and linear velocity
-             variance, respectively, for the `_compute_information_se3_nonzero_delta_t` method.
+            compute_inf_params: A dictionary containing parameters for edge information computation. If both the start
+             and end vertices of the edge are odometry vertices, then 'ang_vel_var' and 'lin_vel_var' keys can be used
+             to specify the angular velocity variance and linear velocity variance, respectively, for the
+             `_compute_information_se3_nonzero_delta_t` method. See that method for more information.
 
         Raises:
             ValueError: If the weights_vec argument or resulting information matrix contain any negative values.
@@ -102,12 +104,17 @@ class Edge:
         if np.any(weights_vec < 0):
             raise ValueError("The input weight vector should not contain negative values.")
 
+        if compute_inf_params is None:
+            compute_inf_params = {}  # Subsequent code depends on this variable being a dictionary
+
         if self.corner_ids is not None:
             self._compute_information_sba(weights_vec)
         else:
             if self.start_end[1].mode == VertexType.ODOMETRY:
-                lvv = kwargs["lin_vel_var"] if isinstance(kwargs.get("lin_vel_var", None), np.ndarray) else np.ones(3)
-                avv = kwargs["ang_vel_var"] if isinstance(kwargs.get("ang_vel_var", None), float) else 1
+                lvv = compute_inf_params["lin_vel_var"] if isinstance(compute_inf_params.get("lin_vel_var", None),
+                                                                      np.ndarray) else np.ones(3)
+                avv = compute_inf_params["ang_vel_var"] if isinstance(compute_inf_params.get("ang_vel_var", None),
+                                                                      float) else 1
                 self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=lvv, ang_vel_var=avv)
             else:
                 self._compute_information_se3_obs(weights_vec)
@@ -126,13 +133,11 @@ class Edge:
              variance, respectively.
         """
         self.information = np.diag(weights_vec)
-
-        self.information[:3, :3] *= np.diag(1 / lin_vel_var)
         delta_t_sq = (self.start_end[1].meta_data["timestamp"] - self.start_end[0].meta_data["timestamp"]) ** 2
 
         # TODO: Should the pose-to-pose transform's be used here in some way?
-        self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var * delta_t_sq))
-        self.information[:3, :3] *= np.diag(1 / lin_vel_var ** 2)
+        self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var ** 2 * delta_t_sq))
+        self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
 
     def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)

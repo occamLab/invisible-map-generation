@@ -129,7 +129,7 @@ class Weights:
         tag_mag = np.linalg.norm(self.tag)
         if tag_mag == 0:  # Avoid divide by zero error
             tag_mag = 1
-        self.tag *= self.tag_odom_ratio / tag_mag
+        self.tag *= 1 / tag_mag
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> Dict[str, Union[List, np.ndarray]]:

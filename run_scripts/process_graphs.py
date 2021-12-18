@@ -20,7 +20,6 @@ from firebase_admin import credentials
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
 cms = CacheManagerSingleton(cred)
-graph_manager = GraphManager(weights_specifier=4, cms=cms, pso=PrescalingOptEnum.ONES)
 
 
 def on_event(event):
@@ -31,7 +30,9 @@ def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
-    opt_chi2, opt_result, _ = graph_manager.optimize_graph(graph, tune_weights=False)
+    opt_chi2, opt_result, _ = GraphManager.optimize_graph(
+        is_sba=False, graph=graph, tune_weights=False,
+        weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
     json_str = make_processed_map_JSON(opt_result)
     cms.upload(map_info, json_str)
 

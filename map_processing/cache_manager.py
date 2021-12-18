@@ -62,7 +62,7 @@ class CacheManagerSingleton:
          of this class (only initialized once).
         __bucket: Handle to the Google Cloud Storage __bucket
         __db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager._weights_dict
+         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager.weights_dict
         __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every time an event is raised
          by the listener.
         __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one thread to access the

@@ -52,6 +52,7 @@ class Graph:
         The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
         in each edge refer to the vertices in the `vertices` dictionary.
 
+        TODO: add rest of the args here
         Args:
             vertices: A dictionary of vertices indexed by UIDs. The UID-vertices associations are referred to by the
              startuid and enduid fields of the :class: Edge  class.
@@ -374,9 +375,13 @@ class Graph:
                       f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
                 self.remove_edge(edge_id)
 
-    def update_edge_information(self) -> None:
+    def update_edge_information(self, compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] =
+                                None) -> None:
         """Invokes the compute_information method on each edge in the graph with the corresponding weights vector as
         the weights_vec argument.
+
+        Args:
+            compute_inf_params: Dict passed down to the `Edge.compute_information` method for its kwargs.
 
         Raises:
             Exception if an edge is encountered whose start mode is not an odometry node
@@ -389,12 +394,12 @@ class Graph:
             if start_mode != VertexType.ODOMETRY:
                 raise Exception("Edge of start type {} not recognized.".format(start_mode))
             if end_mode == VertexType.ODOMETRY:
-                edge.compute_information(self._weights.odometry)
+                edge.compute_information(self._weights.odometry, compute_inf_params=compute_inf_params)
             elif end_mode == VertexType.TAG:
                 if self.is_sparse_bundle_adjustment:
-                    edge.compute_information(self._weights.tag_sba)
+                    edge.compute_information(self._weights.tag_sba, compute_inf_params=compute_inf_params)
                 else:
-                    edge.compute_information(self._weights.tag)
+                    edge.compute_information(self._weights.tag, compute_inf_params=compute_inf_params)
             elif end_mode == VertexType.DUMMY:
                 # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
                 #  to work though)
@@ -413,7 +418,7 @@ class Graph:
                 edge.information = dummy_weight_matrix
             elif end_mode == VertexType.WAYPOINT:
                 # self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
-                edge.compute_information(np.ones(6))
+                edge.compute_information(np.ones(6), compute_inf_params=compute_inf_params)
             else:
                 raise Exception("Edge of end type {} not recognized.".format(end_mode))
 
@@ -524,7 +529,6 @@ class Graph:
         # Compute the ratio and normalize
         self._weights.odom_tag_ratio *= num_tag_edges / num_odom_edges
         self._weights.normalize_tag_and_odom_weights()
-
 
     def get_weights(self):
         return self._weights
