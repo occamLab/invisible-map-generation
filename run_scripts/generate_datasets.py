@@ -2,6 +2,12 @@
 Generate artificial datasets to be used optimization.
 """
 
+import os
+import sys
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
 import argparse
 import re
 from typing import Tuple, Dict, Union
