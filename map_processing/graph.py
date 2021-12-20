@@ -14,7 +14,8 @@ from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, Edge
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
-from .graph_opt_utils import Weights
+import map_processing.weights
+from .weights import Weights
 import map_processing.graph_opt_utils
 from expectation_maximization.maximization_model import maxweights
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
@@ -772,7 +773,7 @@ class Graph:
         """
         results = maxweights(self.observations, self.errors, self._weights)
         self.maximization_success = results.success
-        self._weights = map_processing.graph_opt_utils.Weights.legacy_from_array(results.x)
+        self._weights = map_processing.weights.Weights.legacy_from_array(results.x)
         self.maximization_results = results
         self.update_edge_information()
         return self._weights

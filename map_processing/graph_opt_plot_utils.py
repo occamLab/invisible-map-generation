@@ -1,5 +1,5 @@
 """
-Plotting utilities for graph optimization
+Plotting utilities for graph optimization.
 """
 
 from typing import *

@@ -29,7 +29,7 @@ from map_processing import graph, PrescalingOptEnum
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.graph import Graph
-from map_processing.graph_opt_utils import Weights
+from map_processing.weights import Weights
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt

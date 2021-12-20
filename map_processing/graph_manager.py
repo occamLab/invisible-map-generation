@@ -13,7 +13,7 @@ from geneticalgorithm import geneticalgorithm as ga
 
 import map_processing
 from map_processing import PrescalingOptEnum
-from map_processing.graph_opt_utils import Weights
+from .weights import Weights
 from . import graph_opt_utils, graph_opt_plot_utils
 from .cache_manager import CacheManagerSingleton, MapInfo
 from .graph import Graph

@@ -1,6 +1,6 @@
 """
 Contains the GraphGenerator class used for generating artificial datasets for optimization. See the generate_datasets.py
-script for a CLI interface using this class
+script for a CLI interface using this class.
 """
 
 import json
@@ -394,7 +394,7 @@ class GraphGenerator:
             ])
             theta = np.random.normal(0, np.sqrt(self._delta_t *
                                                 self._odometry_noise_var[GraphGenerator.OdomNoiseDims.RVert]))
-            # Interpret rotational noise as noise w.r.t. the rotation about the vertical (x) axis
+            # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
             noise_as_transform[:3, :3] = np.array([
                 [1, 0, 0],
                 [0, np.cos(theta), -np.sin(theta)],
