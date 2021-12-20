@@ -211,16 +211,20 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict):
         results_arr[odom_tag_ratio_arr_idx_map[result_params[0]], ang_vel_arr_idx_map[result_params[1]],
                     lin_vel_arr_idx_map[result_params[2]]] = result[0]
 
-    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_sweep"
+    results_target_folder = os.path.join(repository_root, "saved_sweeps", map_info.map_name)
+    if not os.path.exists(results_target_folder):
+        os.mkdir(results_target_folder)
+
+    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_{map_info.map_name}_sweep"
     results_args_dict = {
         "ODOM_TAG_RATIO_GEOMSPACE_ARGS": ODOM_TAG_RATIO_GEOMSPACE_ARGS,
         "ANG_VEL_VAR_LINSPACE_ARGS": ANG_VEL_VAR_LINSPACE_ARGS,
         "LIN_VEL_VAR_LINSPACE_ARGS": LIN_VEL_VAR_LINSPACE_ARGS
     }
-    with open(os.path.join(repository_root, "saved_sweeps", results_cache_file_name_no_ext + ".json"), "w") as f:
+    with open(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".json"), "w") as f:
         json.dump(obj=results_args_dict, fp=f, indent=2)
 
-    with open(os.path.join(repository_root, "saved_sweeps", results_cache_file_name_no_ext + ".pickle"), "wb") as f:
+    with open(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".pickle"), "wb") as f:
         pickle.dump(obj=results_arr, file=f, protocol=pickle.HIGHEST_PROTOCOL)
 
     # noinspection PyArgumentList
@@ -244,6 +248,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict):
     ax.set_ylabel("Linear velocity variance")
     c = ax.pcolor(xx, yy, zz, shading="auto")
     fig.colorbar(c, ax=ax)
+    plt.savefig(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".png"), dpi=300)
     plt.show()
 
 

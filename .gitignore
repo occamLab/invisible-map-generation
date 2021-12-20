@@ -20,4 +20,4 @@ venv
 /optimization_weight_analysis/duncan_image_exports/
 **/.ipynb_checkpoints/
 
-/saved_sweeps/*sweep.*
+/saved_sweeps/**/*sweep.*
