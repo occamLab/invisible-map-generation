@@ -1124,7 +1124,7 @@ class Graph:
 
         # TODO: Huber delta should probably scale with pixels rather than error
         resulting_graph = Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=use_sba,
-                                use_huber=False, huber_delta=None, damping_status=True)
+                                use_huber=False, huber_delta=None, damping_status=False)
         return resulting_graph
 
     @staticmethod
