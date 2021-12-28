@@ -516,7 +516,7 @@ class Graph:
         """
         self._weights = copy.deepcopy(weights)
         if not scale_by_edge_amount:
-            self._weights = self._weights.normalize_tag_and_odom_weights()
+            self._weights.normalize_tag_and_odom_weights()
             return
 
         num_odom_edges = 0

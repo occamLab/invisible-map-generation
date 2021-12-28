@@ -53,7 +53,8 @@ def make_parser():
     Returns:
         Argument p
     """
-    p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot")
+    p = argparse.ArgumentParser(description="Graph optimization utility for optimizing, plotting, and database "
+                                            "upload/download", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(
         "-p",
         type=str,
@@ -169,6 +170,12 @@ def make_parser():
         help="Sweep the odom-to-tag ratio, linear velocity variance, and angular velocity variance params. Mutually "
              "exclusive with the -c flag."
     )
+    p.add_argument(
+        "--sbea",
+        action="store_true",
+        help="(scale_by_edge_amount) Apply a multiplicative coefficient to the odom-to-tag ratio that is found by "
+             "computing the ratio of the number of tag edges to odometry edges."
+    )
     return p
 
 
@@ -176,7 +183,7 @@ def download_maps(event):
     cms.get_map_from_unprocessed_map_event(event)
 
 
-def sweep_params(mi: MapInfo, ground_truth_data: dict):
+def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: bool):
     """TODO: Documentation and add SBA weighting to the sweeping
     """
     graph_to_opt = Graph.as_graph(mi.map_dct)
@@ -188,7 +195,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict):
     lin_vel_arr = np.exp(np.linspace(*LIN_VEL_VAR_LINSPACE_ARGS))
     lin_vel_arr_idx_map: Dict[float, int] = {}
 
-    sweep_args_list: List[Tuple[float, float, float, Graph, dict, List[Tuple[float, Tuple[float, float, float]]]]] = []
+    sweep_args_list: List[Tuple[float, float, float, Graph, dict, bool,
+                                List[Tuple[float, Tuple[float, float, float]]]]] = []
     results_list: List[Tuple[float, Tuple[float, float, float]]] = []
     for i_idx, i in enumerate(odom_tag_ratio_arr):
         odom_tag_ratio_arr_idx_map[i] = i_idx
@@ -198,7 +206,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict):
             for k_idx, k in enumerate(lin_vel_arr):
                 if k not in lin_vel_arr_idx_map:
                     lin_vel_arr_idx_map[k] = k_idx
-                sweep_args_list.append((i, j, k, graph_to_opt, ground_truth_data, results_list))
+                sweep_args_list.append((i, j, k, graph_to_opt, ground_truth_data, scale_by_edge_amount, results_list))
 
     with concurrent.futures.ThreadPoolExecutor(NUM_SWEEP_THREADS) as executor:
         executor.map(sweep_target, sweep_args_list)
@@ -252,7 +260,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict):
     plt.show()
 
 
-def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict,
+def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict, bool,
                                          List[Tuple[float, Tuple[float, float, float]]]]) -> None:
     """
     Args:
@@ -272,13 +280,13 @@ def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict,
         compute_inf_params={
             "ang_vel_var": sweep_args_tuple[1],
             "lin_vel_var": sweep_args_tuple[2] * np.ones(3)
-        }
+        }, scale_by_edge_amount=sweep_args_tuple[5]
     )
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
         optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1]["tags"]),
         ground_truth_tags=sweep_args_tuple[4], verbose=False
     )
-    sweep_args_tuple[5].append((gt_result, (sweep_args_tuple[0], sweep_args_tuple[1], sweep_args_tuple[2])))
+    sweep_args_tuple[-1].append((gt_result, (sweep_args_tuple[0], sweep_args_tuple[1], sweep_args_tuple[2])))
 
 
 if __name__ == "__main__":
@@ -320,9 +328,10 @@ if __name__ == "__main__":
     for map_info in matching_maps:
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-            sweep_params(mi=map_info, ground_truth_data=gt_data)
+            sweep_params(mi=map_info, ground_truth_data=gt_data, scale_by_edge_amount=args.sbea)
         else:
-            graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso)
+            graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso,
+                                         scale_by_edge_amount=args.sbea)
             if args.c:
                 graph_manager.compare_weights(map_info, args.v)
             else:
