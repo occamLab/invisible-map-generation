@@ -3,10 +3,10 @@
 This repository is a refactor and extension of the work done in [occamlab/assistive_apps](https://github.com/occamLab/assistive_apps/tree/summer2018) to generate maps.
 
 ## Dependencies
-- [g2opy](https://github.com/uoip/g2opy) to work with the graphs.
-  - There is an issue with newer versions of Eigen, a dependency of g2opy.
-    [This pull request](https://github.com/uoip/g2opy/pull/16) fixes it.
-  - If g2o is building for the wrong python version, see [this issue](https://github.com/uoip/g2opy/issues/9).
+
+- [OCCaM Lab fork of g2opy](https://github.com/occamLab/g2opy) to work with the graphs.
+  - Run the setup_g2opy.sh script to set up this dependency
+  - The script will automatically source your virtual environment if it exists. If your virtual environment is not in a folder called `./venv/`, then update the `VENV_DIR_REL_PATH` such that it can find your virtual environment. Otherwise, the `g2o.cpython-*.so` file will be installed globally.
 - Additional Python requirements can be installed using the included requirements.txt
 
 ## Overview
@@ -20,6 +20,7 @@ The primary Python packages are:
 Refer to each module's docstring for more information. 
 
 ### Additional Directories
+
 - `/archive`: Code that has been replaced or deprecated
 - `/converted-data`, `/data`: Old data files for previous map types
 - `/expectation_maximization`: Previously used maximization model
@@ -41,6 +42,7 @@ The `run_scripts/graph_manager_user.py` script provides a comprehensive set of c
 TODO: Add more example usage documentation for the other scripts in `run_scripts/`.
 
 ## TODOS
+
 - Continue finding metrics to evaluate optimized map quality.
   - Consider ways of obtaining ground truth data
 - Add more ways to consolidate paths in the map to make navigation more efficient
