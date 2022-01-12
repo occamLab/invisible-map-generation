@@ -23,6 +23,7 @@ import map_processing.graph_opt_utils
 from map_processing.graph import Graph
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton
+from map_processing.weights import Weights
 import typing
 
 SpearmenrResult = typing.NamedTuple("SpearmenrResult", [("correlation", float), ("pvalue", float)])
@@ -33,7 +34,7 @@ MAP_TO_ANALYZE = os.path.join("unprocessed_maps", "rawMapData", "HQV39qzyDeeuU3U
 SWEEP = np.arange(-10, 10.1, 4)
 
 SECOND_SUBGRAPH_WEIGHTS_KEY_ORDER = [
-    GraphManager.WeightSpecifier.COMPARISON_BASELINE,
+    GraphManager.WeightSpecifier.IDENTITY,
     GraphManager.WeightSpecifier.TRUST_TAGS,
     GraphManager.WeightSpecifier.TRUST_ODOM,
     GraphManager.WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS,
@@ -88,10 +89,9 @@ def do_sweeping(sweep: np.ndarray):
         subgraph_pair_chi2_diff[key] = []
 
     for run in range(total_runs):
-        weights = map_processing.graph_opt_utils.weight_dict_from_array(np.array([sweep[run], sweep[run],
-                                                                                  -sweep[run], -sweep[run]]))
+        weights = Weights.weight_dict_from_array(np.array([sweep[run], sweep[run], -sweep[run], -sweep[run]]))
         print('optimizing...')
-        opt_chi2 = gm.optimize_and_give_chi2_metric(graph, weights)
+        opt_chi2 = gm.optimize_and_give_chi2_metric(graph, Weights.legacy_from_dict(weights))
         single_graph_chi2[run] = opt_chi2
 
         print('ground truth')
