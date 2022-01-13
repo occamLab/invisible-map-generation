@@ -19,7 +19,6 @@ else
   which python3
 fi
 
-
 if [ ! -d "./g2opy/" ]  # Ignore cloning the repository if it already exists
 then
   git clone https://github.com/occamLab/g2opy || exit

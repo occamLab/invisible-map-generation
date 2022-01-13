@@ -9,13 +9,12 @@ import numpy as np
 
 
 class VertexType(Enum):
-    """An enumeration containing the vertex types ODOMETRY, TAG, DUMMY, and WAYPOINT.
+    """An enumeration containing the vertex types
     """
     ODOMETRY = 0
     TAG = 1
     TAGPOINT = 2
-    DUMMY = 3
-    WAYPOINT = 4
+    WAYPOINT = 3
 
 
 class Vertex:
@@ -64,18 +63,17 @@ class Edge:
     If true, the information matrices are exclusively computed as diagonal matrices from the weight vectors.
     """
 
-    def __init__(self, startuid: int, enduid: int, corner_ids: Optional[List[int]],
+    def __init__(self, startuid: int, enduid: Optional[int], corner_ids: Optional[List[int]],
                  information_prescaling: Optional[np.ndarray], camera_intrinsics: Optional[np.ndarray],
-                 measurement: np.ndarray, start_end: Tuple[Vertex, Vertex]):
+                 measurement: np.ndarray, start_end: Tuple[Vertex, Optional[Vertex]]):
         self.startuid: int = startuid
-        self.enduid: int = enduid
-        self.corner_ids: Optional[List[int]] = corner_ids
-        self.information_prescaling: Optional[np.ndarray] = information_prescaling
-        self.camera_intrinsics: Optional[np.ndarray] = camera_intrinsics
-        self.measurement: Optional[np.ndarray] = measurement
+        self.enduid: Optional[int] = enduid
+        self.corner_ids: Optional[List[int]] = list(corner_ids) if corner_ids is not None else None
+        self.information_prescaling: Optional[np.ndarray] = np.array(information_prescaling)
+        self.camera_intrinsics: Optional[np.ndarray] = np.array(camera_intrinsics)
+        self.measurement: Optional[np.ndarray] = np.array(measurement)
         self.start_end: Tuple[Vertex, Vertex] = start_end
-
-        self.information: np.ndarray = np.eye(6 if corner_ids is None else 2)
+        self.information: np.ndarray = np.eye(2 if corner_ids is not None else (3 if start_end[1] is None else 6))
 
     def compute_information(self, weights_vec: np.ndarray,
                             compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] = None) -> None:
@@ -107,8 +105,10 @@ class Edge:
         if compute_inf_params is None:
             compute_inf_params = {}  # Subsequent code depends on this variable being a dictionary
 
-        if self.corner_ids is not None:
+        if self.corner_ids is not None:  # sba corner edge
             self._compute_information_sba(weights_vec)
+        elif self.start_end[1] is None:  # gravity edge
+            self._compute_information_gravity(weights_vec)
         else:
             if self.start_end[1].mode == VertexType.ODOMETRY:
                 lvv = compute_inf_params["lin_vel_var"] if isinstance(compute_inf_params.get("lin_vel_var", None),
@@ -121,6 +121,10 @@ class Edge:
 
         if np.any(self.information < 0):
             raise ValueError("The information matrix should not contain negative values")
+        if len(self.information.shape) != 2:
+            raise ValueError(f"The information matrix was computed to be an array with {len(self.information.shape)} "
+                             f"dimensions instead of 2 (weights vector argument was an array of shape "
+                             f"{weights_vec.shape}")
 
     def _compute_information_se3_nonzero_delta_t(self, weights_vec: np.ndarray, ang_vel_var: float = 1,
                                                  lin_vel_var: np.array = np.ones(3)) -> None:
@@ -135,7 +139,7 @@ class Edge:
         self.information = np.diag(weights_vec)
         delta_t_sq = (self.start_end[1].meta_data["timestamp"] - self.start_end[0].meta_data["timestamp"]) ** 2
 
-        # TODO: Should the pose-to-pose transform's be used here in some way?
+        # TODO: Should the pose-to-pose transforms be used here in some way?
         self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var ** 2 * delta_t_sq))
         self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
 
@@ -143,6 +147,9 @@ class Edge:
         self.information = np.diag(weights_vec)
 
     def _compute_information_sba(self, weights_vec: np.ndarray) -> None:
+        self.information = np.diag(weights_vec)
+
+    def _compute_information_gravity(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)
 
     def get_start_vertex_type(self, vertices: Dict[int, Vertex]) -> VertexType:

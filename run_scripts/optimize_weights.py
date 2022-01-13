@@ -71,7 +71,7 @@ if __name__ == "__main__":
                 if args.v:
                     for i1, w1 in enumerate(odom_tag_ratio):
                         for i2, w2 in enumerate(w1):
-                            pass # print(f'[{w2}, {pose_orientation_ratio[i1][i2]}]: {metrics[i1, i2]}')
+                            pass  # print(f'[{w2}, {pose_orientation_ratio[i1][i2]}]: {metrics[i1, i2]}')
                     filtered_metrics = metrics == -1
                     reprocessed_metrics = metrics + 1e5 * filtered_metrics
                     best_metric = reprocessed_metrics.min()
@@ -79,7 +79,8 @@ if __name__ == "__main__":
                     best_weights = [np.log(odom_tag_ratio[indexes[0][0], indexes[1][0]]),
                                     np.log(pose_orientation_ratio[indexes[0][0], indexes[1][0]])]
                     print(f'\nBEST METRIC: e^{best_weights}: {best_metric}')
-                    map_processing.graph_opt_plot_utils.plot_metrics(pose_orientation_ratio, reprocessed_metrics, True, True)
+                    map_processing.graph_opt_plot_utils.plot_metrics(
+                        pose_orientation_ratio, reprocessed_metrics, True, True)
         else:
             bounds = (-10, 10)
             step = 0.5

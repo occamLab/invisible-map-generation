@@ -7,6 +7,7 @@ from typing import List
 import g2o
 from typing import Tuple
 import numpy as np
+import scipy
 from g2o import SE3Quat, Quaternion
 from scipy.spatial.transform import Rotation as Rot
 
@@ -125,7 +126,7 @@ def isometry_to_pose(isometry: g2o.Isometry3d) -> np.ndarray:
     return np.concatenate([isometry.translation(), isometry.rotation().coeffs()])
 
 
-def global_yaw_effect_basis(rotation, gravity_axis='z'):
+def global_yaw_effect_basis(rotation: scipy.spatial.transform.Rotation, gravity_axis: str = "z"):
     """Form a basis which describes the effect of a change in global yaw on a local transform_vector's qx, qy, and qz.
 
     Since the accelerometer measures gravitational acceleration, it can accurately measure the global z-azis but its
@@ -133,7 +134,7 @@ def global_yaw_effect_basis(rotation, gravity_axis='z'):
 
     Args:
         rotation: A :class: scipy.spatial.transform.Rotation encoding a local rotation.
-        gravity_axis: A character specifying the gravity axis (e.g., 'z')
+        gravity_axis: Either 'x', 'y', or 'z' to specify the gravity axis.
 
     Returns:
         A 3x3 numpy array where the columns are the new basis.

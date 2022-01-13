@@ -1,5 +1,5 @@
-"""Choose values for variance which maximize the likelihood of
-observed errors.
+"""
+Choose values for variance which maximize the likelihood of observed errors.
 """
 
 import numpy as np
@@ -17,17 +17,17 @@ def likelihood(weights, *args):
     Args:
         weights: a 1-d list of weights.
             Currently, this is an 18-element vector encoding weights
-            for x, y, z, qx, qy, qz for odometry, tag, and dummy edges
+            for x, y, z, qx, qy, qz for odometry, tag, and gravity edges
             respectively.
             For example, the first two elements are odometry x and
-            odometry z weights, and the last one is the dummy edge qz
+            odometry z weights, and the last one is the gravity edge qz
             weight.
         args:
             A tuple of observations (1-d numpy array) and errors
             associated by array index.
             The oservation vector is currently a 1-hot 18-element
             vector encoding if the respective error is an error in x,
-            y, z, qx, qy, or qz for odometry, tag, and dummy edges
+            y, z, qx, qy, or qz for odometry, tag, and gravity edges
             respectively.
 
     Returns:
@@ -57,7 +57,7 @@ def maxweights(observations, errors, weights):
             The oservation array is currently a vertically-stacked
             list 1-hot 18-element vectors encoding if the respective
             error is an error in x, y, z, qx, qy, or qz for odometry,
-            tag, and dummy edges respectively. For example, if the
+            tag, and gravity edges respectively. For example, if the
             fifth row of the observation array is [0, 1, 0, ..., 0],
             then the fifth entry in the errors array encodes an
             odometry error in y.
@@ -65,10 +65,10 @@ def maxweights(observations, errors, weights):
             A list of errors.
         weights: a 1-d list of weights.
             Currently, this is an 18-element vector encoding weights
-            for x, y, z, qx, qy, qz for odometry, tag, and dummy edges
+            for x, y, z, qx, qy, qz for odometry, tag, and gravity edges
             respectively.
             For example, the first two elements are odometry x and
-            odometry z weights, and the last one is the dummy edge qz
+            odometry z weights, and the last one is the gravity edge qz
             weight.
     """
     return minimize(likelihood, weights, (observations, errors),

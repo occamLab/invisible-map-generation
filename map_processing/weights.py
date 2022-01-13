@@ -5,13 +5,14 @@ Weights class.
 from typing import Optional, Union, List, Dict
 
 import numpy as np
+from map_processing.graph_vertex_edge_classes import VertexType
 
 
 class Weights:
     def __init__(self, odometry: Optional[np.ndarray] = None, tag: Optional[np.ndarray] = None,
-                 tag_sba: Optional[np.ndarray] = None, dummy: Optional[np.ndarray] = None,
+                 tag_sba: Optional[np.ndarray] = None, gravity: Optional[np.ndarray] = None,
                  odom_tag_ratio: Optional[Union[np.ndarray, float]] = None):
-        self.dummy: np.ndarray = np.array(dummy) if dummy is not None else np.ones(3)
+        self.gravity: np.ndarray = np.array(gravity) if gravity is not None else np.ones(3)
         self.odometry: np.ndarray = np.array(odometry) if odometry is not None else np.ones(6)
         self.tag: np.ndarray = np.array(tag) if tag is not None else np.ones(6)
         self.tag_sba: np.ndarray = np.array(tag_sba) if tag is not None else np.ones(2)
@@ -24,7 +25,6 @@ class Weights:
             self.odom_tag_ratio = max(0.00001, odom_tag_ratio[0])
         else:
             self.odom_tag_ratio = 1
-        # self.normalize_tag_and_odom_weights()
 
     @property
     def tag_odom_ratio(self):
@@ -32,7 +32,7 @@ class Weights:
 
     @classmethod
     def legacy_from_array(cls, array: Union[np.ndarray, List[float]]) -> "Weights":
-        return cls.legacy_from_dict(cls.weight_dict_from_array(array))
+        return cls.legacy_from_dict(cls.legacy_weight_dict_from_array(array))
 
     @classmethod
     def legacy_from_dict(cls, dct: Dict[str, Union[np.ndarray, float]]) -> "Weights":
@@ -40,7 +40,7 @@ class Weights:
 
     def to_dict(self) -> Dict[str, Union[float, np.ndarray]]:
         return {
-            "dummy": np.array(self.dummy),
+            "gravity": np.array(self.gravity),
             "odometry": np.array(self.odometry),
             "tag": np.array(self.tag),
             "tag_sba": np.array(self.tag_sba),
@@ -48,12 +48,12 @@ class Weights:
         }
 
     @staticmethod
-    def weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
+    def legacy_weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
         """
         Constructs a normalized weight dictionary from a given array of values
         """
         weights = {
-            'dummy': np.array([-1, 1e2, -1]),
+            'gravity': np.array([-1, 1e2, -1]),
             'odometry': np.ones(6),
             'tag': np.ones(6),
             'tag_sba': np.ones(2),
@@ -123,3 +123,28 @@ class Weights:
         if tag_mag == 0:  # Avoid divide by zero error
             tag_mag = 1
         self.tag *= 1 / tag_mag
+    
+    def get_weights_from_end_vertex_mode(self, end_vertex_mode: Optional[VertexType]):
+        """
+        Args:
+            end_vertex_mode: Mode of the end vertex of the edge
+
+        Returns:
+            A copy of the edge weight vector selected according to the mode of an edge's end vertex. An end vertex mode
+             of type waypoint returns a vector of 1s.
+
+        Raises:
+            ValueError: If the end_vertex_mode is not recognized
+        """
+        if end_vertex_mode == VertexType.ODOMETRY:
+            return np.array(self.odometry)
+        elif end_vertex_mode == VertexType.TAG:
+            return np.array(self.tag)
+        elif end_vertex_mode == VertexType.TAGPOINT:
+            return np.array(self.tag_sba)
+        elif end_vertex_mode is None:
+            return np.array(self.gravity)
+        elif end_vertex_mode == VertexType.WAYPOINT:
+            return np.ones(6)  # TODO: set to something other than identity?
+        else:
+            raise Exception(f"Edge of end type {end_vertex_mode} not recognized")

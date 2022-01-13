@@ -4,11 +4,13 @@ Utility functions for graph optimization.
 
 import json
 import math
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Optional, Set
 
 import g2o
 import numpy as np
-from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3
+from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3
+# noinspection PyUnresolvedReferences
+from g2o import EdgeSE3Gravity
 
 from . import graph_util_get_neighbors
 from .graph_vertex_edge_classes import VertexType
@@ -126,22 +128,23 @@ def optimizer_find_connected_tag_vert(optimizer: g2o.SparseOptimizer, location_v
     return None
 
 
-def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> float:
+def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity],
+                     start_vert: Optional[VertexSE3] = None) -> float:
     """Computes the chi2 value associated with the provided edge
 
     Arguments:
-        edge (Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]): A g2o edge
+        edge: A g2o edge of type EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, or EdgeSE3Gravity
+        start_vert: The start vertex associated with this edge (only used if the edge is of type EdgeSE3Gravity)
 
     Returns:
         Chi2 value associated with the provided edge
 
     Raises:
-        Exception if an edge is encountered that is not handled (handled edges are EdgeProjectPSI2UV,
-         EdgeSE3Expmap, and EdgeSE3)
+        ValueError: if an edge is encountered that is not handled (handled edges are EdgeProjectPSI2UV,
+         EdgeSE3Expmap, EdgeSE3, and EdgeSE3Gravity)
+        ValueError: if the edge is of type EdgeSE3Gravity and
     """
     if isinstance(edge, EdgeProjectPSI2UV):
-        # Based on this function: https://github.com/uoip/g2opy/blob/5587024b17fd812c66d91740716fbf0bf5824fbc/g2o/types/
-        #  sba/types_six_dof_expmap.cpp#L174
         cam = edge.parameter(0)
         camera_coords = edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate()
         pixel_coords = cam.cam_map(camera_coords)
@@ -167,26 +170,43 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> 
         delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
         error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
         return error.dot(edge.information()).dot(error)
+    elif isinstance(edge, EdgeSE3Gravity):
+        if start_vert is None:
+            raise ValueError("No start vertex provided for edge of type EdgeSE3Gravity")
+        direction = edge.measurement()[:3]
+        measurement = edge.measurement()[3:]
+        inverted_vert_rot = start_vert.estimate().Quaternion().inverse().R
+        estimate = np.matmul(inverted_vert_rot, direction)
+        error = estimate - measurement
+        return error.dot(edge.information()).dot(error)
     else:
-        raise Exception("Unhandled edge type for chi2 calculation")
+        raise Exception(f"Unhandled edge type for chi2 calculation: {type(edge)}")
 
 
-def sum_optimized_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True) -> float:
+def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True,
+                             edge_type_filter: Optional[Set[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]] =
+                             None) -> float:
     """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.
 
     Args:
         optimizer: A SparseOptimizer object
-        verbose (bool): Boolean for whether to print the total chi2 value
+        verbose: Boolean for whether to print the total chi2 value
+        edge_type_filter: A set providing an inclusive filter of the edge types to sum. If no set is provided or an
+         empty set is provided, then no edges are filtered.
 
     Returns:
         Sum of the chi2 values associated with each edge
     """
+    if edge_type_filter is None:
+        edge_type_filter = set()
+
     total_chi2 = 0.0
     for edge in optimizer.edges():
-        total_chi2 += get_chi2_of_edge(edge)
+        if len(edge_type_filter) == 0 or type(edge) in edge_type_filter:
+            total_chi2 += get_chi2_of_edge(edge, edge.vertices()[0])
 
     if verbose:
-        print("Total chi2:", total_chi2)
+        print(total_chi2)
 
     return total_chi2
 

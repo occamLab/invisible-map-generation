@@ -17,8 +17,10 @@ import numpy as np
 from map_processing.graph_manager import GraphManager
 from map_processing import graph_opt_utils
 from map_processing.graph import Graph
+from map_processing.cache_manager import CacheManagerSingleton
 
-CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache", "unprocessed_maps", "myTestFolder")
+CACHE_DIRECTORY = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache", "unprocessed_maps",
+                               "myTestFolder")
 MAP_JSON = "279953291259OCCAM Room Lidar Aligned.json"
 
 
@@ -48,10 +50,12 @@ def main():
             dct = json.loads(file.read())
         sweep = np.array(dct['odom_tag_ratio'])
         full_chi2s = dct['chi2s']
-        chi2s = {edge: [info['sum'] for info in full_chi2s[edge]] for edge in ('odometry', 'tag', 'dummy')}
+        chi2s = {edge: [info['sum'] for info in full_chi2s[edge]] for edge in ('odometry', 'tag', 'gravity')}
     else:
         cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-        gm = GraphManager(0, cred)
+        cms = CacheManagerSingleton(firebase_creds=cred)
+        gm = GraphManager(0, cms)
+
         map_json_path = os.path.join(CACHE_DIRECTORY, MAP_JSON)
         with open(map_json_path, "r") as json_string_file:
             json_string = json_string_file.read()
@@ -62,12 +66,12 @@ def main():
         sweep = np.exp(np.arange(-10, 10.1, 0.1))
         total_runs = sweep.shape[0]
         chi2s = {
-            'dummy': [0] * total_runs,
+            'gravity': [0] * total_runs,
             'odometry': [0] * total_runs,
             'tag': [0] * total_runs,
         }
         full_chi2s = {
-            'dummy': [{}] * total_runs,
+            'gravity': [{}] * total_runs,
             'odometry': [{}] * total_runs,
             'tag': [{}] * total_runs,
             'total_chi2': [[]] * total_runs,
@@ -78,16 +82,17 @@ def main():
         for run in range(total_runs):
             optimizer = gm.optimize_and_return_optimizer(graph, sweep[run])
             if args.m:
-                run_chi2s = gm.subgraph_pair_optimize_and_categorize_chi2(sweep[run], subgraphs,
-                                                                          subgraph_1_weights='trust_tags')
+                run_chi2s = gm.subgraph_pair_optimize_and_categorize_chi2(
+                    sweep[run], subgraphs, subgraph_1_weights=GraphManager.weights_dict[
+                        GraphManager.WeightSpecifier.TRUST_TAGS])
             else:
                 run_chi2s = graph.get_chi2_by_edge_type(optimizer, False)
             print(f'odom:tag of e^{np.log(sweep[run]):.1f} gives: {run_chi2s}')
             for edge, chi2 in run_chi2s.items():
                 chi2s[edge][run] = chi2['sum']
                 full_chi2s[edge][run] = chi2
-            full_chi2s['actual_chi2s'][run] = graph_opt_utils.sum_optimized_edges_chi2(optimizer)
-            full_chi2s['total_chi2'][run] = sum([run_chi2s[edge]['sum'] for edge in ('odometry', 'tag', 'dummy')])
+            full_chi2s['actual_chi2s'][run] = graph_opt_utils.sum_optimizer_edges_chi2(optimizer)
+            full_chi2s['total_chi2'][run] = sum([run_chi2s[edge]['sum'] for edge in ('odometry', 'tag', 'gravity')])
 
         with open(os.path.join('saved_sweeps', 'chi2_visualization', file_name), 'w') as file:
             json.dump({
@@ -104,30 +109,29 @@ def main():
     #     print()
     # print(sweep)
     # print(sweep.shape)
+
     last_odom = chi2s['odometry'][-1]
     last_tag = chi2s['tag'][-1]
-    last_dummy = chi2s['dummy'][-1]
+    last_gravity = chi2s['gravity'][-1]
     odom_edges = full_chi2s['odometry'][0]['edges']
     tag_edges = full_chi2s['tag'][0]['edges']
-    dummy_edges = full_chi2s['dummy'][0]['edges']
+    gravity_edges = full_chi2s['gravity'][0]['edges']
     print(last_odom)
     print(last_tag)
-    print(last_dummy)
-    print(last_odom + last_tag + last_dummy)
+    print(last_gravity)
+    print(last_odom + last_tag + last_gravity)
     print()
-    print(f'Total edges: {odom_edges + tag_edges + dummy_edges}')
+    print(f'Total edges: {odom_edges + tag_edges + gravity_edges}')
 
-    plt.stackplot(np.log(sweep), chi2s['dummy'], chi2s['odometry'], chi2s['tag'], labels=['Dummy', 'Odometry', 'Tag'])
+    plt.stackplot(np.log(sweep), chi2s['gravity'], chi2s['odometry'], chi2s['tag'],
+                  labels=['Gravity', 'Odometry', 'Tag'])
     plt.xlabel('log(odom/tag)')
     plt.ylabel('Chi^2')
     plot_title = 'Chi2 Metric by Edge Type' if args.m else 'Resulting Chi^2 of Optimized Graph by Edge Type'
     plt.title(plot_title)
     plt.legend()
-
     plt.plot(np.log(sweep[int(sweep.shape[0]/2):]), np.exp(-sweep[int(sweep.shape[0]/2):]), '-b')
-
     plt.show()
-
     plt.plot(np.log(sweep), )
 
 

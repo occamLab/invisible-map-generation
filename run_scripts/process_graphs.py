@@ -23,16 +23,15 @@ cms = CacheManagerSingleton(cred)
 
 
 def on_event(event):
-    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict = True)
+    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=True)
 
 
 def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
-    opt_chi2, opt_result, _ = GraphManager.optimize_graph(
-        is_sba=False, graph=graph, tune_weights=False,
-        weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
+    opt_chi2, opt_result, _ = GraphManager.optimize_graph(is_sba=False, graph=graph, weights=GraphManager.weights_dict[
+        GraphManager.WeightSpecifier.BEST_SWEEP])
     json_str = make_processed_map_JSON(opt_result)
     cms.upload(map_info, json_str)
 

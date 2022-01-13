@@ -151,7 +151,7 @@ def extract_path_args(arguments: argparse.Namespace) -> Dict[str, Union[float, T
     Notes:
         The value for the -p argument is used to filter the path arguments. This is done by looking for arguments whose
         names start with f"{arguments.p}_". E.g., if 'e' is the value for the -p argument (specifying an elliptical
-        path, then the path arguments' names are expected to start with 'e_'.
+        path), then the path arguments' names are expected to start with 'e_'.
 
     Args:
         arguments: Parsed command line arguments.

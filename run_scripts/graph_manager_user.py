@@ -42,9 +42,9 @@ import concurrent.futures
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
 NUM_SWEEP_THREADS = 12
-ODOM_TAG_RATIO_GEOMSPACE_ARGS = [10, 100, 4]
-ANG_VEL_VAR_LINSPACE_ARGS = [3, 10, 4]
-LIN_VEL_VAR_LINSPACE_ARGS = [-5, 5, 4]
+ODOM_TAG_RATIO_GEOMSPACE_ARGS = [0.01, 10, 5]
+ANG_VEL_VAR_LINSPACE_ARGS = [-3, 3, 10]
+LIN_VEL_VAR_LINSPACE_ARGS = [-3, 3, 10]
 
 
 def make_parser():
@@ -127,7 +127,7 @@ def make_parser():
         type=int,
         nargs="*",
         default=[],
-        help="What vertex types to fix during optimization. Dummy and Tagpoints are always fixed. Otherwise," +
+        help="What vertex types to fix during optimization (note: tagpoints are always fixed). Otherwise," +
              " ,".join(pso_options),
         choices={pso_option.value for pso_option in PrescalingOptEnum}
     )
@@ -270,18 +270,13 @@ def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict, bool,
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    results = GraphManager.optimize_graph(
-        is_sba=True,
-        graph=deepcopy(sweep_args_tuple[3]),
-        tune_weights=False,
-        visualize=False,
-        weights=Weights(odom_tag_ratio=sweep_args_tuple[0], dummy=np.array([0.1, 4, 0.1])),
-        obs_chi2_filter=-1,
-        compute_inf_params={
-            "ang_vel_var": sweep_args_tuple[1],
-            "lin_vel_var": sweep_args_tuple[2] * np.ones(3)
-        }, scale_by_edge_amount=sweep_args_tuple[5]
-    )
+    results = GraphManager.optimize_graph(is_sba=True, graph=deepcopy(sweep_args_tuple[3]), visualize=False,
+                                          weights=Weights(gravity=np.array([0.1, 4, 0.1]),
+                                                          odom_tag_ratio=sweep_args_tuple[0]), obs_chi2_filter=-1,
+                                          compute_inf_params={
+                                              "ang_vel_var": sweep_args_tuple[1],
+                                              "lin_vel_var": sweep_args_tuple[2] * np.ones(3)
+                                          }, scale_by_edge_amount=sweep_args_tuple[5])
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
         optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1]["tags"]),
         ground_truth_tags=sweep_args_tuple[4], verbose=False
@@ -298,11 +293,15 @@ if __name__ == "__main__":
         exit(-1)
 
     # Fetch the service account key JSON file contents
-    cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
-    cms = CacheManagerSingleton(cred, max_listen_wait=0)
+    env_variable = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
+    if env_variable is None:
+        cms = CacheManagerSingleton(firebase_creds=None, max_listen_wait=0)
+    else:
+        cms = CacheManagerSingleton(firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0)
 
     if args.f:
         cms.download_all_maps()
+        exit(0)
 
     map_pattern = args.p if args.p else ""
     fixed_tags = set()

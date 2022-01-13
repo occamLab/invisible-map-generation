@@ -1,7 +1,5 @@
 """
 Find the correlation between two metrics for weight optimization
-
-# TODO: figure out why the ground truth metric is exactly the same after every iteration
 """
 
 import os
@@ -19,7 +17,6 @@ from matplotlib import pyplot as plt
 import numpy as np
 from scipy import stats
 
-import map_processing.graph_opt_utils
 from map_processing.graph import Graph
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton
@@ -28,6 +25,7 @@ import typing
 
 SpearmenrResult = typing.NamedTuple("SpearmenrResult", [("correlation", float), ("pvalue", float)])
 
+# noinspection SpellCheckingInspection
 MAP_TO_ANALYZE = os.path.join("unprocessed_maps", "rawMapData", "HQV39qzyDeeuU3UQDGtcywzI9sY2",
                               "duncan-occam-room-10-1-21-2-48 26773176629225.json")
 
@@ -49,9 +47,9 @@ def make_parser() -> argparse.ArgumentParser:
     """
     p = argparse.ArgumentParser(description="Find the best set of weights to use for graph optimization")
     p.add_argument(
-        '-l',
-        action='store_true',
-        help='Load data from file stored in correlation_results.json'
+        "-l",
+        action="store_true",
+        help="Load data from file stored in correlation_results.json"
     )
     return p
 
@@ -68,7 +66,7 @@ def do_sweeping(sweep: np.ndarray):
     single_graph_gt = np.zeros(total_runs)
     single_graph_chi2 = np.zeros(total_runs)
 
-    cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
+    cred = credentials.Certificate(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
     cms = CacheManagerSingleton(cred)
     gm = GraphManager(GraphManager.WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS, cms)
 
@@ -89,34 +87,42 @@ def do_sweeping(sweep: np.ndarray):
         subgraph_pair_chi2_diff[key] = []
 
     for run in range(total_runs):
-        weights = Weights.weight_dict_from_array(np.array([sweep[run], sweep[run], -sweep[run], -sweep[run]]))
-        print('optimizing...')
-        opt_chi2 = gm.optimize_and_give_chi2_metric(graph, Weights.legacy_from_dict(weights))
+        weights = Weights.legacy_from_dict(
+            Weights.legacy_weight_dict_from_array(np.array([sweep[run], sweep[run], -sweep[run], -sweep[run]]))
+        )
+        
+        print("optimizing...")
+        opt_chi2 = gm.optimize_and_give_chi2_metric(graph, weights)
         single_graph_chi2[run] = opt_chi2
 
-        print('ground truth')
-        single_graph_gt[run] = gm.optimize_and_get_ground_truth_error_metric(
-            graph=graph, ground_truth_tags=ground_truth_dict, weights=weights
-        )
+        print("standard optimization ground truth:")
+        single_graph_gt[run] = gm.optimize_and_get_ground_truth_error_metric(weights=weights, graph=graph,
+                                                                             ground_truth_tags=ground_truth_dict)
 
-        for chi2_diffs in subgraph_pair_chi2_diff.keys():
-            print(chi2_diffs)
-            subgraph_pair_chi2_diff[chi2_diffs].append(
-                gm.subgraph_pair_optimize_and_get_chi2_diff(weights, (sg0, sg1), chi2_diffs)
+        print("subgraph pair optimization...")
+        for second_subgraph_weights_key in subgraph_pair_chi2_diff.keys():
+            print(second_subgraph_weights_key)
+            subgraph_pair_chi2_diff[second_subgraph_weights_key].append(
+                gm.subgraph_pair_optimize_and_get_chi2_diff(
+                    subgraph_0_weights=weights,
+                    subgraphs=(sg0, sg1),
+                    subgraph_1_weights=GraphManager.weights_dict[second_subgraph_weights_key],
+                    verbose=True
+                )
             )
 
-        print(f'An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:')
-        for chi2_diffs in subgraph_pair_chi2_diff:
-            print(f'\t{chi2_diffs}: {subgraph_pair_chi2_diff[chi2_diffs][-1]},')
-        print(f'\ta ground truth metric of {single_graph_gt[run]}')
-        print(f'\tand an optimized chi2 of {single_graph_chi2[run]}.\n')
+        print(f"An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:")
+        for second_subgraph_weights_key in subgraph_pair_chi2_diff:
+            print(f"\t{second_subgraph_weights_key}: {subgraph_pair_chi2_diff[second_subgraph_weights_key][-1]},")
+        print(f"\ta ground truth metric of {single_graph_gt[run]}")
+        print(f"\tand an optimized chi2 of {single_graph_chi2[run]}.\n")
 
-    # with open('saved_sweeps/metric_correlation/correlation_results.json', 'w') as file:
+    # with open("saved_sweeps/metric_correlation/correlation_results.json", "w") as file:
     #     json.dump({
-    #         'odom_tag_ratio': sweep.tolist(),
-    #         'subgraph_pair_chi2_diff': subgraph_pair_chi2_diff,
-    #         'single_graph_gt': single_graph_gt,
-    #         'optimized_chi2s': single_graph_chi2,
+    #         "odom_tag_ratio": sweep.tolist(),
+    #         "subgraph_pair_chi2_diff": subgraph_pair_chi2_diff,
+    #         "single_graph_gt": single_graph_gt,
+    #         "optimized_chi2s": single_graph_chi2,
     #     }, file, indent=2)
     return single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff
 
@@ -127,12 +133,12 @@ def main():
     sweep: np.ndarray
 
     if args.l:
-        with open('saved_sweeps/metric_correlation/correlation_results.json', 'r') as results_file:
+        with open("saved_sweeps/metric_correlation/correlation_results.json", "r") as results_file:
             dct = json.loads(results_file.read())
-        sweep = np.array(dct['odom_tag_ratio'])
-        single_graph_gt = dct['single_graph_gt']
-        subgraph_pair_chi2_diff = dct['subgraph_pair_chi2_diff']
-        single_graph_chi2 = dct['single_graph_chi2']
+        sweep = np.array(dct["odom_tag_ratio"])
+        single_graph_gt = dct["single_graph_gt"]
+        subgraph_pair_chi2_diff = dct["subgraph_pair_chi2_diff"]
+        single_graph_chi2 = dct["single_graph_chi2"]
     else:
         sweep = SWEEP
         single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff = do_sweeping(SWEEP)
@@ -149,22 +155,22 @@ def main():
     # columns contain the observations.
     # noinspection PyTypeChecker
     corr: SpearmenrResult = stats.spearmanr(a=stacked_data, axis=1)
-    print(f'The correlation between gt metrics and chi2 metrics are:')
+    print(f"The correlation between gt metrics and chi2 metrics are:")
     print(corr.correlation)
 
-    plt.plot(sweep, np.array(single_graph_gt), '-ob')
-    plt.xlabel('odom/tag')
-    plt.ylabel('Ground Truth Translation Metric (m)')
-    plt.title('Ground truth metric')
+    plt.plot(sweep, np.array(single_graph_gt), "-ob")
+    plt.xlabel("odom/tag")
+    plt.ylabel("Ground Truth Translation Metric (m)")
+    plt.title("Ground truth metric")
     plt.show()
 
-    plotted_weights = 'comparison_baseline'
-    plt.plot(sweep, np.log(np.array(subgraph_pair_chi2_diff[plotted_weights])), '-ob')
-    plt.xlabel('odom/tag')
-    plt.ylabel('log(Chi2)')
-    plt.title(f'Chi2 based on {plotted_weights}')
+    plotted_weights = "comparison_baseline"
+    plt.plot(sweep, np.log(np.array(subgraph_pair_chi2_diff[plotted_weights])), "-ob")
+    plt.xlabel("odom/tag")
+    plt.ylabel("log(Chi2)")
+    plt.title(f"Chi2 based on {plotted_weights}")
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

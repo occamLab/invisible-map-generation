@@ -7,21 +7,22 @@ from __future__ import annotations
 import copy
 import itertools
 from collections import defaultdict
-from typing import *
+from typing import Set, Dict, Optional, Tuple, Union, List
+import numpy as np
 
-import g2o
-from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3
+from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, OptimizationAlgorithmLevenberg, \
+    CameraParameters, RobustKernelHuber, BlockSolverSE3, LinearSolverCholmodSE3, VertexSBAPointXYZ, VertexSE3Expmap, \
+    EdgeSE3, VertexSE3
+# noinspection PyUnresolvedReferences
+from g2o import EdgeSE3Gravity
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
-import map_processing.weights
 from .weights import Weights
-import map_processing.graph_opt_utils
-from expectation_maximization.maximization_model import maxweights
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
-from .graph_vertex_edge_classes import *
-from .transform_utils import pose_to_isometry, pose_to_se3quat, global_yaw_effect_basis, isometry_to_pose, \
-    transform_vector_to_matrix, transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, FLIP_Y_AND_Z_AXES
+from .graph_vertex_edge_classes import Vertex, VertexType, Edge
+from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
+    transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, FLIP_Y_AND_Z_AXES, pose_to_isometry
 
 
 class Graph:
@@ -39,15 +40,15 @@ class Graph:
             "sum": 0.0,
             "edges": 0
         },
-        "dummy": {
+        "gravity": {
             "sum": 0.0,
             "edges": 0
         },
     }
 
     def __init__(self, vertices: Dict[int, Vertex], edges: Dict[int, Edge], weights: Optional[Weights] = None,
-                 gravity_axis: str = "y", is_sparse_bundle_adjustment: bool = False, use_huber: bool = False,
-                 huber_delta=None, damping_status: bool = False):
+                 is_sparse_bundle_adjustment: bool = False, use_huber: bool = False, huber_delta=None,
+                 damping_status: bool = False):
         """The graph class
 
         The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
@@ -58,28 +59,21 @@ class Graph:
             vertices: A dictionary of vertices indexed by UIDs. The UID-vertices associations are referred to by the
              startuid and enduid fields of the :class: Edge  class.
             edges: A dictionary of edges indexed by UIDs.
-
-        Kwargs:
-            weights: An initial guess for what the weights of the model are. The weights correspond to x, y, z, qx, qy,
-             and qz measurements for odometry edges, tag edges, and dummy edges and has 18 elements [odometry x,
-             odometry y, ..., dummy qz]. The weights are related to variance by variance = exp(w).
         """
 
         self.edges: Dict[int, Edge] = copy.deepcopy(edges)
         self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
         self.original_vertices = copy.deepcopy(vertices)
         self.huber_delta: bool = copy.deepcopy(huber_delta)
-        self.gravity_axis: str = copy.deepcopy(gravity_axis)
-        self.is_sparse_bundle_adjustment: bool = is_sparse_bundle_adjustment
+        self.is_sba: bool = is_sparse_bundle_adjustment
         self.damping_status: bool = damping_status
         self.use_huber: bool = use_huber
 
         self._weights = copy.deepcopy(weights) if weights is not None else Weights()
-        
+
         self._verts_to_edges: Dict[int, Set[int]] = {}
+        self.our_odom_edges_to_g2o_edges = {}
         self._generate_verts_to_edges_mapping()
-        self._basis_matrices: Dict[int, np.ndarray] = {}
-        self._generate_basis_matrices()
 
         self.g2o_status = -1
         self.maximization_success_status = False
@@ -90,9 +84,6 @@ class Graph:
         self.unoptimized_graph: Union[SparseOptimizer, None] = None
         self.optimized_graph: Union[SparseOptimizer, None] = None
         self.update_edge_information()
-
-        # This is populated in graph_to_optimizer and is currently no updated anywhere else
-        self.our_edges_to_g2o_edges: Dict[int, Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]] = {}
 
     def generate_unoptimized_graph(self) -> None:
         """Generate the unoptimized g2o graph from the current vertex and edge assignments.
@@ -122,24 +113,22 @@ class Graph:
             verbose (bool): Boolean for whether to print the chi2 values
 
         Returns:
-            A dict mapping 'odometry', 'tag', and 'dummy' to the chi2s corresponding to that edge type
+            A dict mapping 'odometry', 'tag', and 'gravity' to the chi2s corresponding to that edge type
         """
         chi2s = dict(Graph._chi2_dict_template)
         for edge in graph.edges():
-            end_mode = self.vertices[self.edges[edge.id()].enduid].mode
+            this_edge = self.edges[edge.id()]
+            chi2 = graph_opt_utils.get_chi2_of_edge(edge)
+            end_mode = self.vertices[this_edge.enduid].mode if this_edge.enduid is not None else None
             if end_mode == VertexType.ODOMETRY:
-                chi2s['odometry']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
-                chi2s['odometry']['edges'] += 1
+                chi2s["odometry"]["sum"] += chi2
+                chi2s["odometry"]["edges"] += 1
             elif end_mode == VertexType.TAG or end_mode == VertexType.TAGPOINT:
-                chi2s['tag']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
-                chi2s['tag']['edges'] += 1
-            elif end_mode == VertexType.DUMMY:
-                chi2s['dummy']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
-                chi2s['dummy']['edges'] += 1
-            start_mode = self.vertices[self.edges[edge.id()].startuid].mode
-            if start_mode != VertexType.ODOMETRY:
-                raise Exception(f'Original is not odometry. Edge type: {type(edge)}. Start: {start_mode}. End: '
-                                f'{end_mode}')
+                chi2s["tag"]["sum"] += chi2
+                chi2s["tag"]["edges"] += 1
+            elif end_mode is None:
+                chi2s["gravity"]["sum"] += chi2
+                chi2s["gravity"]["edges"] += 1
         for edge_type in chi2s:
             chi2s[edge_type]['average'] = chi2s[edge_type]['sum'] / chi2s[edge_type]['edges']
         if verbose:
@@ -171,8 +160,10 @@ class Graph:
         num_tags_visible = 0
         for e in self._verts_to_edges[vertex_uid]:
             edge = self.edges[e]
+            end_vertex = self.vertices[edge.enduid] if edge.enduid is not None else None
+            if end_vertex is None:  # Continue if the edge is a gravity edge
+                continue
             start_vertex = self.vertices[edge.startuid]
-            end_vertex = self.vertices[edge.enduid]
             if start_vertex.mode == VertexType.ODOMETRY and end_vertex.mode == VertexType.ODOMETRY:
                 odom_edge_uids.append(e)
             elif start_vertex.mode == VertexType.TAG or end_vertex.mode == VertexType.TAG:
@@ -183,27 +174,39 @@ class Graph:
 
         adj_chi2 = 0.0
         for our_edge in odom_edge_uids:
-            g2o_edge = self.our_edges_to_g2o_edges[our_edge]
-            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge)
+            g2o_edge = self.our_odom_edges_to_g2o_edges[our_edge]
+            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])
         return adj_chi2, num_tags_visible
 
-    def optimize_graph(self) -> float:
+    def optimize_graph(self, verbose: bool = True) -> float:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
         optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
 
+        Args:
+            verbose: Boolean for whether to print diagnostic messages about chi2 sums.
+
         Returns:
-            Chi2 sum of optimized graph as returned by the call to `self.sum_optimized_edges_chi2(self.optimized_graph)`
+            Chi2 sum of optimized graph as returned by the call to `self.sum_optimizer_edges_chi2(self.optimized_graph)`
         """
         self.optimized_graph: SparseOptimizer = self.graph_to_optimizer()
         self.optimized_graph.initialize_optimization()
         run_status = self.optimized_graph.optimize(1024)
-
-        print("checking unoptimized edges")
-        graph_opt_utils.sum_optimized_edges_chi2(self.unoptimized_graph)
-        print("checking optimized edges")
-        optimized_chi_sqr = graph_opt_utils.sum_optimized_edges_chi2(self.optimized_graph)
-
         self.g2o_status = run_status
+        optimized_chi_sqr = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)
+
+        if verbose:
+            print("unoptimized edges' chi2 sum:         " + \
+                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False)))
+
+            print("unoptimized gravity edges' chi2 sum: " + \
+                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False,
+                                                               edge_type_filter={EdgeSE3Gravity})))
+            print("optimized edges' chi2 sum:           " + \
+                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)))
+
+            print("optimized gravity edges' chi2 sum:   " + \
+                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False,
+                                                               edge_type_filter={EdgeSE3Gravity})))
         return optimized_chi_sqr
 
     def graph_to_optimizer(self) -> SparseOptimizer:
@@ -216,80 +219,73 @@ class Graph:
             A :class: SparseOptimizer that can be optimized via its optimize class method.
         """
         optimizer: SparseOptimizer = SparseOptimizer()
-        optimizer.set_algorithm(g2o.OptimizationAlgorithmLevenberg(
-            g2o.BlockSolverSE3(g2o.LinearSolverCholmodSE3())))
+        optimizer.set_algorithm(OptimizationAlgorithmLevenberg(BlockSolverSE3(LinearSolverCholmodSE3())))
         cpp_bool_ret_val_check = True
+        self.our_odom_edges_to_g2o_edges.clear()
 
-        if self.is_sparse_bundle_adjustment:
-            for i in self.vertices:
-                if self.vertices[i].mode == VertexType.TAGPOINT:
-                    vertex = g2o.VertexSBAPointXYZ()
-                    vertex.set_estimate(self.vertices[i].estimate[:3])
+        # Add all vertices
+        for i, vertex_i in self.vertices.items():
+            if vertex_i.mode == VertexType.TAGPOINT:
+                vertex = VertexSBAPointXYZ()
+                vertex.set_estimate(vertex_i.estimate[:3])
+            else:
+                if self.is_sba:
+                    vertex = VertexSE3Expmap()
+                    vertex.set_estimate(pose_to_se3quat(vertex_i.estimate))
                 else:
-                    vertex = g2o.VertexSE3Expmap()
-                    vertex.set_estimate(pose_to_se3quat(self.vertices[i].estimate))
-                vertex.set_id(i)
-                vertex.set_fixed(self.vertices[i].fixed)
-                cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
-            cam_idx = 0
-            for i in self.edges:
-                if self.edges[i].corner_ids is None:  # If is none, then this is not an edge connecting to a tagpoint
-                    edge = EdgeSE3Expmap()
-                    for j, k in enumerate([self.edges[i].startuid,
-                                           self.edges[i].enduid]):
-                        edge.set_vertex(j, optimizer.vertex(k))
-                        edge.set_measurement(pose_to_se3quat(self.edges[i].measurement))
-                        edge.set_information(self.edges[i].information)
-                        edge.set_id(i)
-                    cpp_bool_ret_val_check &= optimizer.add_edge(edge)
-                    self.our_edges_to_g2o_edges[i] = edge
-                else:
-                    # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
-                    # (b) it is always the same in ARKit (at least currently)
-                    cam = g2o.CameraParameters(self.edges[i].camera_intrinsics[0],
-                                               self.edges[i].camera_intrinsics[2:], 0)
-                    cam.set_id(cam_idx)
-                    optimizer.add_parameter(cam)
-                    for corner_idx, corner_id in enumerate(self.edges[i].corner_ids):
-                        edge = EdgeProjectPSI2UV()
-                        edge.resize(3)
-                        edge.set_vertex(0, optimizer.vertex(corner_id))
-                        edge.set_vertex(1, optimizer.vertex(self.edges[i].startuid))
-                        edge.set_vertex(2, optimizer.vertex(self.edges[i].enduid))
-                        edge.set_information(self.edges[i].information)
-                        edge.set_measurement(self.edges[i].measurement[corner_idx * 2:corner_idx * 2 + 2])
-                        edge.set_id(i)
-                        cpp_bool_ret_val_check &= edge.set_parameter_id(0, cam_idx)
-                        if self.use_huber:
-                            cpp_bool_ret_val_check &= edge.set_robust_kernel(g2o.RobustKernelHuber(self.huber_delta))
-                        cpp_bool_ret_val_check &= optimizer.add_edge(edge)
+                    vertex = VertexSE3()
+                    vertex.set_estimate(pose_to_isometry(vertex_i.estimate))
+            vertex.set_id(i)
+            vertex.set_fixed(vertex_i.fixed)
+            cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
 
-                        self.our_edges_to_g2o_edges[i] = edge
-                    cam_idx += 1
-        else:
-            for i in self.vertices:
-                vertex = g2o.VertexSE3()
-                vertex.set_id(i)
-                vertex.set_estimate(pose_to_isometry(self.vertices[i].estimate))
-                vertex.set_fixed(self.vertices[i].fixed)
-                cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
-
-            for i in self.edges:
-                edge = EdgeSE3()
-
-                for j, k in enumerate([self.edges[i].startuid, self.edges[i].enduid]):
-                    edge.set_vertex(j, optimizer.vertex(k))
-
-                edge.set_measurement(pose_to_isometry(self.edges[i].measurement))
-                edge.set_information(self.edges[i].information)
-                edge.set_id(i)
-
+        # Add all edges
+        cam_idx = 0
+        for i, edge_i in self.edges.items():
+            if edge_i.corner_ids is not None:
+                # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
+                # (b) it is always the same in ARKit (at least currently)
+                cam = CameraParameters(edge_i.camera_intrinsics[0], edge_i.camera_intrinsics[2:], 0)
+                cam.set_id(cam_idx)
+                optimizer.add_parameter(cam)
+                for corner_idx, corner_id in enumerate(edge_i.corner_ids):
+                    edge = EdgeProjectPSI2UV()
+                    edge.resize(3)
+                    edge.set_vertex(0, optimizer.vertex(corner_id))
+                    edge.set_vertex(1, optimizer.vertex(edge_i.startuid))
+                    edge.set_vertex(2, optimizer.vertex(edge_i.enduid))
+                    edge.set_information(edge_i.information)
+                    edge.set_measurement(edge_i.measurement[corner_idx * 2:corner_idx * 2 + 2])
+                    edge.set_parameter_id(0, cam_idx)
+                    if self.use_huber:
+                        edge.set_robust_kernel(RobustKernelHuber(self.huber_delta))
+                    optimizer.add_edge(edge)
+                cam_idx += 1
+            elif edge_i.enduid is None:  # If is none, then this edge is a gravity edge
+                edge = EdgeSE3Gravity()
+                edge.set_vertex(0, optimizer.vertex(edge_i.startuid))
+                # There is intentionally no end vertex
+                edge.set_measurement(edge_i.measurement)
+                edge.set_information(edge_i.information)
                 cpp_bool_ret_val_check &= optimizer.add_edge(edge)
-                self.our_edges_to_g2o_edges[i] = edge
+            else:
+                if self.is_sba:
+                    edge = EdgeSE3Expmap()
+                    edge.set_measurement(pose_to_se3quat(edge_i.measurement))
+                else:
+                    edge = EdgeSE3()
+                    edge.set_measurement(pose_to_isometry(edge_i.measurement))
+                edge.set_vertex(0, optimizer.vertex(edge_i.startuid))
+                edge.set_vertex(1, optimizer.vertex(edge_i.enduid))
+                edge.set_information(edge_i.information)
+                cpp_bool_ret_val_check &= optimizer.add_edge(edge)
+
+                if edge_i.start_end[0].mode == VertexType.ODOMETRY and \
+                        edge_i.start_end[1].mode == VertexType.ODOMETRY:
+                    self.our_odom_edges_to_g2o_edges[i] = edge
 
         if not cpp_bool_ret_val_check:
             raise Exception("A g2o optimizer method returned false in the graph_to_optimizer method")
-
         return optimizer
 
     # -- Utility methods --
@@ -320,8 +316,6 @@ class Graph:
         # Delete connected edge(s)
         connected_edges = self._verts_to_edges[vertex_uid]
         for edge_uid in connected_edges:
-            if self.our_edges_to_g2o_edges.__contains__(edge_uid):
-                self.our_edges_to_g2o_edges.__delitem__(edge_uid)
             if self.edges[edge_uid].startuid != vertex_uid:
                 self._verts_to_edges[self.edges[edge_uid].startuid].remove(edge_uid)
             else:
@@ -376,10 +370,11 @@ class Graph:
                       f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
                 self.remove_edge(edge_id)
 
-    def update_edge_information(self, compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] =
-                                None) -> None:
+    def update_edge_information(self, compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] = None) -> None:
         """Invokes the compute_information method on each edge in the graph with the corresponding weights vector as
         the weights_vec argument.
+
+        Prescaling is also applied here if the edge contains prescaling information.
 
         Args:
             compute_inf_params: Dict passed down to the `Edge.compute_information` method for its kwargs.
@@ -389,76 +384,29 @@ class Graph:
             Exception if an edge has an unhandled end node type
         """
         for uid in self.edges:
-            edge = self.edges[uid]
-            start_mode = self.vertices[edge.startuid].mode
-            end_mode = self.vertices[edge.enduid].mode
-            if start_mode != VertexType.ODOMETRY:
-                raise Exception("Edge of start type {} not recognized.".format(start_mode))
-            if end_mode == VertexType.ODOMETRY:
-                edge.compute_information(self._weights.odometry, compute_inf_params=compute_inf_params)
-            elif end_mode == VertexType.TAG:
-                if self.is_sparse_bundle_adjustment:
-                    edge.compute_information(self._weights.tag_sba, compute_inf_params=compute_inf_params)
-                else:
-                    edge.compute_information(self._weights.tag, compute_inf_params=compute_inf_params)
-            elif end_mode == VertexType.DUMMY:
-                # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
-                #  to work though)
-                if not self.damping_status:
-                    edge.information = np.zeros([6, 6])
-                    continue
+            edge: Edge = self.edges[uid]
+            end_mode = self.vertices[edge.enduid].mode if edge.enduid is not None else None
+            weights_to_use = self._weights.get_weights_from_end_vertex_mode(
+                end_vertex_mode=VertexType.TAGPOINT if edge.corner_ids is not None else end_mode)
+            edge.compute_information(weights_vec=weights_to_use, compute_inf_params=compute_inf_params)
 
-                dummy_basis = self._basis_matrices[uid][3:6, 3:6]
-                dummy_weight_diag = np.diag(self._weights.dummy)
-                dummy_weight_quadrant = dummy_basis.dot(dummy_weight_diag).dot(dummy_basis.T)
-                dummy_weight_matrix = np.zeros([6, 6])
-                if self.is_sparse_bundle_adjustment:
-                    dummy_weight_matrix[:3, :3] = dummy_weight_quadrant
-                else:
-                    dummy_weight_matrix[3:6, 3:6] = dummy_weight_quadrant
-                edge.information = dummy_weight_matrix
-            elif end_mode == VertexType.WAYPOINT:
-                # self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
-                edge.compute_information(np.ones(6), compute_inf_params=compute_inf_params)
-            else:
-                raise Exception("Edge of end type {} not recognized.".format(end_mode))
-
-            if self.edges[uid].information_prescaling is not None:
+            if edge.information_prescaling is not None and len(edge.information_prescaling.shape) != 0:
                 prescaling_matrix = self.edges[uid].information_prescaling
                 if prescaling_matrix.ndim == 1:
                     prescaling_matrix = np.diag(prescaling_matrix)
-                self.edges[uid].information = np.matmul(prescaling_matrix, self.edges[uid].information)
+                self.edges[uid].information = np.matmul(prescaling_matrix, edge.information)
 
     def update_vertices_estimates(self) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.
         """
         for uid in self.optimized_graph.vertices():
-            if self.is_sparse_bundle_adjustment:
+            if self.is_sba:
                 if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
                     self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
                 else:
                     self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
             else:
                 self.vertices[uid].estimate = isometry_to_pose(self.optimized_graph.vertices()[uid].estimate())
-
-    def _generate_basis_matrices(self) -> None:
-        """Generate basis matrices used to show how a change in global yaw changes the values of a local
-        transform_vector.
-
-        This is used for dummy edges. For other edge types, the basis is simply the identity matrix.
-        """
-        basis_matrices = {}
-
-        for uid in self.edges:
-            if (self.vertices[self.edges[uid].startuid].mode == VertexType.DUMMY) \
-                    != (self.vertices[self.edges[uid].enduid].mode == VertexType.DUMMY):
-                basis_matrices[uid] = np.eye(6)
-                if not self.is_sparse_bundle_adjustment:
-                    basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                        Rot.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
-            else:
-                basis_matrices[uid] = np.eye(6)
-        self._basis_matrices = basis_matrices
 
     def connected_components(self) -> List[Graph]:
         """Return a list of graphs representing connecting components of the input graph.
@@ -478,7 +426,7 @@ class Graph:
                     membership.append(i)
 
             new_group = set.union(uids, *[groups[i][0] for i in membership]), \
-                set.union({uid}, *[groups[i][1] for i in membership])
+                        set.union({uid}, *[groups[i][1] for i in membership])
             membership.reverse()
             for i in membership:
                 del groups[i]
@@ -554,15 +502,16 @@ class Graph:
         return tags
 
     def get_subgraph(self, start_vertex_uid, end_vertex_uid) -> Graph:
-        """Returns a Graph instance that is a subgraph created from the specified range of odometry vertices
+        """Returns a Graph instance that is a subgraph created from the specified range of odometry vertices.
 
         Args:
             start_vertex_uid: First vertex in range of vertices from which to create a subgraph
             end_vertex_uid: Last vertex in range of vertices from which to create a subgraph
 
         Returns:
-            A Graph object that was constructed from all odometry vertices within the prescribed range and any
-            incident tag vertices.
+            A Graph object constructed from all odometry vertices within the prescribed range and any other vertices
+            incident to the odometry vertices. Gravity edges are included (despite their not having been assigned an end
+            vertex), as are any tag vertices (even if they are not connected to the included odometry vertices).
         """
         start_found = False
         edges: Dict[int, Edge] = {}
@@ -572,33 +521,22 @@ class Graph:
             if edge.startuid == start_vertex_uid:
                 start_found = True
             if start_found:
-                vertices[edge.enduid] = self.vertices[edge.enduid]
                 vertices[edge.startuid] = self.vertices[edge.startuid]
+                if edge.enduid is not None:
+                    vertices[edge.enduid] = self.vertices[edge.enduid]
                 edges[edgeuid] = edge
             if edge.enduid == end_vertex_uid:
                 break
 
-        # Find tags and edges connecting to the found vertices
-        for edgeuid in self.edges:
-            edge = self.edges[edgeuid]
-            if self.vertices[edge.startuid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.enduid in vertices:
-                edges[edgeuid] = edge
-                vertices[edge.startuid] = self.vertices[edge.startuid]
-            if self.vertices[edge.enduid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.startuid in vertices:
-                edges[edgeuid] = edge
-                vertices[edge.enduid] = self.vertices[edge.enduid]
-
+        # Ensure all tag vertices are included, regardless of connectivity with the odometry vertices
         for (vert_id, vert) in self.vertices.items():
             if vert.mode == VertexType.TAGPOINT:
-                vertices[vert_id] = vert
+                if vert_id not in vertices:
+                    vertices[vert_id] = vert
 
-        ret_graph = Graph(vertices, edges,
-                          weights=self._weights,
-                          gravity_axis=self.gravity_axis,
-                          is_sparse_bundle_adjustment=self.is_sparse_bundle_adjustment,
-                          use_huber=self.use_huber,
-                          huber_delta=self.huber_delta,
-                          damping_status=self.damping_status)
+        ret_graph = Graph(vertices, edges, weights=self._weights,
+                          is_sparse_bundle_adjustment=self.is_sba, use_huber=self.use_huber,
+                          huber_delta=self.huber_delta, damping_status=self.damping_status)
         return ret_graph
 
     def get_tag_verts(self) -> List[int]:
@@ -685,98 +623,6 @@ class Graph:
             self.vertices[uid].meta_data["tag_id"]: self.optimized_graph.vertex(uid).estimate().vector()
             for uid in self.optimized_graph.vertices() if self.vertices[uid].mode == VertexType.TAG
         }
-
-    # -- Expectation maximization-related methods  --
-
-    def expectation_maximization_once(self) -> Dict[str, np.ndarray]:
-        """Run one cycle of expectation maximization.
-
-        It generates an unoptimized graph from current vertex estimates and edge measurements and importances, and
-        optimizes the graph. Using the errors, it tunes the weights so that the variances maximize the likelihood of
-        each error by type.
-        """
-        self.generate_unoptimized_graph()
-        self.optimize_graph()
-        self.update_vertices_estimates()
-        self.generate_maximization_params()
-        return self.tune_weights().to_dict()
-
-    def expectation_maximization(self, maxiter=10, tol=1) -> int:
-        """Run many iterations of expectation maximization.
-
-        Kwargs:
-            maxiter (int): The maximum amount of iterations.
-            tol (float): The maximum magnitude of the change in weight vectors that will signal the end of the cycle.
-
-        Returns:
-            Number of iterations ran
-        """
-        previous_weights = self._weights.to_dict()
-        i = 0
-        while i < maxiter:
-            self.expectation_maximization_once()
-            new_weights = self._weights.to_dict()
-            for weight_type in new_weights:
-                if np.linalg.norm(new_weights[weight_type] - previous_weights[weight_type]) < tol:
-                    return i
-            previous_weights = new_weights
-            i += 1
-        return i
-
-    def generate_maximization_params(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Generate the arrays to be processed by the maximization model.
-
-        Sets the error field to an array of errors, as well as a 2-d array populated by 1-hot 18 element observation
-        vectors indicating the type of transform_vector. The meaning of the position of the one in the observation
-        vector corresponds to the layout of the weights vector.
-
-        Returns:
-            Errors and observations
-        """
-        errors = np.array([])
-        observations = np.reshape([], [0, 18])
-        optimized_edges = {edge.id(): edge for edge in list(
-            self.optimized_graph.edges())}
-
-        for uid in self.edges:
-            edge = self.edges[uid]
-            start_mode = self.vertices[edge.startuid].mode
-            end_mode = self.vertices[edge.enduid].mode
-
-            if end_mode != VertexType.WAYPOINT:
-                errors = np.hstack(
-                    [errors, self._basis_matrices[uid].T.dot(
-                        optimized_edges[uid].error())])
-
-            if start_mode == VertexType.ODOMETRY:
-                if end_mode == VertexType.ODOMETRY:
-                    observations = np.vstack([observations, np.eye(6, 18)])
-                elif end_mode == VertexType.TAG:
-                    observations = np.vstack([observations, np.eye(6, 18, 6)])
-                elif end_mode == VertexType.DUMMY:
-                    observations = np.vstack([observations, np.eye(6, 18, 12)])
-                elif end_mode == VertexType.WAYPOINT:
-                    continue
-                else:
-                    raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
-                                                                                                            end_mode))
-            else:
-                raise Exception("Unspecified handling for edge of start type {} and end type {}".format(start_mode,
-                                                                                                        end_mode))
-
-        self.errors = errors
-        self.observations = observations
-        return errors, observations
-
-    def tune_weights(self):
-        """Tune the weights to maximize the likelihood of the errors found between the unoptimized and optimized graphs.
-        """
-        results = maxweights(self.observations, self.errors, self._weights)
-        self.maximization_success = results.success
-        self._weights = map_processing.weights.Weights.legacy_from_array(results.x)
-        self.maximization_results = results
-        self.update_edge_information()
-        return self._weights
 
     @staticmethod
     def as_graph(dct: Dict, fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
@@ -911,7 +757,7 @@ class Graph:
             elif prescaling_opt == PrescalingOptEnum.DIAG_COV:
                 tag_edge_prescaling = 1. / np.hstack((tag_position_variances, tag_orientation_variances[:, :-1]))
             elif prescaling_opt == PrescalingOptEnum.ONES:
-                tag_edge_prescaling = np.ones((n_pose_ids, 6, 6))
+                tag_edge_prescaling = np.array([np.eye(6, 6)] * n_pose_ids)
             else:
                 raise Exception("{} is not yet handled".format(str(prescaling_opt)))
 
@@ -1021,7 +867,7 @@ class Graph:
                     # adjust the x-coordinates of the detections to account for differences in coordinate systems
                     # induced by the FLIP_Y_AND_Z_AXES
                     tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - \
-                        tag_corners[tag_index][::2]
+                                                  tag_corners[tag_index][::2]
 
                     # Archive:
                     # for k, point in enumerate(true_3d_tag_points):
@@ -1099,20 +945,22 @@ class Graph:
                                                                                    vertices[current_odom_vertex_uid]))
                 edge_counter += 1
 
-            # Make dummy node
-            dummy_node_uid = vertex_counter
-            vertices[dummy_node_uid] = Vertex(
-                mode=VertexType.DUMMY,
-                estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
-                fixed=True)
-            vertex_counter += 1
-
-            # Connect odometry to dummy node
-            edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=dummy_node_uid, corner_ids=None,
-                                       information_prescaling=None, camera_intrinsics=None,
-                                       measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
-                                       start_end=(vertices[current_odom_vertex_uid], vertices[dummy_node_uid]))
+            # Connect gravity edge to odometry vertex
+            if not use_sba:
+                # Use the second column of the inverted rotation matrix
+                gravity_edge_measurement_vector = np.concatenate((np.array([0.0, 1.0, 0.0]),
+                                                                  pose_matrices[i, 1, :-1]))
+            else:
+                # Use the second column of the twice-inverted rotation matrix
+                gravity_edge_measurement_vector = np.concatenate((np.array([0.0, 1.0, 0.0]),
+                                                                  pose_matrices[i, :-1, 1]))
+            edges[edge_counter] = Edge(
+                startuid=current_odom_vertex_uid, enduid=None, information_prescaling=None,
+                measurement=gravity_edge_measurement_vector, start_end=(vertices[current_odom_vertex_uid], None),
+                camera_intrinsics=None, corner_ids=None)
             edge_counter += 1
+
+            # Store uid so that it can be easily accessed for the next odometry-to-odometry edge addition
             previous_vertex_uid = current_odom_vertex_uid
 
             if not use_sba:
@@ -1123,7 +971,7 @@ class Graph:
                 vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
 
         # TODO: Huber delta should probably scale with pixels rather than error
-        resulting_graph = Graph(vertices, edges, gravity_axis='y', is_sparse_bundle_adjustment=use_sba,
+        resulting_graph = Graph(vertices, edges, is_sparse_bundle_adjustment=use_sba,
                                 use_huber=False, huber_delta=None, damping_status=False)
         return resulting_graph
 
