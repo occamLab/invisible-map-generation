@@ -8,7 +8,7 @@ from typing import Union, List, Dict
 
 import g2o
 import numpy as np
-from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3
+from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity
 
 from . import graph_util_get_neighbors
 from .graph_vertex_edge_classes import VertexType
@@ -167,6 +167,9 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3]) -> 
         delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
         error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
         return error.dot(edge.information()).dot(error)
+    elif isinstance(edge, EdgeSE3Gravity):
+        error = edge.vertex(0).estimate().rotation().inverse() * edge.measurement()[:3] - edge.measurement()[3:]
+        return error.dot(edge.information()).dot(error)
     else:
         raise Exception("Unhandled edge type for chi2 calculation")
 
@@ -294,7 +297,8 @@ def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calc
                                  "y": curr_odom[4],
                                  "z": curr_odom[5],
                                  "w": curr_odom[6]},
-                    "poseId": int(curr_odom[8]),
+                    "po"
+                    "seId": int(curr_odom[8]),
                     "adjChi2": curr_odom[9],
                     "vizTags": curr_odom[10]
                 },

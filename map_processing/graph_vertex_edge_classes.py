@@ -14,7 +14,6 @@ class VertexType(Enum):
     ODOMETRY = 0
     TAG = 1
     TAGPOINT = 2
-    DUMMY = 3
     WAYPOINT = 4
 
 
@@ -110,14 +109,18 @@ class Edge:
         if self.corner_ids is not None:
             self._compute_information_sba(weights_vec)
         else:
-            if self.start_end[1].mode == VertexType.ODOMETRY:
-                lvv = compute_inf_params["lin_vel_var"] if isinstance(compute_inf_params.get("lin_vel_var", None),
-                                                                      np.ndarray) else np.ones(3)
-                avv = compute_inf_params["ang_vel_var"] if isinstance(compute_inf_params.get("ang_vel_var", None),
-                                                                      float) else 1
-                self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=lvv, ang_vel_var=avv)
+            if self.start_end[1] is None:
+                # we have a dummy node
+                self.information = np.diag(weights_vec)
             else:
-                self._compute_information_se3_obs(weights_vec)
+                if self.start_end[1].mode == VertexType.ODOMETRY:
+                    lvv = compute_inf_params["lin_vel_var"] if isinstance(compute_inf_params.get("lin_vel_var", None),
+                                                                          np.ndarray) else np.ones(3)
+                    avv = compute_inf_params["ang_vel_var"] if isinstance(compute_inf_params.get("ang_vel_var", None),
+                                                                          float) else 1
+                    self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=lvv, ang_vel_var=avv)
+                else:
+                    self._compute_information_se3_obs(weights_vec)
 
         if np.any(self.information < 0):
             raise ValueError("The information matrix should not contain negative values")

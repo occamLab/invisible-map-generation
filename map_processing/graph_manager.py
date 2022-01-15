@@ -449,13 +449,6 @@ class GraphManager:
         graph1 = Graph.as_graph(graph, prescaling_opt=self.pso)
         graph2 = Graph.as_graph(graph, fixed_vertices=VertexType.TAG, prescaling_opt=self.pso)
         dummy_nodes = [0, 0]
-        for vertex in graph1.vertices.values():
-            if vertex.mode == VertexType.DUMMY:
-                dummy_nodes[0] += 1
-        for vertex in graph2.vertices.values():
-            if vertex.mode == VertexType.DUMMY:
-                dummy_nodes[1] += 1
-        print(f'Dummy nodes: {dummy_nodes}')
         ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
         start_uid = graph1.edges[ordered_odom_edges[0]].startuid
         middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid

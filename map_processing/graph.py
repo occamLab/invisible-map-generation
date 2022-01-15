@@ -10,7 +10,7 @@ from collections import defaultdict
 from typing import *
 
 import g2o
-from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3
+from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
@@ -78,8 +78,6 @@ class Graph:
         
         self._verts_to_edges: Dict[int, Set[int]] = {}
         self._generate_verts_to_edges_mapping()
-        self._basis_matrices: Dict[int, np.ndarray] = {}
-        self._generate_basis_matrices()
 
         self.g2o_status = -1
         self.maximization_success_status = False
@@ -126,6 +124,9 @@ class Graph:
         """
         chi2s = dict(Graph._chi2_dict_template)
         for edge in graph.edges():
+            if self.vertices[self.edges[edge.id()].endui] is None:
+                print("Warning: not handling unary edges like EdgeSE3Gravity")
+                continue
             end_mode = self.vertices[self.edges[edge.id()].enduid].mode
             if end_mode == VertexType.ODOMETRY:
                 chi2s['odometry']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
@@ -133,9 +134,6 @@ class Graph:
             elif end_mode == VertexType.TAG or end_mode == VertexType.TAGPOINT:
                 chi2s['tag']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
                 chi2s['tag']['edges'] += 1
-            elif end_mode == VertexType.DUMMY:
-                chi2s['dummy']['sum'] += graph_opt_utils.get_chi2_of_edge(edge)
-                chi2s['dummy']['edges'] += 1
             start_mode = self.vertices[self.edges[edge.id()].startuid].mode
             if start_mode != VertexType.ODOMETRY:
                 raise Exception(f'Original is not odometry. Edge type: {type(edge)}. Start: {start_mode}. End: '
@@ -171,6 +169,8 @@ class Graph:
         num_tags_visible = 0
         for e in self._verts_to_edges[vertex_uid]:
             edge = self.edges[e]
+            if edge.enduid is None:
+                continue
             start_vertex = self.vertices[edge.startuid]
             end_vertex = self.vertices[edge.enduid]
             if start_vertex.mode == VertexType.ODOMETRY and end_vertex.mode == VertexType.ODOMETRY:
@@ -275,13 +275,20 @@ class Graph:
                 cpp_bool_ret_val_check &= optimizer.add_vertex(vertex)
 
             for i in self.edges:
-                edge = EdgeSE3()
+                if self.edges[i].enduid is None:
+                    edge = EdgeSE3Gravity()
+                    # sorry Duncan, hacking this since I don't have time to properly set the information right now :(
+                    edge.set_information(np.eye(3)*100)
+                    edge.set_measurement(self.edges[i].measurement)
+                else:
+                    edge = EdgeSE3()
+                    edge.set_information(self.edges[i].information)
+                    edge.set_measurement(pose_to_isometry(self.edges[i].measurement))
 
                 for j, k in enumerate([self.edges[i].startuid, self.edges[i].enduid]):
-                    edge.set_vertex(j, optimizer.vertex(k))
+                    if k is not None:
+                        edge.set_vertex(j, optimizer.vertex(k))
 
-                edge.set_measurement(pose_to_isometry(self.edges[i].measurement))
-                edge.set_information(self.edges[i].information)
                 edge.set_id(i)
 
                 cpp_bool_ret_val_check &= optimizer.add_edge(edge)
@@ -391,37 +398,24 @@ class Graph:
         for uid in self.edges:
             edge = self.edges[uid]
             start_mode = self.vertices[edge.startuid].mode
-            end_mode = self.vertices[edge.enduid].mode
             if start_mode != VertexType.ODOMETRY:
                 raise Exception("Edge of start type {} not recognized.".format(start_mode))
-            if end_mode == VertexType.ODOMETRY:
-                edge.compute_information(self._weights.odometry, compute_inf_params=compute_inf_params)
-            elif end_mode == VertexType.TAG:
-                if self.is_sparse_bundle_adjustment:
-                    edge.compute_information(self._weights.tag_sba, compute_inf_params=compute_inf_params)
-                else:
-                    edge.compute_information(self._weights.tag, compute_inf_params=compute_inf_params)
-            elif end_mode == VertexType.DUMMY:
-                # TODO: this basis is not very pure and results in weight on each dimension of the quaternion (seems
-                #  to work though)
-                if not self.damping_status:
-                    edge.information = np.zeros([6, 6])
-                    continue
-
-                dummy_basis = self._basis_matrices[uid][3:6, 3:6]
-                dummy_weight_diag = np.diag(self._weights.dummy)
-                dummy_weight_quadrant = dummy_basis.dot(dummy_weight_diag).dot(dummy_basis.T)
-                dummy_weight_matrix = np.zeros([6, 6])
-                if self.is_sparse_bundle_adjustment:
-                    dummy_weight_matrix[:3, :3] = dummy_weight_quadrant
-                else:
-                    dummy_weight_matrix[3:6, 3:6] = dummy_weight_quadrant
-                edge.information = dummy_weight_matrix
-            elif end_mode == VertexType.WAYPOINT:
-                # self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
-                edge.compute_information(np.ones(6), compute_inf_params=compute_inf_params)
+            if edge.enduid is None:
+                edge.compute_information(self._weights.dummy, compute_inf_params=compute_inf_params)
             else:
-                raise Exception("Edge of end type {} not recognized.".format(end_mode))
+                end_mode = self.vertices[edge.enduid].mode
+                if end_mode == VertexType.ODOMETRY:
+                    edge.compute_information(self._weights.odometry, compute_inf_params=compute_inf_params)
+                elif end_mode == VertexType.TAG:
+                    if self.is_sparse_bundle_adjustment:
+                        edge.compute_information(self._weights.tag_sba, compute_inf_params=compute_inf_params)
+                    else:
+                        edge.compute_information(self._weights.tag, compute_inf_params=compute_inf_params)
+                elif end_mode == VertexType.WAYPOINT:
+                    # self.edges[uid].information = np.eye(6, 6)  # TODO: set to something other than identity?
+                    edge.compute_information(np.ones(6), compute_inf_params=compute_inf_params)
+                else:
+                    raise Exception("Edge of end type {} not recognized.".format(end_mode))
 
             if self.edges[uid].information_prescaling is not None:
                 prescaling_matrix = self.edges[uid].information_prescaling
@@ -440,25 +434,6 @@ class Graph:
                     self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
             else:
                 self.vertices[uid].estimate = isometry_to_pose(self.optimized_graph.vertices()[uid].estimate())
-
-    def _generate_basis_matrices(self) -> None:
-        """Generate basis matrices used to show how a change in global yaw changes the values of a local
-        transform_vector.
-
-        This is used for dummy edges. For other edge types, the basis is simply the identity matrix.
-        """
-        basis_matrices = {}
-
-        for uid in self.edges:
-            if (self.vertices[self.edges[uid].startuid].mode == VertexType.DUMMY) \
-                    != (self.vertices[self.edges[uid].enduid].mode == VertexType.DUMMY):
-                basis_matrices[uid] = np.eye(6)
-                if not self.is_sparse_bundle_adjustment:
-                    basis_matrices[uid][3:6, 3:6] = global_yaw_effect_basis(
-                        Rot.from_quat(self.vertices[self.edges[uid].enduid].estimate[3:7]), self.gravity_axis)
-            else:
-                basis_matrices[uid] = np.eye(6)
-        self._basis_matrices = basis_matrices
 
     def connected_components(self) -> List[Graph]:
         """Return a list of graphs representing connecting components of the input graph.
@@ -522,7 +497,10 @@ class Graph:
         num_odom_edges = 0
         num_tag_edges = 0
         for edge_id, edge in self.edges.items():
-            if edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
+            if edge.start_end[1] is None:
+                # this is a gravity edge
+                pass
+            elif edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
                 num_odom_edges += 1
             elif edge.get_end_vertex_type(self.vertices) in (VertexType.TAG, VertexType.TAGPOINT):
                 num_tag_edges += 1
@@ -572,7 +550,8 @@ class Graph:
             if edge.startuid == start_vertex_uid:
                 start_found = True
             if start_found:
-                vertices[edge.enduid] = self.vertices[edge.enduid]
+                if edge.enduid is not None:
+                    vertices[edge.enduid] = self.vertices[edge.enduid]
                 vertices[edge.startuid] = self.vertices[edge.startuid]
                 edges[edgeuid] = edge
             if edge.enduid == end_vertex_uid:
@@ -581,10 +560,13 @@ class Graph:
         # Find tags and edges connecting to the found vertices
         for edgeuid in self.edges:
             edge = self.edges[edgeuid]
-            if self.vertices[edge.startuid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.enduid in vertices:
+            # check for Unary edges (like gravity edges)
+            if edge.enduid is None and edge.startuid in vertices:
+                edges[edgeuid] = edge
+            elif self.vertices[edge.startuid].mode == VertexType.TAG and edge.enduid in vertices:
                 edges[edgeuid] = edge
                 vertices[edge.startuid] = self.vertices[edge.startuid]
-            if self.vertices[edge.enduid].mode in (VertexType.TAG, VertexType.DUMMY) and edge.startuid in vertices:
+            if self.vertices[edge.enduid].mode == VertexType.TAG and edge.startuid in vertices:
                 edges[edgeuid] = edge
                 vertices[edge.enduid] = self.vertices[edge.enduid]
 
@@ -745,8 +727,7 @@ class Graph:
 
             if end_mode != VertexType.WAYPOINT:
                 errors = np.hstack(
-                    [errors, self._basis_matrices[uid].T.dot(
-                        optimized_edges[uid].error())])
+                    [errors, optimized_edges[uid].error()])
 
             if start_mode == VertexType.ODOMETRY:
                 if end_mode == VertexType.ODOMETRY:
@@ -1099,19 +1080,14 @@ class Graph:
                                                                                    vertices[current_odom_vertex_uid]))
                 edge_counter += 1
 
-            # Make dummy node
-            dummy_node_uid = vertex_counter
-            vertices[dummy_node_uid] = Vertex(
-                mode=VertexType.DUMMY,
-                estimate=np.hstack((np.zeros(3, ), odom_vertex_estimates[i][3:])),
-                fixed=True)
-            vertex_counter += 1
-
-            # Connect odometry to dummy node
-            edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=dummy_node_uid, corner_ids=None,
+            # Connect odometry to gravity
+            assert not use_sba, "Gravity Edges don't work for SBA yet"
+            # the measurement is a concatenation of up direction in the global frame and the mesaurement of the up
+            # direction in the phone frame
+            edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=None, corner_ids=None,
                                        information_prescaling=None, camera_intrinsics=None,
-                                       measurement=np.array([0, 0, 0, 0, 0, 0, 1]),
-                                       start_end=(vertices[current_odom_vertex_uid], vertices[dummy_node_uid]))
+                                       measurement=np.concatenate((np.array([0.0, 1.0, 0.0]), pose_matrices[i][1,:-1])),
+                                       start_end=(vertices[current_odom_vertex_uid],None))
             edge_counter += 1
             previous_vertex_uid = current_odom_vertex_uid
 
