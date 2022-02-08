@@ -263,6 +263,8 @@ class Graph:
                 cam_idx += 1
             elif edge_i.enduid is None:  # If is none, then this edge is a gravity edge
                 edge = EdgeSE3Gravity()
+                if self.is_sba:
+                    edge.set_odometry_is_se3_expmap()
                 edge.set_vertex(0, optimizer.vertex(edge_i.startuid))
                 # There is intentionally no end vertex
                 edge.set_measurement(edge_i.measurement)
@@ -946,14 +948,9 @@ class Graph:
                 edge_counter += 1
 
             # Connect gravity edge to odometry vertex
-            if not use_sba:
-                # Use the second column of the inverted rotation matrix
-                gravity_edge_measurement_vector = np.concatenate((np.array([0.0, 1.0, 0.0]),
-                                                                  pose_matrices[i, 1, :-1]))
-            else:
-                # Use the second column of the twice-inverted rotation matrix
-                gravity_edge_measurement_vector = np.concatenate((np.array([0.0, 1.0, 0.0]),
-                                                                  pose_matrices[i, :-1, 1]))
+            # (use the second column of the inverted rotation matrix)
+            gravity_edge_measurement_vector = np.concatenate((np.array([0.0, 1.0, 0.0]),
+                                                              pose_matrices[i, 1, :-1]))
             edges[edge_counter] = Edge(
                 startuid=current_odom_vertex_uid, enduid=None, information_prescaling=None,
                 measurement=gravity_edge_measurement_vector, start_end=(vertices[current_odom_vertex_uid], None),

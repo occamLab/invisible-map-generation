@@ -8,7 +8,7 @@ from typing import Union, List, Dict, Optional, Set
 
 import g2o
 import numpy as np
-from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3
+from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, VertexSE3Expmap
 # noinspection PyUnresolvedReferences
 from g2o import EdgeSE3Gravity
 
@@ -129,12 +129,13 @@ def optimizer_find_connected_tag_vert(optimizer: g2o.SparseOptimizer, location_v
 
 
 def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity],
-                     start_vert: Optional[VertexSE3] = None) -> float:
+                     start_vert: Optional[Union[VertexSE3, VertexSE3Expmap]] = None) -> float:
     """Computes the chi2 value associated with the provided edge
 
     Arguments:
         edge: A g2o edge of type EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, or EdgeSE3Gravity
-        start_vert: The start vertex associated with this edge (only used if the edge is of type EdgeSE3Gravity)
+        start_vert: The start vertex associated with this edge (only used if the edge is of type EdgeSE3Gravity;
+         otherwise, it is ignored.)
 
     Returns:
         Chi2 value associated with the provided edge
@@ -155,15 +156,6 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, Edge
         chi2 = error.log().T.dot(edge.information()).dot(error.log())
         # noinspection SpellCheckingInspection
         if math.isnan(chi2):
-            # print(f'vertex 0 estimate:\n{edge.vertex(0).estimate().matrix()}'
-            #       f'\nfull:\n{edge.vertex(0).estimate().adj()}')
-            # print(f'vertex 1 estimate:\n{edge.vertex(1).estimate().matrix()}'
-            #       f'\nfull:\n{edge.vertex(1).estimate().adj()}')
-            # print(f'transform_vector:\n{edge.transform_vector().matrix()}\nfull:\n{edge.transform_vector().adj()}')
-            # print(f'calc. error:\n{error.matrix()}\nfull:{error.adj()}')
-            # print(f'omega:\n{edge.information()}')
-            # if weights is not None:
-            #     print(f'weights:\n{weights}')
             raise Exception('chi2 is NaN for an edge of type EdgeSE3Expmap')
         return chi2
     elif isinstance(edge, EdgeSE3):
@@ -175,8 +167,13 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, Edge
             raise ValueError("No start vertex provided for edge of type EdgeSE3Gravity")
         direction = edge.measurement()[:3]
         measurement = edge.measurement()[3:]
-        inverted_vert_rot = start_vert.estimate().Quaternion().inverse().R
-        estimate = np.matmul(inverted_vert_rot, direction)
+
+        if isinstance(start_vert, VertexSE3):
+            rot_mat = start_vert.estimate().Quaternion().inverse().R
+        else:  # start_vert is a VertexSE3Expmap, so don't invert the rotation
+            rot_mat = start_vert.estimate().Quaternion().R
+
+        estimate = np.matmul(rot_mat, direction)
         error = estimate - measurement
         return error.dot(edge.information()).dot(error)
     else:
