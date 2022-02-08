@@ -6,6 +6,7 @@ from typing import Optional, Union, List, Dict
 
 import numpy as np
 from map_processing.graph_vertex_edge_classes import VertexType
+from map_processing import ASSUMED_FOCAL_LENGTH
 
 
 class Weights:
@@ -49,8 +50,7 @@ class Weights:
 
     @staticmethod
     def legacy_weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
-        """
-        Constructs a normalized weight dictionary from a given array of values
+        """Construct a normalized weight dictionary from a given array of values using the legacy approach.
         """
         weights = {
             'gravity': np.array([-1, 1e2, -1]),
@@ -101,27 +101,37 @@ class Weights:
             raise Exception(f'Weight length of {length} is not supported')
 
         w = Weights.legacy_from_dict(weights)
-        w.normalize_tag_and_odom_weights()
+        w.scale_tag_and_odom_weights(normalize=True)
         return w.to_dict()
 
-    def normalize_tag_and_odom_weights(self):
-        """Normalizes the tag and odometry weights' magnitudes, then applies the odom-to-tag ratio as a scaling factor.
-        """
-        odom_mag = np.linalg.norm(self.odometry)
-        if odom_mag == 0:  # Avoid divide by zero error
-            odom_mag = 1
-        self.odometry *= self.odom_tag_ratio / odom_mag
+    def scale_tag_and_odom_weights(self, normalize: bool = False):
+        """Apply the odom-to-tag ratio as a scaling factor to the odometry and tag vectors; divide the tag_sba vector
+         by the camera's focal length.
 
+        Args:
+            normalize: If true, add a multiplicative factor that is the reciprocal of each vector's magnitude.
+        """
+        if normalize:
+            odom_mag = np.linalg.norm(self.odometry)
+            if odom_mag == 0:  # Avoid divide by zero error
+                odom_mag = 1
+
+            sba_mag = np.linalg.norm(self.tag_sba)
+            if sba_mag == 0:
+                sba_mag = 1  # Avoid divide by zero error
+
+            tag_mag = np.linalg.norm(self.tag)
+            if tag_mag == 0:  # Avoid divide by zero error
+                tag_mag = 1
+        else:
+            odom_mag = 1
+            sba_mag = 1
+            tag_mag = 1
+
+        self.odometry *= self.odom_tag_ratio / odom_mag
         # TODO: The below implements what was previously in place for SBA weighting. Should it be changed? Why is
         #  such a low weighting so effective?
-        sba_mag = np.linalg.norm(self.tag_sba)
-        if sba_mag == 0:
-            sba_mag = 1  # Avoid divide by zero error
-        self.tag_sba *= 1 / (sba_mag * 1464)
-
-        tag_mag = np.linalg.norm(self.tag)
-        if tag_mag == 0:  # Avoid divide by zero error
-            tag_mag = 1
+        self.tag_sba *= 1 / (sba_mag * ASSUMED_FOCAL_LENGTH)
         self.tag *= 1 / tag_mag
     
     def get_weights_from_end_vertex_mode(self, end_vertex_mode: Optional[VertexType]):
