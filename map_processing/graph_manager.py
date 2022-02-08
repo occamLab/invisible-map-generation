@@ -79,7 +79,7 @@ class GraphManager:
                                                  tag_sba=np.exp(-np.array([9.91, 8.88])), gravity=np.ones(3)),
         WeightSpecifier.BEST_SWEEP: Weights.legacy_from_array(np.exp(np.array([8.5, 10]))),
         WeightSpecifier.IDENTITY: Weights(),
-        WeightSpecifier.TRUST_GRAVITY: Weights(gravity=0 * np.ones(3))
+        WeightSpecifier.TRUST_GRAVITY: Weights(gravity=1 * np.ones(3))
     }
     _comparison_graph1_subgraph_weights: List[WeightSpecifier] = [
         WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS,
