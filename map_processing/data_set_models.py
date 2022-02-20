@@ -96,6 +96,8 @@ class UGDataSet(BaseModel):
     pose_data: List[UGPoseDatum]
     tag_data: List[List[UGTagDatum]] = []
 
+    # TODO: Add documentation for the following properties
+
     @property
     def pose_data_len(self) -> int:
         return len(self.pose_data)

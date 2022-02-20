@@ -86,7 +86,7 @@ def make_parser():
     )
 
     weights_options = [f"{weight_option.value}-'{str(weight_option)[len(GraphManager.WeightSpecifier.__name__) + 1:]}'"
-                       for weight_option in GraphManager.WeightSpecifier]
+                       for weight_option in GraphManager.weights_dict.keys()]
     p.add_argument(
         "-w",
         type=int,
@@ -94,7 +94,7 @@ def make_parser():
         help="Specifies which weight vector to be used (maps to a weight vector which is stored as a class attribute "
              "of the GraphManager class). Viable options are: " + ", ".join(weights_options),
         default=0,
-        choices={weight_option.value for weight_option in GraphManager.WeightSpecifier}
+        choices={weight_option.value for weight_option in GraphManager.weights_dict.keys()}
     )
     p.add_argument(
         "-f",
