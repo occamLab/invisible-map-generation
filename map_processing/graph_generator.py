@@ -5,7 +5,7 @@ script for a CLI interface using this class.
 
 import json
 import random
-from enum import Enum
+from enum import Enum, auto
 from typing import Callable, Tuple, Optional, List, Dict, Union
 
 import matplotlib
@@ -15,10 +15,10 @@ from g2o import SE3Quat
 from mpl_toolkits.mplot3d import Axes3D
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, transform_matrix_to_vector, \
-    transform_vector_to_matrix
 from map_processing.data_set_models import UGDataSet, UGTagDatum, UGPoseDatum, \
     GTDataSet, GTTagPose
+from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, transform_matrix_to_vector, \
+    transform_vector_to_matrix
 
 matplotlib.rcParams['figure.dpi'] = 500
 
@@ -31,9 +31,16 @@ class GraphGenerator:
     Attributes:
         _path: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve at,
          and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
-        _t_max: Max parameter value to use when evaluating the path
-        _n_poses: Number of poses to sample the path at (referenced as N in the array dimensions described for other
-         attributes).
+        _path_type: The type of the `_path` attribute as specified by the `GraphGenerator.PathType` enumeration.
+        _t_max: Max parameter value to use when evaluating a parameterized path. If a recorded path is prescribed, then
+         this is ignored.
+        _delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
+         a recorded path, then this value is set to 0 arbitrarily.
+        _odometry_t_vec: The vector of pose time stamps, either generated from _t_max and _n_poses in the case of a
+         parameterized path or copied from the 'timestamp' fields of the data set otherwise.
+        _n_poses: Number of poses to sample a parameterized path at (referenced as N in the array dimensions described
+         for other attributes); if the path is a recorded path, then this is set to the number of poses in that data
+         set.
         _tag_poses: A Mx4x4 array of M tag poses defined in the global reference frame using homogenous transform
          matrices.
         _dist_threshold: Maximum distance from which a tag can be considered observable.
@@ -48,6 +55,10 @@ class GraphGenerator:
         _observation_pixels: Nx2x4 array containing the pixel coordinates corresponding to the pose observations
          recorded in _observation_poses.
     """
+
+    class PathType(Enum):
+        RECORDED = auto()
+        PARAMETERIZED = auto()
 
     class OdomNoiseDims(Enum):
         X = 0
@@ -142,50 +153,78 @@ class GraphGenerator:
     Z_HAT_1X3 = np.array(((0, 0, 1),))
     BASES_COLOR_CODES = ("r", "g", "b")
 
-    def __init__(
-            self,
-            path: Callable[[np.ndarray, Dict[str, float]], np.ndarray],
-            dataset_name: str,
-            path_args: Dict[str, Union[float, Tuple[float, float]]],
-            t_max: float,
-            n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None,
-            dist_threshold: float = 3.7,
-            aoa_threshold: float = np.pi / 4,
-            tag_size: float = 0.7,
-            odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None
-    ):
-        """Initializes a GraphGenerator instance and automatically invokes generate.
+    def __init__(self,
+                 path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet], dataset_name: str,
+                 parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None,
+                 t_max: float = 0, n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None,
+                 dist_threshold: float = 3.7, aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
+                 odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None):
+        """Initializes a GraphGenerator instance and automatically invokes the `generate` method.
 
         Args:
-            path: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve
-             at, and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
-            dataset_name: String used as the name for the dataset when caching the ground truth data.
-            t_max: Max parameter value to use when evaluating the path
-            n_poses: Number of poses to sample the path at.
+            path_from: If a callable, then it defines a parameterized path where the first positional argument of the
+             callable is to be an N-length vector of parameters to evaluate the curve at, and returns a 3xN array where
+             the rows from top to bottom are the x, y, and z coordinates respectively; the second positional argument is
+             a dictionary specifying path parameters (the contents of which is function-specific). If a `UGDataSet`
+             instance, then it defines a path and set of tags according to the data in the data set.
+            dataset_name: String used as the name for the dataset when caching the ground truth data
+            parameterized_path_args: Dictionary to pass as the second positional argument to the `path` if it is a
+             callable (if the `path` argument is not a callable, then this argument is ignored).
+            t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
+            n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
+             argument is ignored.
             tag_poses: A dictionary mapping tag IDs to their poses in the global reference frame using homogenous
-             transform matrices.
+             transform matrices; if a recorded path is provided, then this argument overrides the data set's tag poses
+             if it is not none.
             dist_threshold: Maximum distance from which a tag can be considered observable.
             aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
              of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
              phone.
-            tag_size: Dimensions (height and width) of the tags in meters.
+            tag_size: Height/width dimension of the (square) tags in meters.
+
+        Raises:
+            ValueError - If `path_from` is a `UGDataSet` instance and `t_max` is negative.
+            ValueError - If `path_from` is a `UGDataSet` instance and `n_poses` is <2
         """
-        self._path: Callable[[np.ndarray, Dict[str, float]], np.ndarray] = path
+        self._path: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet] = path_from
+        self._path_type = GraphGenerator.PathType.PARAMETERIZED if isinstance(self._path, Callable) else \
+            GraphGenerator.PathType.RECORDED
         self._dataset_name: str = dataset_name
-        self._path_args: Dict[str, Union[float, Tuple[float, float]]] = dict(path_args)
-        self._t_max = t_max
-        self._n_poses = n_poses
         self._dist_threshold = dist_threshold
         self._aoa_threshold = aoa_threshold
 
-        self._tag_poses: Dict[int, np.ndarray] = tag_poses if tag_poses is not None else {}
+        self._parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = \
+            dict(parameterized_path_args) if parameterized_path_args is not None else None
+
+        if t_max < 0:
+            raise ValueError("'t_max' argument cannot be less than 0")
+        self._t_max = t_max
+
+        if n_poses < 2:
+            raise ValueError("'n_poses' argument cannot be less than 2")
+        self._n_poses = n_poses if isinstance(self._path, Callable) else len(self._path.pose_data)
+
+        self._tag_poses: Dict[int, np.ndarray]
+        if tag_poses is not None:
+            self._tag_poses = tag_poses
+        else:
+            if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
+                self._tag_poses = {}
+            else:
+                self._tag_poses = self._path.approx_tag_in_global_by_id
+
         self._tag_poses_arr = np.zeros((len(self._tag_poses), 4, 4))
         for i, pose in enumerate(self._tag_poses.values()):
             self._tag_poses_arr[i, :, :] = pose
 
         self._odometry_poses: Optional[np.ndarray] = None
-        self._odometry_t_vec = np.arange(0, self._t_max, self._t_max / self._n_poses)
-        self._delta_t = self._t_max / (self._n_poses - 1)
+        if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
+            self._odometry_t_vec = np.arange(0, self._t_max, self._t_max / self._n_poses)
+            self._delta_t = self._t_max / (self._n_poses - 1)
+        else:
+            self._odometry_t_vec = self._path.timestamps
+            self._delta_t = 0
+
         self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
         self._obs_from_poses: Optional[np.ndarray] = None
         self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
@@ -308,8 +347,7 @@ class GraphGenerator:
         Args:
             plus_minus_lim: Value for the x-, y-, and z-lim3d parameters of the matplotlib 3d axes.
         """
-        path_t_vec = np.arange(0, 2 * np.pi, 0.01)
-        path_samples = self._path(path_t_vec, self._path_args)
+        path_samples = self._obs_from_poses[:, :3, 3].transpose()
 
         f: plt.Figure = plt.figure()
         ax: Axes3D = f.add_subplot(projection="3d")
@@ -345,16 +383,26 @@ class GraphGenerator:
     def generate(self) -> None:
         """Populate the _odometry_poses attribute with the poses sampled at the given parameter values, then the
         _observation_poses attribute is populated with the tag observations at each of the poses.
-        """
-        positions = self._path(self._odometry_t_vec, self._path_args)  # 3xN
-        frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path, self._path_args)  # Nx3x3
-        true_poses = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
-        true_poses[:, 3, 3] = 1
-        true_poses[:, :3, 3] = positions.transpose()
-        true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
 
-        self._odometry_poses = self._apply_noise(true_poses)
-        self._obs_from_poses = true_poses
+        Raises:
+            ValueError - If `_path` is not a Callable or a UGDataSet.
+        """
+        if isinstance(self._path, Callable):
+            positions = self._path(self._odometry_t_vec, self._parameterized_path_args)  # 3xN array
+            # Nx3x3 array
+            frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path,
+                                                         self._parameterized_path_args)
+            true_poses = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
+            true_poses[:, 3, 3] = 1
+            true_poses[:, :3, 3] = positions.transpose()
+            true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
+            self._odometry_poses = self._apply_noise(true_poses)
+            self._obs_from_poses = true_poses
+        elif isinstance(self._path, UGDataSet):
+            self._odometry_poses = self._apply_noise(self._path.pose_matrices)
+            self._obs_from_poses = self._path.pose_matrices
+        else:
+            raise ValueError(f"'_path' attribute is not of a known type")
 
         self._observation_poses = []
         self._observation_pixels = []
@@ -385,14 +433,15 @@ class GraphGenerator:
         # pose-to-pose transforms except with noise applied.
         noisy_transforms = np.zeros((true_poses.shape[0] - 1, 4, 4))
         for i in range(0, true_poses.shape[0] - 1):
+            this_delta_t = self._odometry_t_vec[i + 1] - self._odometry_t_vec[i]
             noise_as_transform = np.zeros((4, 4))
             noise_as_transform[3, 3] = 1
             noise_as_transform[:3, 3] = np.array([
-                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X])),
-                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y])),
-                np.random.normal(0, np.sqrt(self._delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]))
+                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X])),
+                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y])),
+                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]))
             ])
-            theta = np.random.normal(0, np.sqrt(self._delta_t *
+            theta = np.random.normal(0, np.sqrt(this_delta_t *
                                                 self._odometry_noise_var[GraphGenerator.OdomNoiseDims.RVert]))
             # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
             noise_as_transform[:3, :3] = np.array([
@@ -522,7 +571,7 @@ class GraphGenerator:
                              "for an elliptical path")
 
     # noinspection PyUnresolvedReferences
-    PATH_ALIAS_TO_CALLABLE: Dict[str, Callable[[np.ndarray, Dict[str, float]], np.ndarray]] = {
+    PARAMETERIZED_PATH_ALIAS_TO_CALLABLE: Dict[str, Callable[[np.ndarray, Dict[str, float]], np.ndarray]] = {
         "e": xz_path_ellipsis_four_by_two.__func__
     }
 

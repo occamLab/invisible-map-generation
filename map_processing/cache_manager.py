@@ -121,9 +121,8 @@ class CacheManagerSingleton:
     def __new__(cls, *args, **kwargs):
         """Implements the singleton pattern.
         """
-        if cls.__instance is not None:
-            return
-        cls.__instance = super(CacheManagerSingleton, cls).__new__(cls)
+        if cls.__instance is None:
+            cls.__instance = super(CacheManagerSingleton, cls).__new__(cls)
         return cls.__instance
 
     # -- Properties --

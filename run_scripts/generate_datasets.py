@@ -16,6 +16,9 @@ import numpy as np
 
 from map_processing import ASSUMED_TAG_SIZE
 from map_processing.graph_generator import GraphGenerator
+from map_processing.data_set_models import UGDataSet
+from run_scripts import graph_manager_user
+from map_processing.cache_manager import CacheManagerSingleton
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -24,36 +27,49 @@ def make_parser() -> argparse.ArgumentParser:
     Returns:
         Argument p
     """
-    p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot")
+    p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot",
+                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(
         "-p",
         type=str,
         required=False,
-        help="Specifies which path to use as the path that the simulated phone follows. (TODO: add more options besides"
-             "the ellipse.) Options:"
-             "-'e': Ellipse, whose x-width, z-width, centerpoint, and xz-plane height are specified by the '--e_xw', "
-             "'--e_zw', '--e_cp', and '--xzp' arguments, respectively",
-        default="e"
+        help="Specifies which path to use as the path that the simulated phone follows. Options:"
+             "'e'-Ellipse, whose x-width, z-width, centerpoint, and xz-plane height are specified by the '--e_xw', "
+             "'--e_zw', '--e_cp', and '--xzp' arguments, respectively; "
+             "'d': Data set-based path, meaning that the path and tag positions recorded in the given data set are "
+             "used to generate new observations (to specify a data set, refer to the '--d_p' argument).",
+        default="e",
+        choices=["e", "d"]
+    )
+    p.add_argument(
+        "--d_p",
+        type=str,
+        required=False,
+        help=f"If a data set-based path is specified, this defines the pattern that is used to search for the cached "
+             f"data set. This argument functions the same way the '-p' argument does for the "
+             f"{graph_manager_user.__name__}.py script when only unprocessed maps are searched, so refer to that help "
+             f"message for more information. Note that if multiple paths are matched, then data sets are generated for "
+             f"each of them."
     )
     p.add_argument(
         "--e_xw",
         type=float,
         required=False,
-        help="If an ellipse-shaped path is specified, this defines the ellipse's width along the x-axis.",
+        help="If an elliptical path is specified, this defines the ellipse's width along the x-axis.",
         default=8.0
     )
     p.add_argument(
         "--e_zw",
         type=float,
         required=False,
-        help="If an ellipse-shaped path is specified, this defines the ellipse's width along the z-axis.",
+        help="If an elliptical path is specified, this defines the ellipse's width along the z-axis.",
         default=4.0
     )
     p.add_argument(
         "--e_cp",
         type=str,
         required=False,
-        help="If an ellipse-shaped path is specified, this defines the (x, z) centerpoint of the ellipse. The input is "
+        help="If an elliptical path is specified, this defines the (x, z) centerpoint of the ellipse. The input is "
              "expected to be formatted as two integer or floating point values that are delimited by some non-digit or "
              "decimal character (e.g., '3.0,4' and '(3.0 4)' are both acceptable).",
         default="0, 0"
@@ -62,20 +78,20 @@ def make_parser() -> argparse.ArgumentParser:
         "--xzp",
         type=float,
         required=False,
-        help="For a path that is parameterized only in the x- and z-directions, this argument defines the y-value of "
-             "the xz-coplanar plane that the path is in.",
+        help="For a parameterized path that is parameterized only in the x- and z-directions, this argument defines "
+             "the y-value of the xz-coplanar plane that the path is in.",
         default=0.0
     )
     p.add_argument(
         "-t",
         type=str,
-        help="Specifies which set of tag poses to use. Options:"
+        help="In the case of a parameterized path, specifies which set of tag poses to use. Options:"
              "-'3line': 3 tags in the xz plane with (x, z) coordinates of (-3, 4), (0, 4), and (3, 4), respectively."
              "-'occam': The tags in the room adjacent to the OCCaM lab room. The origin of the coordinate system is "
              "defined at the point at the floor beneath the tag of ID 0 where the z-axis is pointing out of the wall."
              "If facing the tag, then the x-axis points to the right.",
         default="3line",
-        choices=["3line", "occam"]
+        choices=[key for key in GraphGenerator.TAG_DATASETS.keys()]
     )
     p.add_argument(
         "--t_max",
@@ -145,7 +161,7 @@ def parse_str_as_tuple(tuple_str: str, expected_length: int) -> Tuple[float, ...
     return tuple([float(coord_str) for coord_str in match_list])
 
 
-def extract_path_args(arguments: argparse.Namespace) -> Dict[str, Union[float, Tuple[float, float]]]:
+def extract_parameterized_path_args(arguments: argparse.Namespace) -> Dict[str, Union[float, Tuple[float, float]]]:
     """Construct the dictionary to be used as the path arguments for path evaluation.
 
     Notes:
@@ -178,40 +194,43 @@ def extract_path_args(arguments: argparse.Namespace) -> Dict[str, Union[float, T
 if __name__ == "__main__":
     parser = make_parser()
     args: argparse.Namespace = parser.parse_args()
-    path_arguments = extract_path_args(args)
-
-    if args.p not in GraphGenerator.PATH_ALIAS_TO_CALLABLE:
-        print(f"Accepted argument to flag '-p' of {args.p} does not have a matching key in the path alias to "
-              "callable map of the GraphGenerator.")
-        exit(-1)
-
-    if args.t not in GraphGenerator.TAG_DATASETS:
-        print(f"Accepted argument to flag '-t' of {args.t} does not have a matching key in the dictionary of tag "
-              f"datasets.")
-        exit(-1)
 
     try:
         odom_noise_tuple = parse_str_as_tuple(args.noise, 4)
         odom_noise = {noise_param_enum: odom_noise_tuple[i] for i, noise_param_enum in
                       enumerate(GraphGenerator.OdomNoiseDims.ordering())}
     except ValueError as ve:
-        print(f"Could not parse the --noise argument due to the following exception raised when parsing it: {ve}")
-        exit(-1)
+        raise Exception(f"Could not parse the '--noise' argument due to the following exception raised when parsing "
+                        f"it: {ve}")
 
-    # Ignore unbound local variable warning for odometry_noise (it is guaranteed to be defined)
-    # noinspection PyUnboundLocalVariable
-    gg = GraphGenerator(
-        path=GraphGenerator.PATH_ALIAS_TO_CALLABLE[args.p],
-        dataset_name=args.t,
-        path_args=path_arguments,
-        tag_poses=GraphGenerator.TAG_DATASETS[args.t],
-        t_max=args.t_max,
-        n_poses=args.np,
-        tag_size=ASSUMED_TAG_SIZE,
-        odometry_noise=odom_noise
-    )
+    if args.p == "e":  # e specifies an elliptical path, so acquire the arguments
+        path_arguments = extract_parameterized_path_args(args)
+        # Ignore unbound local variable warning for odometry_noise (it is guaranteed to be defined)
+        # noinspection PyUnboundLocalVariable
+        gg = GraphGenerator(path_from=GraphGenerator.PARAMETERIZED_PATH_ALIAS_TO_CALLABLE[args.p], dataset_name=args.t,
+                            parameterized_path_args=path_arguments, t_max=args.t_max, n_poses=args.np,
+                            tag_poses=GraphGenerator.TAG_DATASETS[args.t], tag_size=ASSUMED_TAG_SIZE,
+                            odometry_noise=odom_noise)
+        if args.v:
+            gg.visualize()
 
-    if args.v:
-        gg.visualize()
+        gg.export_to_map_processing_cache()
+    elif args.p == "d":  # d specifies a data set-based path, so get a CacheManagerSingleton instance ready
+        # Fetch the service account key JSON file contents
 
-    gg.export_to_map_processing_cache()
+        cms = CacheManagerSingleton(firebase_creds=None, max_listen_wait=0)
+        matching_maps = cms.find_maps(args.d_p, search_only_unprocessed=True)
+        if len(matching_maps) == 0:
+            print(f"No matches for {args.d_p} in recursive search of {cms.cache_path}")
+            exit(0)
+
+        for map_info in matching_maps:
+            data_set_parsed = UGDataSet(**map_info.map_dct)
+            gg = GraphGenerator(path_from=data_set_parsed, dataset_name=args.t, tag_size=ASSUMED_TAG_SIZE,
+                                odometry_noise=odom_noise)
+            if args.v:
+                gg.visualize()
+
+            gg.export_to_map_processing_cache()
+    else:
+        raise Exception("Encountered unhandled value for the '-p' parameter: " + args.p)

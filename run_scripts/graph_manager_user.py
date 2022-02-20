@@ -315,8 +315,8 @@ if __name__ == "__main__":
 
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
     if len(matching_maps) == 0:
-        print("No matches for {} in recursive search of {}".format(map_pattern, cms.cache_path))
-        exit(-1)
+        print(f"No matches for {map_pattern} in recursive search of {cms.cache_path}")
+        exit(0)
 
     compute_inf_params = {}
     if args.lvv is not None:

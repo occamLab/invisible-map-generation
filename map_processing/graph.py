@@ -24,7 +24,7 @@ from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
 from .data_set_models import UGDataSet
 from .graph_vertex_edge_classes import Vertex, VertexType, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
-    transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, FLIP_Y_AND_Z_AXES, pose_to_isometry
+    transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, pose_to_isometry
 from .weights import Weights
 
 
@@ -431,7 +431,7 @@ class Graph:
                     membership.append(i)
 
             new_group = set.union(uids, *[groups[i][0] for i in membership]), \
-                        set.union({uid}, *[groups[i][1] for i in membership])
+                set.union({uid}, *[groups[i][1] for i in membership])
             membership.reverse()
             for i in membership:
                 del groups[i]
@@ -674,7 +674,6 @@ class Graph:
         use_sba = prescaling_opt == PrescalingOptEnum.USE_SBA
 
         # Used only if `use_sba` is false:
-        tag_joint_covar = None
         tag_position_variances = None
         tag_orientation_variances = None
         tag_edge_prescaling = None
@@ -686,7 +685,6 @@ class Graph:
         true_3d_tag_center: Union[None, np.ndarray] = None
         true_3d_tag_points: Union[None, np.ndarray] = None
         tag_transform_estimates = None
-        tag_corner_ids_by_tag_vertex_id = None
         initialize_with_averages = None
 
         # Ensure that the fixed_vertices is always a tuple
@@ -707,7 +705,6 @@ class Graph:
         #                           if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
         #                              and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
 
-        tag_pose_flat = data_set.tag_pose_flat
         tag_ids = data_set.tag_ids
         pose_ids = data_set.pose_ids
         if use_sba:
@@ -717,9 +714,7 @@ class Graph:
             tag_position_variances = data_set.tag_position_variances
             tag_orientation_variances = data_set.tag_orientation_variances
 
-        # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
-        # measurements. Additionally, note that the matrix here is recorded in row-major format.
-        tag_edge_measurements_matrix = np.matmul(FLIP_Y_AND_Z_AXES, tag_pose_flat.reshape([-1, 4, 4]))
+        tag_edge_measurements_matrix = data_set.tag_edge_measurements_matrix
         tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 
@@ -737,18 +732,22 @@ class Graph:
                 raise ValueError("{} is not yet handled".format(str(prescaling_opt)))
 
         unique_tag_ids = np.unique(tag_ids)
+        tag_vertex_id_by_tag_id: Dict[int, int]
         if use_sba:
             tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(0, unique_tag_ids.size * 5, 5)))
         else:
             tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
         tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
+
+        tag_corner_ids_by_tag_vertex_id: Dict[int, List[int]]
         if use_sba:
             tag_corner_ids_by_tag_vertex_id = dict(
                 zip(tag_id_by_tag_vertex_id.keys(),
                     map(lambda tag_vertex_id_x: list(range(tag_vertex_id_x + 1, tag_vertex_id_x + 5)),
                         tag_id_by_tag_vertex_id.keys())))
 
-        tag_vertex_id_and_index_by_frame_id = {}  # Enable lookup of tags by the frame they appear in
+        # Enable lookup of tags by the frame they appear in
+        tag_vertex_id_and_index_by_frame_id: Dict[int, List[Tuple[int, int]]] = {}
         for tag_index, (tag_id, tag_frame) in enumerate(np.hstack((tag_ids, pose_ids))):
             tag_vertex_id = tag_vertex_id_by_tag_id[tag_id]
             tag_vertex_id_and_index_by_frame_id[tag_frame] = tag_vertex_id_and_index_by_frame_id.get(tag_frame, [])
@@ -842,7 +841,7 @@ class Graph:
                     # adjust the x-coordinates of the detections to account for differences in coordinate systems
                     # induced by the FLIP_Y_AND_Z_AXES
                     tag_corners[tag_index][::2] = 2 * camera_intrinsics_for_tag[tag_index][2] - \
-                                                  tag_corners[tag_index][::2]
+                        tag_corners[tag_index][::2]
 
                     # Archive:
                     # for k, point in enumerate(true_3d_tag_points):

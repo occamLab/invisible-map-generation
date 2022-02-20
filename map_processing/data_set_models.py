@@ -7,41 +7,17 @@ Notes:
     Interpreting prefixes: GT --> ground truth. UG --> un-processed graph.
 """
 
-from typing import List, Tuple, Dict
-from pydantic import BaseModel, ValidationError
+from typing import List, Dict, Union
+from pydantic import BaseModel, ValidationError, conlist
 import numpy as np
 import itertools
-
-Flattened4x4MatrixTuple = Tuple[
-    float, float, float, float,
-    float, float, float, float,
-    float, float, float, float,
-    float, float, float, float
-]
-Flattened7x7MatrixTuple = Tuple[
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-    float, float, float, float, float, float, float,
-]
-Flattened4x2MatrixTuple = Tuple[
-    float, float,
-    float, float,
-    float, float,
-    float, float
-]
-Length7VectorTuple = Tuple[float, float, float, float, float, float, float]
-Length4VectorTuple = Tuple[float, float, float, float]
-Length3VectorTuple = Tuple[float, float, float]
+from .transform_utils import FLIP_Y_AND_Z_AXES
 
 
 class UGPoseDatum(BaseModel):
     """Represents a single pose datum.
     """
-    pose: Flattened4x4MatrixTuple
+    pose: conlist(Union[float, int], min_items=16, max_items=16)
     """
     Pose as a tuple of floats where reshaping into a 4x4 array using Fortran-like index order results in the transform 
     matrix. For more information on Fortran-like indexing from the numpy documentation: "...means to read / write the 
@@ -67,22 +43,22 @@ class UGTagDatum(BaseModel):
     """Represents a single tag observation datum.
     """
 
-    tag_corners_pixel_coordinates: Flattened4x2MatrixTuple
+    tag_corners_pixel_coordinates: conlist(Union[float, int], min_items=8, max_items=8)
     """
     Values alternate between x and y coordinates in the camera frame. Tag corner order convention: Bottom right, bottom 
     left, top left, top right.
     """
     tag_id: int
     pose_id: int
-    camera_intrinsics: Length4VectorTuple
+    camera_intrinsics: conlist(Union[float, int], min_items=4, max_items=4)
     """
     Camera intrinsics in the order of: fx, fy, cx, cy
     """
     timestamp: float
-    tag_pose: Flattened4x4MatrixTuple
-    tag_position_variance: Length3VectorTuple = tuple([1, ] * 3)
-    tag_orientation_variance: Length4VectorTuple = tuple([1, ] * 4)
-    joint_covar: Flattened7x7MatrixTuple = tuple([1, ] * 49)
+    tag_pose: conlist(Union[float, int], min_items=16, max_items=16)
+    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [1, ] * 3
+    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [1, ] * 4
+    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = [1, ] * 49
 
     @property
     def tag_pose_as_matrix(self) -> np.ndarray:
@@ -97,7 +73,7 @@ class UGTagDatum(BaseModel):
 
 
 class UGLocationDatum(BaseModel):
-    transform: Flattened4x4MatrixTuple
+    transform: conlist(Union[float, int], min_items=16, max_items=16)
     """
     Pose as a tuple of floats where reshaping into a 4x4 array using C-like index order results in the transform 
     matrix. For more information on Fortran-like indexing from the numpy documentation: "means to read / write the 
@@ -141,9 +117,48 @@ class UGDataSet(BaseModel):
         return np.array([pose_datum.pose for pose_datum in self.pose_data]).reshape((-1, 4, 4), order="F")
 
     @property
-    def tag_pose_flat(self) -> np.ndarray:
-        return np.zeros((0, 16)) if len(self.tag_data) == 0 else \
-            np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in self.tag_data])
+    def poses_by_pose_ids(self) -> Dict[int, np.ndarray]:
+        ret: Dict[int, np.ndarray] = {}
+        pose_matrices = self.pose_matrices
+        for i, pose_datum in enumerate(self.pose_data):
+            ret[pose_datum.id] = pose_matrices[i]
+        return ret
+
+    @property
+    def tag_edge_measurements_matrix(self) -> np.ndarray:
+        # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
+        # measurements. Additionally, note that the matrix here is recorded in row-major format.
+        return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
+            np.matmul(FLIP_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
+                                                    self.tag_data]).reshape([-1, 4, 4]))
+
+    @property
+    def timestamps(self) -> np.ndarray:
+        return np.array([pose_datum.timestamp for pose_datum in self.pose_data])
+
+    @property
+    def approx_tag_in_global_by_id(self) -> Dict[int, np.ndarray]:
+        """
+        Returns:
+            A dictionary mapping tag ids to their poses in the global reference frame according to the first observation
+             of the tag.
+        """
+        ret = {}
+        tag_edge_measurements_matrix = self.tag_edge_measurements_matrix
+        pose_ids = self.pose_ids.flatten()
+        sort_indices = np.argsort(pose_ids)
+        tag_ids_sorted_by_pose_ids = self.tag_ids.flatten()[sort_indices]
+        num_unique_tag_ids = len(np.unique(tag_ids_sorted_by_pose_ids))
+        poses_by_pose_ids: Dict[int, np.ndarray] = self.poses_by_pose_ids
+
+        for i, tag_id in enumerate(tag_ids_sorted_by_pose_ids):
+            if len(ret) == num_unique_tag_ids:
+                break  # Additional looping will not add any new entries to the return value
+            if tag_id not in ret:
+                corresponding_pose_id = pose_ids[i]
+                ret[tag_id] = poses_by_pose_ids[corresponding_pose_id].dot(
+                    tag_edge_measurements_matrix[sort_indices[i]])
+        return ret
 
     @property
     def camera_intrinsics_for_tag(self) -> np.ndarray:
@@ -206,7 +221,7 @@ class UGDataSet(BaseModel):
 
 class GTTagPose(BaseModel):
     tag_id: int
-    pose: Length7VectorTuple
+    pose: conlist(Union[float, int], min_items=7, max_items=7)
 
 
 class GTDataSet(BaseModel):
