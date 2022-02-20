@@ -15,7 +15,7 @@ from typing import Tuple, Dict, Union
 import numpy as np
 
 from map_processing import ASSUMED_TAG_SIZE
-from map_processing.dataset_generation.graph_generator import GraphGenerator
+from map_processing.graph_generator import GraphGenerator
 
 
 def make_parser() -> argparse.ArgumentParser:

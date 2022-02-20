@@ -17,8 +17,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, transform_matrix_to_vector, \
     transform_vector_to_matrix
-from map_processing.dataset_generation.map_processing_json_encoders import UGJsonEncoder, UGTagDatum, UGPoseDatum, \
-    GTJsonEncoder, GTTagPose
+from map_processing.data_set_models import UGDataSet, UGTagDatum, UGPoseDatum, \
+    GTDataSet, GTTagPose
 
 matplotlib.rcParams['figure.dpi'] = 500
 
@@ -207,13 +207,13 @@ class GraphGenerator:
 
     # -- Public methods --
 
-    def export(self) -> Tuple[UGJsonEncoder, GTJsonEncoder]:
+    def export(self) -> Tuple[UGDataSet, GTDataSet]:
         """
         Returns:
-            A UGJsonEncoder object that, when serialized, will contain the unprocessed graph json encoding of this
+            A UGDataSet object that, when serialized, will contain the unprocessed graph json encoding of this
              artificial dataset generation.
         """
-        # Construct data for the UGJsonEncoder initialization
+        # Construct data for the UGDataSet initialization
         pose_data: List[UGPoseDatum] = []
         tag_data: List[List[UGTagDatum]] = []
         tag_data_idx = -1
@@ -223,7 +223,7 @@ class GraphGenerator:
                     pose=tuple(self._odometry_poses[pose_idx, :, :].flatten(order="F")),
                     timestamp=self._odometry_t_vec[pose_idx],
                     # Intentionally skipping planes
-                    pose_id=pose_idx
+                    id=pose_idx
                 )
             )
 
@@ -249,7 +249,7 @@ class GraphGenerator:
                     )
                 )
 
-        # Construct data for the GTJsonEncoder initialization: arbitrarily select a tag to use as the origin of the
+        # Construct data for the GTDataSet initialization: arbitrarily select a tag to use as the origin of the
         # coordinate system in which the rest of the tags are represented.
         ground_truth_tags = []
         origin_key: int = 0
@@ -269,13 +269,13 @@ class GraphGenerator:
                 )
             )
 
-        return UGJsonEncoder(
+        return UGDataSet(
             # Intentionally skipping location data
             map_id="generated_" + str(random.randint(0, int(1e9))),  # arbitrary integer for unique id-ing
             # Intentionally skipping plane data
             pose_data=pose_data,
             tag_data=tag_data
-        ), GTJsonEncoder(
+        ), GTDataSet(
             poses=ground_truth_tags
         )
 
@@ -283,7 +283,7 @@ class GraphGenerator:
         """Serializes the graph into a json file and saves it to the target destination as set by the TODO
         """
         map_obj, gt_obj = self.export()
-        map_dict = map_obj.default(map_obj)
+        map_dict = map_obj.dict()
         map_str = json.dumps(map_dict, indent=2)
 
         map_name = map_dict["map_id"]

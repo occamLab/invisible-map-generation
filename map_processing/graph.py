@@ -5,24 +5,27 @@ Contains the Graph class which store a map in graph form and optimizes it.
 from __future__ import annotations
 
 import copy
-import itertools
 from collections import defaultdict
 from typing import Set, Dict, Optional, Tuple, Union, List
-import numpy as np
 
+import numpy as np
+import pydantic
+# For some reason, the EdgeSE3Gravity class is not being recognized. If the instructions in the README.md are followed,
+# then importing this should not be an issue.
+# noinspection PyUnresolvedReferences
+from g2o import EdgeSE3Gravity
 from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, OptimizationAlgorithmLevenberg, \
     CameraParameters, RobustKernelHuber, BlockSolverSE3, LinearSolverCholmodSE3, VertexSBAPointXYZ, VertexSE3Expmap, \
     EdgeSE3, VertexSE3
-# noinspection PyUnresolvedReferences
-from g2o import EdgeSE3Gravity
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
-from .weights import Weights
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
+from .data_set_models import UGDataSet
 from .graph_vertex_edge_classes import Vertex, VertexType, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
     transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, FLIP_Y_AND_Z_AXES, pose_to_isometry
+from .weights import Weights
 
 
 class Graph:
@@ -627,14 +630,14 @@ class Graph:
         }
 
     @staticmethod
-    def as_graph(dct: Dict, fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
+    def as_graph(data_set: Union[Dict, UGDataSet], fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
                  prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
         Args:
-            dct (dict): The dictionary to convert to a
+            data_set: Unprocessed map data set. If a dict, it is decoded into a `UGDataSet` instance.
             fixed_vertices (tuple): Determines which vertex types to set to fixed. Dummy and Tagpoints are always fixed
-                regardless of their presence in the tuple.
+             regardless of their presence in the tuple.
             prescaling_opt (PrescalingOptEnum): Selects which logical branches to use. If it is equal to
             `PrescalingOptEnum.USE_SBA`, then sparse bundle adjustment is used; otherwise, the outcome only differs
              between the remaining enum values by how the tag edge prescaling matrix is selected. Read the
@@ -644,8 +647,8 @@ class Graph:
             A graph derived from the input dictionary.
 
         Raises:
-            Exception: if prescaling_opt is an enum_value that is not handled.
-            Exception: if no pose data was provided to the dictionary
+            ValueError: If prescaling_opt is an enum_value that is not handled.
+            ValueError: If `data_set` is a dictionary and could not be decoded into a `UGDataSet` instance.
             KeyError: exceptions from missing keys that are expected to be in dct (i.e., KeyErrors are not caught)
 
         Notes:
@@ -660,6 +663,13 @@ class Graph:
             logical branches according to the implementation in convert_json.py and the implementation in
             convert_json_sba.py.
         """
+        if isinstance(data_set, dict):
+            try:
+                data_set = UGDataSet(**data_set)
+            except pydantic.ValidationError as ve:
+                raise ValueError(f"Could not parse the provided data set into a {UGDataSet.__name__} instance. "
+                                 f"Diagnostic from pydantic validation:\n{ve.json(indent=2)}")
+
         # Pull out this equality from the enum (this equality is checked many times)
         use_sba = prescaling_opt == PrescalingOptEnum.USE_SBA
 
@@ -679,67 +689,33 @@ class Graph:
         tag_corner_ids_by_tag_vertex_id = None
         initialize_with_averages = None
 
+        # Ensure that the fixed_vertices is always a tuple
         if isinstance(fixed_vertices, VertexType):
             fixed_vertices = (fixed_vertices,)
 
         if use_sba:
             true_3d_tag_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
 
-        frame_ids_to_timestamps = {pose['id']: pose['timestamp'] for pose in dct['pose_data']}
-
-        if len(dct['pose_data']) == 0:
-            raise Exception("No pose data in the provided dictionary")
-
-        pose_matrices = np.array([pose['pose'] for pose in dct['pose_data']]).reshape((-1, 4, 4), order="F")
+        frame_ids_to_timestamps = data_set.frame_ids_to_timestamps
+        pose_matrices = data_set.pose_matrices
         odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
-        # Extract data from the dictionary. If no tag data exists, then generate placeholder vectors of the right shape
-        # containing 0s
-        if len(dct['tag_data']) > 0:
-            good_tag_detections = dct['tag_data']
-            # good_tag_detections = list(filter(lambda l: len(l) > 0,
-            #                              [[tag_data for tag_data in tags_from_frame
-            #                           if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
-            #                              and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
+        # Commented out: a potential filter to apply to the tag detections (simply uncommenting would not do
+        # anything; further refactoring would be required)
+        # good_tag_detections = list(filter(lambda l: len(l) > 0,
+        #                              [[tag_data for tag_data in tags_from_frame
+        #                           if np.linalg.norm(np.asarray([tag_data['tag_pose'][i] for i in (3, 7, 11)])) < 1
+        #                              and tag_data['tag_pose'][10] < 0.7] for tags_from_frame in dct['tag_data']]))
 
-            tag_pose_flat = np.vstack([[x['tag_pose'] for x in tags_from_frame] for tags_from_frame in
-                                       good_tag_detections])
-
-            if use_sba:
-                camera_intrinsics_for_tag = np.vstack([[x['camera_intrinsics'] for x in tags_from_frame]
-                                                       for tags_from_frame in good_tag_detections])
-                tag_corners = np.vstack([[x['tag_corners_pixel_coordinates'] for x in tags_from_frame] for
-                                         tags_from_frame in good_tag_detections])
-            else:
-                tag_joint_covar = np.vstack([[x['joint_covar'] for x in tags_from_frame] for tags_from_frame in
-                                             good_tag_detections])
-                tag_position_variances = np.vstack([[x['tag_position_variance'] for x in tags_from_frame] for
-                                                    tags_from_frame in good_tag_detections])
-                tag_orientation_variances = np.vstack([[x['tag_orientation_variance'] for x in tags_from_frame] for
-                                                       tags_from_frame in dct['tag_data']])
-
-            tag_ids = np.vstack(list(itertools.chain(*[[x['tag_id'] for x in tags_from_frame] for tags_from_frame in
-                                                       good_tag_detections])))
-            pose_ids = np.vstack(list(itertools.chain(*[[x['pose_id'] for x in tags_from_frame] for tags_from_frame in
-                                                        good_tag_detections])))
-        else:
-            tag_pose_flat = np.zeros((0, 16))
-            tag_ids = np.zeros((0, 1), dtype=np.int64)
-            pose_ids = np.zeros((0, 1), dtype=np.int64)
-
-            if use_sba:
-                camera_intrinsics_for_tag = np.zeros((0, 4))
-                tag_corners = np.zeros((0, 8))
-            else:
-                tag_joint_covar = np.zeros((0, 49), dtype=np.double)
-                tag_position_variances = np.zeros((0, 3), dtype=np.double)
-                tag_orientation_variances = np.zeros((0, 4), dtype=np.double)
-
-        unique_tag_ids = np.unique(tag_ids)
+        tag_pose_flat = data_set.tag_pose_flat
+        tag_ids = data_set.tag_ids
+        pose_ids = data_set.pose_ids
         if use_sba:
-            tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(0, unique_tag_ids.size * 5, 5)))
+            camera_intrinsics_for_tag = data_set.camera_intrinsics_for_tag
+            tag_corners = data_set.tag_corners
         else:
-            tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
+            tag_position_variances = data_set.tag_position_variances
+            tag_orientation_variances = data_set.tag_orientation_variances
 
         # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
         # measurements. Additionally, note that the matrix here is recorded in row-major format.
@@ -749,11 +725,8 @@ class Graph:
 
         if not use_sba:
             if prescaling_opt == PrescalingOptEnum.FULL_COV:
-                # Note that we are ignoring the variance deviation of qw since we use a compact quaternion
-                # parameterization of orientation
-                tag_joint_covar_matrices = tag_joint_covar.reshape((-1, 7, 7))
-
-                # TODO: for some reason we have missing measurements (all zeros).  Throw those out
+                tag_joint_covar_matrices = data_set.tag_joint_covar_matrices
+                # TODO: for some reason we have missing measurements (all zeros). Throw those out
                 tag_edge_prescaling = np.array([np.linalg.inv(covar[:-1, :-1]) if np.linalg.det(covar[:-1, :-1]) != 0
                                                 else np.zeros((6, 6)) for covar in tag_joint_covar_matrices])
             elif prescaling_opt == PrescalingOptEnum.DIAG_COV:
@@ -761,8 +734,13 @@ class Graph:
             elif prescaling_opt == PrescalingOptEnum.ONES:
                 tag_edge_prescaling = np.array([np.eye(6, 6)] * n_pose_ids)
             else:
-                raise Exception("{} is not yet handled".format(str(prescaling_opt)))
+                raise ValueError("{} is not yet handled".format(str(prescaling_opt)))
 
+        unique_tag_ids = np.unique(tag_ids)
+        if use_sba:
+            tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(0, unique_tag_ids.size * 5, 5)))
+        else:
+            tag_vertex_id_by_tag_id = dict(zip(unique_tag_ids, range(unique_tag_ids.size)))
         tag_id_by_tag_vertex_id = dict(zip(tag_vertex_id_by_tag_id.values(), tag_vertex_id_by_tag_id.keys()))
         if use_sba:
             tag_corner_ids_by_tag_vertex_id = dict(
@@ -789,17 +767,12 @@ class Graph:
         #         last_tag = tag_vertex_id_and_index_by_frame_id[frame_id][0][0]
         #         tag_detections = []
 
-        waypoint_names = [location_data['name'] for location_data in dct['location_data']]
+        waypoint_names = data_set.waypoint_names
         unique_waypoint_names = np.unique(waypoint_names)
         num_unique_waypoint_names = unique_waypoint_names.size
-
-        waypoint_edge_measurements_matrix = np.zeros((0, 4, 4))
-        if len(dct['location_data']) > 0:
-            waypoint_edge_measurements_matrix = np.concatenate(
-                [np.asarray(location_data['transform']).reshape((-1, 4, 4)) for location_data in dct['location_data']]
-            )
+        waypoint_edge_measurements_matrix = data_set.waypoint_edge_measurements_matrix
         waypoint_edge_measurements = transform_matrix_to_vector(waypoint_edge_measurements_matrix)
-        waypoint_frame_ids = [location_data['pose_id'] for location_data in dct['location_data']]
+        waypoint_frame_ids = data_set.waypoint_frame_ids
 
         if use_sba:
             waypoint_vertex_id_by_name = dict(
@@ -815,7 +788,7 @@ class Graph:
         for waypoint_index, (waypoint_name, waypoint_frame) in enumerate(zip(waypoint_names, waypoint_frame_ids)):
             waypoint_vertex_id = waypoint_vertex_id_by_name[waypoint_name]
             waypoint_vertex_id_and_index_by_frame_id[waypoint_frame] = waypoint_vertex_id_and_index_by_frame_id.get(
-                waypoint_name, [])
+                waypoint_index, [])
             waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append((waypoint_vertex_id, waypoint_index))
 
         num_tag_edges = edge_counter = 0

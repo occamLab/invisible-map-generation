@@ -14,7 +14,7 @@ from firebase_admin import db
 from firebase_admin import storage
 from varname import nameof
 
-from map_processing.dataset_generation.map_processing_json_encoders import GTJsonEncoder
+from map_processing.data_set_models import GTDataSet
 
 
 class MapInfo:
@@ -449,7 +449,7 @@ class CacheManagerSingleton:
         return ret
 
     @staticmethod
-    def cache_ground_truth_data(gt_data: GTJsonEncoder, dataset_name: str, corresponding_map_names: List[str]) -> None:
+    def cache_ground_truth_data(gt_data: GTDataSet, dataset_name: str, corresponding_map_names: List[str]) -> None:
         """Serialize the ground truth data object and save it in the ground truth directory under the name
         gt_{dataset_name}.json.
 
@@ -465,7 +465,7 @@ class CacheManagerSingleton:
         """
         if not os.path.exists(CacheManagerSingleton.GROUND_TRUTH_PATH):
             os.mkdir(CacheManagerSingleton.GROUND_TRUTH_PATH)
-        gt_dict = gt_data.default(gt_data)
+        gt_dict = gt_data.dict()
         file_name = "gt_" + dataset_name + ".json"
         with open(os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, file_name), "w") as f:
             json.dump(gt_dict, f, indent=2)
