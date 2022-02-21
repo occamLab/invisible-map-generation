@@ -832,6 +832,7 @@ class Graph:
                             meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
 
                         for idx, true_point_3d in enumerate(true_3d_tag_points):
+                            # noinspection PyUnboundLocalVariable
                             vertices[tag_corner_ids_by_tag_vertex_id[tag_vertex_id][idx]] = Vertex(
                                 mode=VertexType.TAGPOINT,
                                 estimate=np.hstack((true_point_3d, [0, 0, 0, 1])),

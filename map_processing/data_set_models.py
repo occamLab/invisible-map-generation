@@ -147,8 +147,8 @@ class UGDataSet(BaseModel):
         """
         ret = {}
         tag_edge_measurements_matrix = self.tag_edge_measurements_matrix
-        pose_ids = self.pose_ids.flatten()
-        sort_indices = np.argsort(pose_ids)
+        pose_ids: np.ndarray = self.pose_ids.flatten()
+        sort_indices: np.ndarray = np.argsort(pose_ids)
         tag_ids_sorted_by_pose_ids = self.tag_ids.flatten()[sort_indices]
         num_unique_tag_ids = len(np.unique(tag_ids_sorted_by_pose_ids))
         poses_by_pose_ids: Dict[int, np.ndarray] = self.poses_by_pose_ids

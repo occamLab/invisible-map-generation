@@ -259,7 +259,7 @@ class GraphGenerator:
         for pose_idx in range(self._odometry_poses.shape[0]):
             pose_data.append(
                 UGPoseDatum(
-                    pose=tuple(self._odometry_poses[pose_idx, :, :].flatten(order="F")),
+                    pose=list(self._odometry_poses[pose_idx, :, :].flatten(order="F")),
                     timestamp=self._odometry_t_vec[pose_idx],
                     # Intentionally skipping planes
                     id=pose_idx
@@ -275,15 +275,15 @@ class GraphGenerator:
 
                 tag_data[tag_data_idx].append(
                     UGTagDatum(
-                        tag_corners_pixel_coordinates=tuple(
+                        tag_corners_pixel_coordinates=list(
                             self._observation_pixels[pose_idx][tag_id].flatten(order="F")),
                         tag_id=tag_id,
                         pose_id=pose_idx,
-                        camera_intrinsics=tuple(np.array(GraphGenerator.CAMERA_INTRINSICS_VEC)),
+                        camera_intrinsics=list(np.array(GraphGenerator.CAMERA_INTRINSICS_VEC)),
                         # Intentionally skipping position and orientation variance
                         timestamp=self._odometry_t_vec[pose_idx],
-                        tag_pose=tuple(np.matmul(FLIP_Y_AND_Z_AXES,
-                                                 self._observation_poses[pose_idx][tag_id]).flatten(order="C")),
+                        tag_pose=list(np.matmul(FLIP_Y_AND_Z_AXES,
+                                                self._observation_poses[pose_idx][tag_id]).flatten(order="C")),
                         # Intentionally skipping joint covariance
                     )
                 )
@@ -304,7 +304,7 @@ class GraphGenerator:
             ground_truth_tags.append(
                 GTTagPose(
                     tag_id=item[0],
-                    pose=tuple(transform_matrix_to_vector(np.matmul(origin_inv, item[1])))
+                    pose=list(transform_matrix_to_vector(np.matmul(origin_inv, item[1])))
                 )
             )
 
@@ -380,6 +380,7 @@ class GraphGenerator:
                 )
         plt.show()
 
+    # noinspection Pydantic
     def generate(self) -> None:
         """Populate the _odometry_poses attribute with the poses sampled at the given parameter values, then the
         _observation_poses attribute is populated with the tag observations at each of the poses.
