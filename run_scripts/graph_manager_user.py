@@ -285,7 +285,7 @@ def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict, bool,
     results = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[3]), visualize=False,
                                           optimization_config=optimization_config)
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1]["tags"]),
+        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1].tags),
         ground_truth_tags=sweep_args_tuple[4], verbose=False)
     sweep_args_tuple[-1].append((gt_result, (sweep_args_tuple[0], sweep_args_tuple[1], sweep_args_tuple[2])))
 
@@ -352,11 +352,11 @@ if __name__ == "__main__":
                     continue
 
                 ground_truth_metric_pre = graph_manager.ground_truth_metric_with_tag_id_intersection(
-                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[2]["tags"]),
+                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[2].tags),
                     ground_truth_tags=gt_data, verbose=False
                 )
                 ground_truth_metric_opt = graph_manager.ground_truth_metric_with_tag_id_intersection(
-                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1]["tags"]),
+                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1].tags),
                     ground_truth_tags=gt_data, verbose=False
                 )
                 print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt} (delta of "

@@ -9,6 +9,7 @@ from g2o import Quaternion, SE3Quat
 from matplotlib import pyplot as plt, cm
 
 from . import graph_opt_utils, transform_utils
+from map_processing.data_models import OG2oOptimizer
 
 
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
@@ -135,7 +136,7 @@ def axis_equal(ax: plt.Axes):
         ax.plot([xb], [yb], [zb], "w")
 
 
-def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None) -> None:
+def plot_adj_chi2(map_from_opt: OG2oOptimizer, plot_title: Union[str, None] = None) -> None:
     """TODO: Documentation
 
     Args:
@@ -143,10 +144,10 @@ def plot_adj_chi2(map_from_opt: Dict, plot_title: Union[str, None] = None) -> No
         plot_title:
     """
     locations_chi2_viz_tags = []
-    locations_shape = np.shape(map_from_opt["locations"])
+    locations_shape = np.shape(map_from_opt.locations)
     for i in range(locations_shape[0]):
-        locations_chi2_viz_tags.append((map_from_opt["locations"][i], map_from_opt["locationsAdjChi2"][i],
-                                        map_from_opt["visibleTagsCount"][i]))
+        locations_chi2_viz_tags.append((map_from_opt.locations[i], map_from_opt.locationsAdjChi2[i],
+                                        map_from_opt.visibleTagsCount[i]))
     locations_chi2_viz_tags.sort(key=lambda x: x[0][7])  # Sorts by UID, which is at the 7th index
 
     chi2_values = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values

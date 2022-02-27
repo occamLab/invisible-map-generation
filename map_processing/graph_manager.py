@@ -15,7 +15,7 @@ import map_processing
 from map_processing import PrescalingOptEnum, VertexType
 from . import graph_opt_utils, graph_opt_plot_utils
 from .cache_manager import CacheManagerSingleton, MapInfo
-from .data_models import OComputeInfParams, Weights, OConfig
+from .data_models import OComputeInfParams, Weights, OConfig, OG2oOptimizer
 from .graph import Graph
 
 
@@ -103,7 +103,7 @@ class GraphManager:
     def process_map(self, map_info: MapInfo, visualize: bool = True, upload: bool = False,
                     fixed_vertices: Union[VertexType, Tuple[VertexType]] = (), obs_chi2_filter: float = -1,
                     compute_inf_params: Optional[OComputeInfParams] = None) \
-            -> Tuple[float, Dict[str, Union[List, np.ndarray]], Dict[str, Union[List, np.ndarray]]]:
+            -> Tuple[float, OG2oOptimizer, OG2oOptimizer]:
         """Invokes optimization and plotting routines for any cached graphs matching the specified pattern.
 
         Additionally, save the optimized json in <cache directory>/GraphManager._processed_upload_to.
@@ -448,7 +448,7 @@ class GraphManager:
 
     @staticmethod
     def optimize_graph(graph: Graph, optimization_config: OConfig, visualize: bool = False) -> \
-            Tuple[float, Dict[str, Union[List, np.ndarray]], Dict[str, Union[List, np.ndarray]]]:
+            Tuple[float, OG2oOptimizer, OG2oOptimizer]:
         """Optimizes the input graph.
 
         Notes:
@@ -491,17 +491,17 @@ class GraphManager:
                                                                              is_sba=is_sba)
 
         if visualize:
-            locations = resulting_map["locations"]
-            tag_verts = resulting_map["tags"]
-            waypoint_verts = tuple(resulting_map["waypoints"])
-            tagpoint_positions = resulting_map["tagpoints"]
+            locations = resulting_map.locations
+            tag_verts = resulting_map.tags
+            waypoint_verts = (resulting_map.waypoints_metadata, resulting_map.waypoints_arr)
+            tagpoint_positions = resulting_map.tagpoints
             graph_opt_plot_utils.plot_optimization_result(
                 locations=locations,
-                prior_locations=prior_map["locations"],
+                prior_locations=prior_map.locations,
                 tag_verts=tag_verts,
                 tagpoint_positions=tagpoint_positions,
                 waypoint_verts=waypoint_verts,
-                original_tag_verts=prior_map["tags"],
+                original_tag_verts=prior_map.tags,
                 ground_truth_tags=None,
                 plot_title=optimization_config.graph_plot_title,
                 is_sba=is_sba
@@ -614,7 +614,7 @@ class GraphManager:
         opt_results = GraphManager.optimize_graph(graph=graph, visualize=visualize,
                                                   optimization_config=optimization_config)
         return GraphManager.ground_truth_metric_with_tag_id_intersection(
-            optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1]["tags"]),
+            optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1].tags),
             ground_truth_tags=ground_truth_tags,
             verbose=verbose
         )

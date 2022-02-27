@@ -3,7 +3,7 @@ Utility functions for graph optimization.
 """
 
 import math
-from typing import Union, List, Dict, Optional, Set
+from typing import Union, List, Optional, Set
 
 import g2o
 import numpy as np
@@ -12,10 +12,11 @@ from g2o import EdgeSE3Gravity
 from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, VertexSE3Expmap
 
 from . import graph_util_get_neighbors, VertexType
-from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet
+from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet, \
+    OG2oOptimizer
 
 
-def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> Dict[str, Union[List, np.ndarray]]:
+def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> OG2oOptimizer:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
     Args:
@@ -75,12 +76,11 @@ def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> 
     tags_arr = np.array(tags) if len(tags) > 0 else np.zeros((0, 8))
     tagpoints_arr = np.array(tagpoints) if len(tagpoints) > 0 else np.zeros((0, 3))
     waypoints_arr = np.array(waypoints) if len(waypoints) > 0 else np.zeros((0, 8))
-    return {'locations': locations_arr, 'tags': tags_arr, 'tagpoints': tagpoints_arr,
-            'waypoints': [waypoint_metadata, waypoints_arr]}
+    return OG2oOptimizer(locations=locations_arr, tags=tags_arr, tagpoints=tagpoints_arr, waypoints_arr=waypoints_arr,
+                         waypoints_metadata=waypoint_metadata)
 
 
-def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sba=False) -> \
-        Dict[str, Union[List, np.ndarray]]:
+def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sba=False) -> OG2oOptimizer:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, waypoints, and
     per-odometry edge chi2 information.
 
@@ -94,25 +94,18 @@ def optimizer_to_map_chi2(graph, optimizer: g2o.SparseOptimizer, is_sba=False) -
          `optimizer_to_map`.
         is_sba: True if the optimizer is based on sparse bundle adjustment and False otherwise;
          passed as the `is_sba` keyword argument to `optimizer_to_map`.
-
-    Returns:
-        A dictionary with fields 'locations', 'tags', 'waypoints', and 'locationsAdjChi2'. The 'locations' key covers a
-        (n, 8) array  containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at n points.
-        The 'tags' and 'waypoints' keys cover the locations of the tags and waypoints in the same format. Associated
-        with each odometry node is a chi2 calculated from the `map_odom_to_adj_chi2` method of the `Graph` class, which
-        is stored in the vector in the locationsAdjChi2 vector.
     """
     ret_map = optimizer_to_map(graph.vertices, optimizer, is_sba=is_sba)
-    locations_shape = np.shape(ret_map["locations"])
+    locations_shape = np.shape(ret_map.locations)
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
     visible_tags_count = np.zeros([locations_shape[0], 1])
 
-    for i, odom_node_vec in enumerate(ret_map["locations"]):
+    for i, odom_node_vec in enumerate(ret_map.locations):
         uid = round(odom_node_vec[7])  # UID integer is stored as a floating point number, so cast it to an integer
         locations_adj_chi2[i], visible_tags_count[i] = graph.map_odom_to_adj_chi2(uid)
 
-    ret_map["locationsAdjChi2"] = locations_adj_chi2
-    ret_map["visibleTagsCount"] = visible_tags_count
+    ret_map.locationsAdjChi2 = locations_adj_chi2
+    ret_map.visibleTagsCount = visible_tags_count
     return ret_map
 
 
@@ -252,7 +245,7 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     return avg
 
 
-def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calculate_intersections: bool = False) \
+def make_processed_map_JSON(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
         -> str:
     """Serializes the result of an optimization into a JSON that is of an acceptable format for uploading to the
     database.
@@ -274,11 +267,11 @@ def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calc
         pydantic.ValidationError - If the input arguments are not of the correct format to be parsed into any of the
          relevant data set models in the `data_set_models` module.
     """
-    tag_locations = opt_result["tags"]
-    odom_locations = opt_result["locations"]
-    waypoint_locations = tuple(opt_result["waypoints"])
-    adj_chi2_arr = opt_result["locationsAdjChi2"]
-    visible_tags_count = opt_result["visibleTagsCount"]
+    tag_locations = opt_result.tags
+    odom_locations = opt_result.locations
+    adj_chi2_arr = opt_result.locationsAdjChi2
+    visible_tags_count = opt_result.visibleTagsCount
+    waypoint_locations = (opt_result.waypoints_metadata, opt_result.waypoints_arr)
 
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
         raise ValueError("'visible_tags_count' and 'adj_chi2_arr' arguments must both be None or non-None")

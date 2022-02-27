@@ -12,28 +12,48 @@ Notes:
 """
 
 import itertools
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, conlist, Field, confloat, validator
 
 from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
-from .transform_utils import FLIP_Y_AND_Z_AXES
+from map_processing.transform_utils import FLIP_Y_AND_Z_AXES
+
+
+def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], is_optional: bool = False):
+    if is_optional and v is None:
+        return v
+    v_sqz: np.ndarray = np.squeeze(v)
+    if v_sqz.ndim != 2:
+        raise ValueError(
+            f"Field that should have been a matrix was found to not have the right dimensions (number of dims found to "
+            f"be {v_sqz.ndim} after squeezing the array)"
+        )
+    for dim_idx, dim in enumerate(shape):
+        if 0 <= shape[dim_idx] != v_sqz.shape[dim_idx]:
+            raise ValueError(
+                f"Field that should have had a matrix of shape {shape} had a shape of {v_sqz.shape} (note that "
+                f"negative expected dimensions, if there are any, mean that the matrix can be of any size along that "
+                f"axis)"
+            )
+    return v_sqz
 
 
 def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
-    v_sqz = np.squeeze(v)
+    v_sqz: np.ndarray = np.squeeze(v)
     if v_sqz.ndim != 1:
         raise ValueError(
-            f"field that should have been a vector was found not to have the right dimensions (number of "
-            f"dims found to be {v_sqz.ndim} after squeezing the array)")
+            f"field that should have been a vector was found to not have the right dimensions (number of dims found to "
+            f"be {v_sqz.ndim} after squeezing the array)")
     if v_sqz.size != length:
         raise ValueError(
             f"Expected vector to be of length {length} but instead found the length to be {v_sqz.size}")
     return v_sqz
 
 
-def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]):
+def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> \
+        np.ndarray:
     if isinstance(v, np.ndarray):
         return v
     elif isinstance(v, str):
@@ -464,16 +484,17 @@ class OComputeInfParams(BaseModel):
 
 class OConfig(BaseModel):
     """
-    is_sba: True if SBA is being used.
-    obs_chi2_filter: Removes from the graph (stored in the `graph` instance attribute) observation edges above
-     this many standard deviations from the mean observation edge chi2 value in the optimized graph. The graph
-     optimization is then re-run with the modified graph. A negative value performs no filtering.
-    graph_plot_title: Plot title argument to pass to the visualization routine for the graph visualizations.
-    chi2_plot_title: Plot title argument to pass to the visualization routine for the chi2 plot.
-    compute_inf_params: Passed down to the `Edge.compute_information` method to specify the edge
-     information computation parameters.
-    scale_by_edge_amount: Passed on to the `scale_by_edge_amount` argument of the `Graph.set_weights` method. If
-     true, then the odom:tag ratio is scaled by the ratio of tag edges to odometry edges
+    Class Attributes:
+        is_sba: True if SBA is being used.
+        obs_chi2_filter: Removes from the graph (stored in the `graph` instance attribute) observation edges above
+         this many standard deviations from the mean observation edge chi2 value in the optimized graph. The graph
+         optimization is then re-run with the modified graph. A negative value performs no filtering.
+        graph_plot_title: Plot title argument to pass to the visualization routine for the graph visualizations.
+        chi2_plot_title: Plot title argument to pass to the visualization routine for the chi2 plot.
+        compute_inf_params: Passed down to the `Edge.compute_information` method to specify the edge
+         information computation parameters.
+        scale_by_edge_amount: Passed on to the `scale_by_edge_amount` argument of the `Graph.set_weights` method. If
+         true, then the odom:tag ratio is scaled by the ratio of tag edges to odometry edges
     """
 
     is_sba: bool
@@ -483,3 +504,49 @@ class OConfig(BaseModel):
     weights: Weights = Weights()
     graph_plot_title: str = ""
     chi2_plot_title: str = ""
+
+
+class OG2oOptimizer(BaseModel):
+    """
+    Class Attributes:
+        locations: (n, 9) array containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at
+         n points.
+        locationsAdjChi2: Optionally associated with each odometry node is a chi2 calculated from the
+         `map_odom_to_adj_chi2` method of the `Graph` class, which is stored in this vector.
+    """
+
+    locations: np.ndarray = Field(default_factory=lambda: np.zeros((0, 9)))
+    tags: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
+    tagpoints: np.ndarray = Field(default_factory=lambda: np.zeros((0, 3)))
+    waypoints_arr: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
+    waypoints_metadata: List[Dict]
+    locationsAdjChi2: Optional[np.ndarray] = None
+    visibleTagsCount: Optional[np.ndarray] = None
+
+    class Config:
+        arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr.flatten(order="C"))}
+
+    _check_locations_is_correct_shape_matrix = validator("locations", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 9)))
+    _check_tags_is_correct_shape_matrix = validator("tags", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 8)))
+    _check_tagpoints_is_correct_shape_matrix = validator("tagpoints", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 3)))
+    _check_waypoints_arr_is_correct_shape_matrix = validator("waypoints_arr", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 8)))
+    _check_locationsAdjChi2_is_correct_shape_matrix = validator("locationsAdjChi2", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 1), is_optional=True))
+    _check_visibleTagsCount_is_correct_shape_matrix = validator("visibleTagsCount", allow_reuse=True)(
+        lambda v: _is_matrix_of_right_shape(v, (-1, 1), is_optional=True))
+
+    _deserialize_locations_matrix_if_needed = validator("locations", allow_reuse=True, pre=True)(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 9]))
+    _deserialize_tags_matrix_if_needed = validator("tags", allow_reuse=True, pre=True)(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]))
+    _deserialize_tagpoints_matrix_if_needed = validator("tagpoints", allow_reuse=True, pre=True)(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 3]))
+    _deserialize_waypoints_arr_matrix_if_needed = validator("waypoints_arr", allow_reuse=True, pre=True)(
+            lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
+    _deserialize_visibleTagsCount_matrix_if_needed = validator("visibleTagsCount", allow_reuse=True, pre=True)(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
