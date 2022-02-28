@@ -20,7 +20,7 @@ from scipy import stats
 from map_processing.graph import Graph
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton
-from map_processing.weights import Weights
+from map_processing.data_models import Weights
 import typing
 
 SpearmenrResult = typing.NamedTuple("SpearmenrResult", [("correlation", float), ("pvalue", float)])
@@ -87,8 +87,8 @@ def do_sweeping(sweep: np.ndarray):
         subgraph_pair_chi2_diff[key] = []
 
     for run in range(total_runs):
-        weights = Weights.legacy_from_dict(
-            Weights.legacy_weight_dict_from_array(np.array([sweep[run], sweep[run], -sweep[run], -sweep[run]]))
+        weights = Weights(
+            **Weights.legacy_weight_dict_from_array(np.array([sweep[run], sweep[run], -sweep[run], -sweep[run]]))
         )
         
         print("optimizing...")

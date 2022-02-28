@@ -15,8 +15,7 @@ from g2o import SE3Quat
 from mpl_toolkits.mplot3d import Axes3D
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.data_set_models import UGDataSet, UGTagDatum, UGPoseDatum, \
-    GTDataSet, GTTagPose
+from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GTTagPose
 from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, transform_matrix_to_vector, \
     transform_vector_to_matrix
 

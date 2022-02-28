@@ -7,14 +7,14 @@ import json
 import os
 from threading import Semaphore, Thread, Timer
 from typing import Dict, Union, List, Optional, Set, Callable
-import numpy as np
 
 import firebase_admin
+import numpy as np
 from firebase_admin import db
 from firebase_admin import storage
 from varname import nameof
 
-from map_processing.data_set_models import GTDataSet
+from map_processing.data_models import GTDataSet
 
 
 class MapInfo:

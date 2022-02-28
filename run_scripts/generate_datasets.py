@@ -16,7 +16,7 @@ import numpy as np
 
 from map_processing import ASSUMED_TAG_SIZE
 from map_processing.graph_generator import GraphGenerator
-from map_processing.data_set_models import UGDataSet
+from map_processing.data_models import UGDataSet
 from run_scripts import graph_manager_user
 from map_processing.cache_manager import CacheManagerSingleton
 

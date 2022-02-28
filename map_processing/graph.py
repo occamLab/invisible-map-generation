@@ -20,12 +20,11 @@ from g2o import SE3Quat, SparseOptimizer, EdgeProjectPSI2UV, EdgeSE3Expmap, Opti
 from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
-from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE
-from .data_set_models import UGDataSet
-from .graph_vertex_edge_classes import Vertex, VertexType, Edge
+from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE, VertexType
+from .data_models import UGDataSet, OComputeInfParams, Weights
+from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
     transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, pose_to_isometry
-from .weights import Weights
 
 
 class Graph:
@@ -375,14 +374,14 @@ class Graph:
                       f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
                 self.remove_edge(edge_id)
 
-    def update_edge_information(self, compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] = None) -> None:
+    def update_edge_information(self, compute_inf_params: Optional[OComputeInfParams] = None) -> None:
         """Invokes the compute_information method on each edge in the graph with the corresponding weights vector as
         the weights_vec argument.
 
         Prescaling is also applied here if the edge contains prescaling information.
 
         Args:
-            compute_inf_params: Dict passed down to the `Edge.compute_information` method for its kwargs.
+            compute_inf_params: Passed down to the `Edge.compute_information` method.
 
         Raises:
             Exception if an edge is encountered whose start mode is not an odometry node

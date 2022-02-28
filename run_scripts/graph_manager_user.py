@@ -19,17 +19,18 @@ Notes:
 import os
 import sys
 
+import map_processing
+
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 from typing import Tuple, List, Dict
 import argparse
 from firebase_admin import credentials
-from map_processing import graph, PrescalingOptEnum
+from map_processing import PrescalingOptEnum
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.graph import Graph
-from map_processing.weights import Weights
 import numpy as np
 from copy import deepcopy
 import matplotlib.pyplot as plt
@@ -38,6 +39,8 @@ import json
 import pickle
 
 import concurrent.futures
+
+from map_processing.data_models import OComputeInfParams, Weights, OConfig
 
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
@@ -270,17 +273,20 @@ def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict, bool,
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    results = GraphManager.optimize_graph(is_sba=True, graph=deepcopy(sweep_args_tuple[3]), visualize=False,
-                                          weights=Weights(gravity=np.array([0.1, 4, 0.1]),
-                                                          odom_tag_ratio=sweep_args_tuple[0]), obs_chi2_filter=-1,
-                                          compute_inf_params={
-                                              "ang_vel_var": sweep_args_tuple[1],
-                                              "lin_vel_var": sweep_args_tuple[2] * np.ones(3)
-                                          }, scale_by_edge_amount=sweep_args_tuple[5])
+    optimization_config = OConfig(
+        is_sba=True,
+        weights=Weights(gravity=np.array([0.1, 4, 0.1]),
+                        odom_tag_ratio=sweep_args_tuple[0]), obs_chi2_filter=-1,
+        compute_inf_params=OComputeInfParams(
+            ang_vel_var=sweep_args_tuple[1],
+            lin_vel_var=sweep_args_tuple[2] * np.ones(3)),
+        scale_by_edge_amount=sweep_args_tuple[5]
+    )
+    results = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[3]), visualize=False,
+                                          optimization_config=optimization_config)
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
         optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1]["tags"]),
-        ground_truth_tags=sweep_args_tuple[4], verbose=False
-    )
+        ground_truth_tags=sweep_args_tuple[4], verbose=False)
     sweep_args_tuple[-1].append((gt_result, (sweep_args_tuple[0], sweep_args_tuple[1], sweep_args_tuple[2])))
 
 
@@ -307,22 +313,22 @@ if __name__ == "__main__":
     fixed_tags = set()
     for tag_type in args.fix:
         if tag_type == 0:
-            fixed_tags.add(graph.VertexType.ODOMETRY)
+            fixed_tags.add(map_processing.VertexType.ODOMETRY)
         elif tag_type == 1:
-            fixed_tags.add(graph.VertexType.TAG)
+            fixed_tags.add(map_processing.VertexType.TAG)
         elif tag_type == 2:
-            fixed_tags.add(graph.VertexType.WAYPOINT)
+            fixed_tags.add(map_processing.VertexType.WAYPOINT)
 
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {cms.cache_path}")
         exit(0)
 
-    compute_inf_params = {}
+    compute_inf_params = OComputeInfParams()
     if args.lvv is not None:
-        compute_inf_params["lin_vel_var"] = np.ones(3) * args.lvv,
+        compute_inf_params.lin_vel_var = np.ones(3) * args.lvv,
     if args.avv is not None:
-        compute_inf_params["ang_vel_var"] = args.avv
+        compute_inf_params.ang_vel_var = args.avv
 
     for map_info in matching_maps:
         if args.s:
@@ -335,13 +341,8 @@ if __name__ == "__main__":
                 graph_manager.compare_weights(map_info, args.v)
             else:
                 opt_results = graph_manager.process_map(
-                    map_info=map_info,
-                    visualize=args.v,
-                    upload=args.F,
-                    fixed_vertices=tuple(fixed_tags),
-                    obs_chi2_filter=args.filter,
-                    compute_inf_params=compute_inf_params
-                )
+                    map_info=map_info, visualize=args.v, upload=args.F, fixed_vertices=tuple(fixed_tags),
+                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params)
                 if not args.g:
                     continue
 

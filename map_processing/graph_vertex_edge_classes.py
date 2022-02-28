@@ -2,19 +2,12 @@
 Vertex, VertexType, and Edge classes which are used in the Graph class.
 """
 
-from enum import Enum
 from typing import List, Union, Dict, Any, Optional, Tuple
 
 import numpy as np
 
-
-class VertexType(Enum):
-    """An enumeration containing the vertex types
-    """
-    ODOMETRY = 0
-    TAG = 1
-    TAGPOINT = 2
-    WAYPOINT = 3
+from . import VertexType
+from .data_models import OComputeInfParams
 
 
 class Vertex:
@@ -75,8 +68,8 @@ class Edge:
         self.start_end: Tuple[Vertex, Vertex] = start_end
         self.information: np.ndarray = np.eye(2 if corner_ids is not None else (3 if start_end[1] is None else 6))
 
-    def compute_information(self, weights_vec: np.ndarray,
-                            compute_inf_params: Optional[Dict[str, Union[float, np.ndarray]]] = None) -> None:
+    def compute_information(self, weights_vec: np.ndarray, compute_inf_params: Optional[OComputeInfParams] = None) -> \
+            None:
         """Computes the information matrix for the edge.
 
         Notes:
@@ -91,8 +84,8 @@ class Edge:
         Args:
             weights_vec: A vector of weights that is used to scale the information matrix. Passed as the argument to the
              corresponding downstream `compute_information*` method.
-            compute_inf_params: A dictionary containing parameters for edge information computation. If both the start
-             and end vertices of the edge are odometry vertices, then 'ang_vel_var' and 'lin_vel_var' keys can be used
+            compute_inf_params: Contains parameters for edge information computation. If both the start
+             and end vertices of the edge are odometry vertices, then 'ang_vel_var' and 'lin_vel_var' fields is used
              to specify the angular velocity variance and linear velocity variance, respectively, for the
              `_compute_information_se3_nonzero_delta_t` method. See that method for more information.
 
@@ -103,7 +96,7 @@ class Edge:
             raise ValueError("The input weight vector should not contain negative values.")
 
         if compute_inf_params is None:
-            compute_inf_params = {}  # Subsequent code depends on this variable being a dictionary
+            compute_inf_params = OComputeInfParams()
 
         if self.corner_ids is not None:  # sba corner edge
             self._compute_information_sba(weights_vec)
@@ -111,11 +104,8 @@ class Edge:
             self._compute_information_gravity(weights_vec)
         else:
             if self.start_end[1].mode == VertexType.ODOMETRY:
-                lvv = compute_inf_params["lin_vel_var"] if isinstance(compute_inf_params.get("lin_vel_var", None),
-                                                                      np.ndarray) else np.ones(3)
-                avv = compute_inf_params["ang_vel_var"] if isinstance(compute_inf_params.get("ang_vel_var", None),
-                                                                      float) else 1
-                self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=lvv, ang_vel_var=avv)
+                self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=compute_inf_params.lin_vel_var,
+                                                              ang_vel_var=compute_inf_params.ang_vel_var)
             else:
                 self._compute_information_se3_obs(weights_vec)
 

@@ -20,7 +20,7 @@ The primary Python packages are:
 
 ### Unprocessed Data Set Parsing
 
-The unprocessed graph data sets are described by the [pydantic](https://pydantic-docs.helpmanual.io/) `BaseModel`s in [map_processing/data_set_models.py](map_processing/data_set_models.py). If a change is made to the way the data sets are serialized on the client side (e.g., by adding or removing a field), this could manifest as a data validation error during decoding in the `Graph.as_graph` class method. Additionally, conventions for row/column ordering in flattened matrices and how the transforms are described can be found by inspection of the `UGDataSet`'s properties (in [map_processing/data_set_models.py](map_processing/data_set_models.py)).
+The unprocessed graph data sets are described by the [pydantic](https://pydantic-docs.helpmanual.io/) `BaseModel`s in [map_processing/data_set_models.py](map_processing/data_models.py). If a change is made to the way the data sets are serialized on the client side (e.g., by adding or removing a field), this could manifest as a data validation error during decoding in the `Graph.as_graph` class method. Additionally, conventions for row/column ordering in flattened matrices and how the transforms are described can be found by inspection of the `UGDataSet`'s properties (in [map_processing/data_set_models.py](map_processing/data_models.py)).
 
 ### Additional Directories
 

@@ -3,9 +3,9 @@ Utilities for manipulating transformations and providing other helpful matrix op
 """
 
 from typing import List
+from typing import Tuple
 
 import g2o
-from typing import Tuple
 import numpy as np
 import scipy
 from g2o import SE3Quat, Quaternion

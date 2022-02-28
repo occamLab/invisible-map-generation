@@ -23,3 +23,12 @@ class PrescalingOptEnum(Enum):
     FULL_COV = 1
     DIAG_COV = 2
     ONES = 3
+
+
+class VertexType(Enum):
+    """An enumeration containing the vertex types
+    """
+    ODOMETRY = 0
+    TAG = 1
+    TAGPOINT = 2
+    WAYPOINT = 3

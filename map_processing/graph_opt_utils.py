@@ -2,18 +2,17 @@
 Utility functions for graph optimization.
 """
 
-import json
 import math
 from typing import Union, List, Dict, Optional, Set
 
 import g2o
 import numpy as np
-from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, VertexSE3Expmap
 # noinspection PyUnresolvedReferences
 from g2o import EdgeSE3Gravity
+from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, VertexSE3Expmap
 
-from . import graph_util_get_neighbors
-from .graph_vertex_edge_classes import VertexType
+from . import graph_util_get_neighbors, VertexType
+from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> Dict[str, Union[List, np.ndarray]]:
@@ -129,60 +128,72 @@ def optimizer_find_connected_tag_vert(optimizer: g2o.SparseOptimizer, location_v
 
 
 def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity],
-                     start_vert: Optional[Union[VertexSE3, VertexSE3Expmap]] = None) -> float:
+                     start_vert: Optional[Union[VertexSE3, VertexSE3Expmap]] = None,
+                     log_normalization: bool = False) -> float:
     """Computes the chi2 value associated with the provided edge
 
     Arguments:
         edge: A g2o edge of type EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, or EdgeSE3Gravity
         start_vert: The start vertex associated with this edge (only used if the edge is of type EdgeSE3Gravity;
          otherwise, it is ignored.)
+        log_normalization: If true, then accounts for the log normalization constant. See the notes for this function's
+         documentation for more information
 
     Returns:
-        Chi2 value associated with the provided edge
+        Chi2 value associated with the provided edge.
 
     Raises:
-        ValueError: if an edge is encountered that is not handled (handled edges are EdgeProjectPSI2UV,
-         EdgeSE3Expmap, EdgeSE3, and EdgeSE3Gravity)
-        ValueError: if the edge is of type EdgeSE3Gravity and
+        ValueError - If an edge is encountered that is not handled (handled edges are EdgeProjectPSI2UV,
+         EdgeSE3Expmap, EdgeSE3, and EdgeSE3Gravity).
+        ValueError - If the edge is of type EdgeSE3Gravity and no start vertex was provided.
+        ValueError - If the resulting chi2 value ends up being NaN.
+
+    Notes:
+        TODO: Explain the log normalization stuff.
     """
+    chi2: float
+    information: np.ndarray = edge.information()
     if isinstance(edge, EdgeProjectPSI2UV):
         cam = edge.parameter(0)
         camera_coords = edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate()
         pixel_coords = cam.cam_map(camera_coords)
         error = edge.measurement() - pixel_coords
-        return error.dot(edge.information()).dot(error)
+        chi2 = error.dot(information).dot(error)
     elif isinstance(edge, EdgeSE3Expmap):
         error = edge.vertex(1).estimate().inverse() * edge.measurement() * edge.vertex(0).estimate()
-        chi2 = error.log().T.dot(edge.information()).dot(error.log())
-        # noinspection SpellCheckingInspection
-        if math.isnan(chi2):
-            raise Exception('chi2 is NaN for an edge of type EdgeSE3Expmap')
-        return chi2
+        chi2 = error.log().T.dot(information).dot(error.log())
     elif isinstance(edge, EdgeSE3):
         delta = edge.measurement().inverse() * edge.vertex(0).estimate().inverse() * edge.vertex(1).estimate()
         error = np.hstack((delta.translation(), delta.orientation().coeffs()[:-1]))
-        return error.dot(edge.information()).dot(error)
+        chi2 = error.dot(information).dot(error)
     elif isinstance(edge, EdgeSE3Gravity):
         if start_vert is None:
             raise ValueError("No start vertex provided for edge of type EdgeSE3Gravity")
         direction = edge.measurement()[:3]
         measurement = edge.measurement()[3:]
-
         if isinstance(start_vert, VertexSE3):
             rot_mat = start_vert.estimate().Quaternion().inverse().R
         else:  # start_vert is a VertexSE3Expmap, so don't invert the rotation
             rot_mat = start_vert.estimate().Quaternion().R
-
         estimate = np.matmul(rot_mat, direction)
         error = estimate - measurement
-        return error.dot(edge.information()).dot(error)
+        chi2 = error.dot(information).dot(error)
     else:
-        raise Exception(f"Unhandled edge type for chi2 calculation: {type(edge)}")
+        raise ValueError(f"Unhandled edge type for chi2 calculation: {type(edge)}")
+
+    if math.isnan(chi2):
+        raise ValueError(f"chi2 is NaN for: {edge}")
+
+    if log_normalization:
+        c = -np.log((2 * np.pi) ** (-0.5 * information.shape[0]))
+        return c - np.log(np.sqrt(np.linalg.det(information))) + chi2
+    else:
+        return chi2
 
 
 def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True,
                              edge_type_filter: Optional[Set[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]] =
-                             None) -> float:
+                             None, log_normalization: bool = False) -> float:
     """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.
 
     Args:
@@ -190,6 +201,8 @@ def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = Tru
         verbose: Boolean for whether to print the total chi2 value
         edge_type_filter: A set providing an inclusive filter of the edge types to sum. If no set is provided or an
          empty set is provided, then no edges are filtered.
+        log_normalization: If true, then accounts for the log normalization constant. See the `get_chi2_of_edge`
+         function for more information on what this means.
 
     Returns:
         Sum of the chi2 values associated with each edge
@@ -200,7 +213,7 @@ def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = Tru
     total_chi2 = 0.0
     for edge in optimizer.edges():
         if len(edge_type_filter) == 0 or type(edge) in edge_type_filter:
-            total_chi2 += get_chi2_of_edge(edge, edge.vertices()[0])
+            total_chi2 += get_chi2_of_edge(edge, edge.vertices()[0], log_normalization=log_normalization)
 
     if verbose:
         print(total_chi2)
@@ -255,6 +268,11 @@ def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calc
 
     Returns:
         Json string containing the serialized results.
+
+    Raises:
+        ValueError - If both the `visible_tags_count` and `adj_chi2_arr` arguments are None or not None.
+        pydantic.ValidationError - If the input arguments are not of the correct format to be parsed into any of the
+         relevant data set models in the `data_set_models` module.
     """
     tag_locations = opt_result["tags"]
     odom_locations = opt_result["locations"]
@@ -263,84 +281,57 @@ def make_processed_map_JSON(opt_result: Dict[str, Union[List, np.ndarray]], calc
     visible_tags_count = opt_result["visibleTagsCount"]
 
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
-        print("visible_tags_count and adj_chi2_arr arguments must both be None or non-None")
+        raise ValueError("'visible_tags_count' and 'adj_chi2_arr' arguments must both be None or non-None")
 
-    tag_vertex_map = map(
-        lambda curr_tag: {
-            "translation": {"x": curr_tag[0],
-                            "y": curr_tag[1],
-                            "z": curr_tag[2]},
-            "rotation": {"x": curr_tag[3],
-                         "y": curr_tag[4],
-                         "z": curr_tag[5],
-                         "w": curr_tag[6]},
-            "id": int(curr_tag[7])
-        },
-        tag_locations
-    )
-
-    odom_vertex_map: List[Dict[str, Union[List[int], int, float, Dict[str, float]]]]
-    if adj_chi2_arr is None:
-        odom_vertex_map = list(
-            map(
-                lambda curr_odom: {
-                    "translation": {"x": curr_odom[0],
-                                    "y": curr_odom[1],
-                                    "z": curr_odom[2]},
-                    "rotation": {"x": curr_odom[3],
-                                 "y": curr_odom[4],
-                                 "z": curr_odom[5],
-                                 "w": curr_odom[6]},
-                    "poseId": int(curr_odom[8]),
-                },
-                odom_locations
+    tag_vertex_list: List[PGTagVertex] = []
+    for curr_tag in tag_locations:
+        tag_vertex_list.append(
+            PGTagVertex(
+                translation=PGTranslation(x=curr_tag[0], y=curr_tag[1], z=curr_tag[2]),
+                rotation=PGRotation(x=curr_tag[3], y=curr_tag[4], z=curr_tag[5], w=curr_tag[6]),
+                id=int(curr_tag[7])
             )
         )
-    else:
+
+    odom_vertex_list: List[PGOdomVertex] = []
+    for curr_odom in odom_locations:
+        odom_vertex_list.append(
+            PGOdomVertex(
+                translation=PGTranslation(x=curr_odom[0], y=curr_odom[1], z=curr_odom[2]),
+                rotation=PGRotation(x=curr_odom[3], y=curr_odom[4], z=curr_odom[5], w=curr_odom[6]),
+                poseId=int(curr_odom[8]),
+            )
+        )
+
+    if adj_chi2_arr is not None:
         odom_locations_with_chi2_and_viz_tags = np.concatenate(
-            [odom_locations, adj_chi2_arr, visible_tags_count],
-            axis=1
-        )
-        odom_vertex_map = list(
-            map(
-                lambda curr_odom: {
-                    "translation": {"x": curr_odom[0],
-                                    "y": curr_odom[1],
-                                    "z": curr_odom[2]},
-                    "rotation": {"x": curr_odom[3],
-                                 "y": curr_odom[4],
-                                 "z": curr_odom[5],
-                                 "w": curr_odom[6]},
-                    "poseId": int(curr_odom[8]),
-                    "adjChi2": curr_odom[9],
-                    "vizTags": curr_odom[10]
-                },
-                odom_locations_with_chi2_and_viz_tags
-            )
-        )
+            [odom_locations, adj_chi2_arr, visible_tags_count], axis=1)
+        for odom_idx, curr_odom in enumerate(odom_locations_with_chi2_and_viz_tags):
+            odom_vertex_list[odom_idx].adjChi2 = curr_odom[9]
+            odom_vertex_list[odom_idx].vizTags = curr_odom[10]
 
     if calculate_intersections:
-        neighbors, intersections = graph_util_get_neighbors.get_neighbors(odom_locations[:, :7])
-        for index, neighbor in enumerate(neighbors):
-            odom_vertex_map[index]["neighbors"] = neighbor
+        neighbors_list, intersections = graph_util_get_neighbors.get_neighbors(odom_locations[:, :7])
+        for index, neighbors in enumerate(neighbors_list):
+            odom_vertex_list[index].neighbors = neighbors
         for intersection in intersections:
-            odom_vertex_map.append(intersection)
+            odom_vertex_list.append(PGOdomVertex(**intersection))
 
-    waypoint_vertex_map = map(
-        lambda idx: {
-            "translation": {"x": waypoint_locations[1][idx][0],
-                            "y": waypoint_locations[1][idx][1],
-                            "z": waypoint_locations[1][idx][2]},
-            "rotation": {"x": waypoint_locations[1][idx][3],
-                         "y": waypoint_locations[1][idx][4],
-                         "z": waypoint_locations[1][idx][5],
-                         "w": waypoint_locations[1][idx][6]},
-            "id": waypoint_locations[0][idx]["name"]
-        }, range(len(waypoint_locations[0]))
-    )
-    return json.dumps({"tag_vertices": list(tag_vertex_map),
-                       "odometry_vertices": odom_vertex_map,
-                       "waypoints_vertices": list(waypoint_vertex_map)}, indent=2)
+    waypoint_vertex_list: List[PGWaypointVertex] = []
+    for idx in range(len(waypoint_locations[0])):
+        waypoint_vertex_list.append(
+            PGWaypointVertex(
+                translation=PGTranslation(x=waypoint_locations[1][idx][0], y=waypoint_locations[1][idx][1],
+                                          z=waypoint_locations[1][idx][2]),
+                rotation=PGRotation(x=waypoint_locations[1][idx][3], y=waypoint_locations[1][idx][4],
+                                    z=waypoint_locations[1][idx][5], w=waypoint_locations[1][idx][6]),
+                id=waypoint_locations[0][idx]["name"]
+            )
+        )
+
+    processed_data_set = PGDataSet(
+        tag_vertices=tag_vertex_list, odometry_vertices=odom_vertex_list, waypoints_vertices=waypoint_vertex_list)
+    return processed_data_set.json(indent=2)
 
 
 def compare_std_dev(all_tags, all_tags_original):

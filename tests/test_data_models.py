@@ -4,8 +4,7 @@ from typing import List
 import os
 from pathlib import Path
 
-from map_processing.data_set_models import UGDataSet
-
+from map_processing.data_models import UGDataSet, Weights
 
 CURR_FILE_DIR = Path(os.path.abspath(__file__)).absolute().parent
 TEST_FILES_DIR = os.path.join(CURR_FILE_DIR, "test_files")
@@ -23,3 +22,10 @@ def test_ug_data_model(targets: List[str]):
         with open(target, "r") as f:
             json_str = f.read()
             assert UGDataSet.parse_raw(json_str)
+
+
+def test_weights_model():
+    w = Weights()
+    json_str = w.json(indent=2)
+    Weights.parse_raw(json_str)
+

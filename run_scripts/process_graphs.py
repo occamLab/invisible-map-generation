@@ -17,6 +17,8 @@ from map_processing.graph import Graph
 from map_processing.graph_opt_utils import make_processed_map_JSON
 from firebase_admin import credentials
 
+from map_processing.data_models import OConfig
+
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get('GOOGLE_APPLICATION_CREDENTIALS'))
 cms = CacheManagerSingleton(cred)
@@ -30,8 +32,9 @@ def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
-    opt_chi2, opt_result, _ = GraphManager.optimize_graph(is_sba=False, graph=graph, weights=GraphManager.weights_dict[
-        GraphManager.WeightSpecifier.BEST_SWEEP])
+    optimization_config = OConfig(
+        is_sba=False, weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
+    opt_chi2, opt_result, _ = GraphManager.optimize_graph(graph=graph, optimization_config=optimization_config)
     json_str = make_processed_map_JSON(opt_result)
     cms.upload(map_info, json_str)
 
