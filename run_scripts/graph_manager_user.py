@@ -19,14 +19,13 @@ Notes:
 import os
 import sys
 
-import map_processing
-
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 from typing import Tuple, List, Dict
 import argparse
 from firebase_admin import credentials
+import map_processing
 from map_processing import PrescalingOptEnum
 from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo

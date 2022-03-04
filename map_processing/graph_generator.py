@@ -13,10 +13,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from g2o import SE3Quat
 from mpl_toolkits.mplot3d import Axes3D
+import cv2.cv2 as cv2
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GTTagPose
-from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, transform_matrix_to_vector, \
+from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, AR_TO_OPENCV, transform_matrix_to_vector, \
     transform_vector_to_matrix
 
 matplotlib.rcParams['figure.dpi'] = 500
@@ -53,6 +54,9 @@ class GraphGenerator:
          pose.
         _observation_pixels: Nx2x4 array containing the pixel coordinates corresponding to the pose observations
          recorded in _observation_poses.
+        _tag_corners_in_tag: Applying the tag-in-phone transform with the y and z-axes negated to this 4x4 matrix yields
+         a 4x4 matrix where the first 3 rows correspond to the tag corners' locations in the (y- and z-axis negated)
+         reference frame.
     """
 
     class PathType(Enum):
@@ -132,12 +136,19 @@ class GraphGenerator:
     ])
     _double_camera_intrinsics = 2 * CAMERA_INTRINSICS
 
-    TAG_CORNERS_SIZE_1 = np.transpose(np.array([
-        [-1, -1, 0, 1],  # Bottom left
-        [1, -1, 0, 1],  # Bottom right
-        [1, 1, 0, 1],  # Top right
+    TAG_CORNERS_SIZE_2 = np.transpose(np.array([
         [-1, 1, 0, 1],  # Top left
+        [1, 1, 0, 1],  # Top right
+        [1, -1, 0, 1],  # Bottom right
+        [-1, -1, 0, 1],  # Bottom left
     ]).astype(float))
+
+    TAG_CORNERS_SIZE_2_FOR_CV_PNP = np.array([
+        [-1, 1, 0],
+        [1, 1, 0],
+        [1, -1, 0],
+        [-1, -1, 0],
+    ]).astype(float)
 
     PHONE_IN_FRENET = np.array([
         [0, -1, 0, 0],
@@ -157,7 +168,7 @@ class GraphGenerator:
                  parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None,
                  t_max: float = 0, n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None,
                  dist_threshold: float = 3.7, aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
-                 odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None):
+                 odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None, obs_noise_var: float = 0.0):
         """Initializes a GraphGenerator instance and automatically invokes the `generate` method.
 
         Args:
@@ -180,6 +191,9 @@ class GraphGenerator:
              of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
              phone.
             tag_size: Height/width dimension of the (square) tags in meters.
+            obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
+             from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
+             simulated tag observation poses are re-derived from these noise pixel observations.
 
         Raises:
             ValueError - If `path_from` is a `UGDataSet` instance and `t_max` is negative.
@@ -228,8 +242,9 @@ class GraphGenerator:
         self._obs_from_poses: Optional[np.ndarray] = None
         self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
 
-        self._tag_corners_in_tag = GraphGenerator.TAG_CORNERS_SIZE_1
+        self._tag_corners_in_tag = GraphGenerator.TAG_CORNERS_SIZE_2
         self._tag_corners_in_tag[:3, :] *= tag_size / 2
+        self._tag_corners_for_pnp = GraphGenerator.TAG_CORNERS_SIZE_2_FOR_CV_PNP * tag_size / 2
 
         self._cms: Optional[CacheManagerSingleton] = None
 
@@ -240,6 +255,7 @@ class GraphGenerator:
                 GraphGenerator.OdomNoiseDims.Z: 0,
                 GraphGenerator.OdomNoiseDims.RVert: 0,
             }
+        self._obs_noise_var = obs_noise_var
 
         self.generate()
 
@@ -325,6 +341,9 @@ class GraphGenerator:
         map_str = json.dumps(map_dict, indent=2)
 
         map_name = map_dict["map_id"]
+        print(f"Generated new data set '{map_name}' containing {map_obj.pose_data_len} poses, {map_obj.num_tags} "
+              f"tags, and {map_obj.num_observations} observations")
+
         if self._cms is None:
             self._cms = CacheManagerSingleton()
         self._cms.cache_map(
@@ -432,14 +451,17 @@ class GraphGenerator:
         # Noise model: assume that noise variance is proportional to the elapsed time. noisy_transforms contains the
         # pose-to-pose transforms except with noise applied.
         noisy_transforms = np.zeros((true_poses.shape[0] - 1, 4, 4))
+        odom_noise_x = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X]
+        odom_noise_y = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y]
+        odom_noise_z = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]
         for i in range(0, true_poses.shape[0] - 1):
             this_delta_t = self._odometry_t_vec[i + 1] - self._odometry_t_vec[i]
             noise_as_transform = np.zeros((4, 4))
             noise_as_transform[3, 3] = 1
             noise_as_transform[:3, 3] = np.array([
-                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X])),
-                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y])),
-                np.random.normal(0, np.sqrt(this_delta_t * self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]))
+                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_x)),
+                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_y)),
+                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_z))
             ])
             theta = np.random.normal(0, np.sqrt(this_delta_t *
                                                 self._odometry_noise_var[GraphGenerator.OdomNoiseDims.RVert]))
@@ -459,9 +481,6 @@ class GraphGenerator:
             noisy_poses[i + 1, :, :] = np.matmul(noisy_poses[i, :, :], noisy_transforms[i, :, :])
         return noisy_poses
 
-    def _generate_time_series_for_equidistant_poses(self, n_odom, t_end):
-        raise NotImplementedError()
-
     def _get_tag_observation(self, obs_from: np.ndarray, tag: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Args:
@@ -473,19 +492,22 @@ class GraphGenerator:
         Returns:
             If the tag is visible: A tuple containing (1) a 4x4 homogenous transform giving the tag pose in the
             reference frame of the phone and (2) a 2x4 array where each column gives the x-y pixel coordinates of the
-            pixel projection for a given corner (corner order determined by the TAG_CORNERS_SIZE_1 class attribute).
+            pixel projection for a given corner (corner order determined by the TAG_CORNERS_SIZE_2 class attribute).
             Otherwise, two empty arrays are returned.
         """
         tag_in_phone = np.matmul(np.linalg.inv(obs_from), tag)
+        if tag_in_phone[2, 3] > 0:  # True if the tag is behind the camera
+            return np.array([]), np.array([])
+
         vector_phone_to_tag = tag_in_phone[:3, 3]
         dist_to_tag = np.linalg.norm(vector_phone_to_tag)
         if dist_to_tag > self._dist_threshold:
             return np.array([]), np.array([])
 
-        # Dotting this vector with the tag's z-axis is the same as selecting the z-element of the vector
-        dot_for_aoa = -vector_phone_to_tag[2]
-
-        # Calculate aoa in the range [0, pi] rad.
+        # Calculate aoa in the range [0, pi] rad. The angle of attack is found by computing the arccos of
+        # normalized vector_phone_to_tag vector and the optical axis of the phone's camera (which is the negative z-axis
+        # basis vector of the rotation matrix in the tag_in_phone transform)
+        dot_for_aoa = -np.dot(vector_phone_to_tag, tag_in_phone[:3, 2])
         if dist_to_tag == 0:
             # Avoid divide by zero by setting angle of attack to pi
             aoa = np.pi
@@ -495,54 +517,76 @@ class GraphGenerator:
         if aoa > self._aoa_threshold:
             return np.array([]), np.array([])
 
-        # Flip the y and z because the math for the camera intrinsics assumes that +z is increasing depth from the
-        # camera (and the AR kit has +z facing out of the screen).
-        flipped_tag_in_phone = np.matmul(FLIP_Y_AND_Z_AXES, tag_in_phone)
-        tag_corners_in_phone = np.matmul(flipped_tag_in_phone, self._tag_corners_in_tag)
-
         tag_pixels = np.zeros((2, 4))
-        if not GraphGenerator.project_and_check_visible(tag_corners_in_phone[:3, :], tag_pixels):
+        if not self.observe_tag_by_pixels(tag_in_phone, tag_pixels):
             return np.array([]), np.array([])
 
         return tag_in_phone, tag_pixels
 
-    # -- Static methods --
-
-    @staticmethod
-    def project_and_check_visible(points: np.ndarray, pixel_vals: Optional[np.ndarray] = None) -> bool:
+    def observe_tag_by_pixels(self, tag_in_phone, pixel_vals: np.ndarray) -> bool:
         """Project points in 3D space into phone space.
 
         Args:
-            points: 3xN array of N vectors (or 1-D length-3 array) (in the phone's reference frame) to points in 3D
-             space.
-            pixel_vals: If not none, then the array provided by this argument is expected to be a 2xN array (must be a
-             2-D array; cannot be a 1-D array). The columns of this array will be populated with the pixel coordinates
-             of the resulting projection of the points into pixel space. Row-order for coordinates is x then y.
+            tag_in_phone: Transform of the tag observation in the phone's reference frame. This array is modified such
+             that it contains the new tag transform after the coordinate projection, noise addition, and pose
+             re-computation
+            pixel_vals: 2x4 array populated with coordinates of the tag observation after noise is applied.
         Returns:
             True if all points are visible according to the camera intrinsics.
         """
+        # Flip the y and z because the math for the camera intrinsics assumes that +z is increasing depth from the
+        # camera (and the AR kit has +z facing out of the screen).
+        flipped_tag_in_phone = np.matmul(FLIP_Y_AND_Z_AXES, tag_in_phone)
+        tag_corners_in_flipped_phone = np.matmul(flipped_tag_in_phone, self._tag_corners_in_tag)
+
         # 3xN array of N points' pixel coordinates (accurate only after subsequent normalization)
-        pixel_coords = np.matmul(GraphGenerator.CAMERA_INTRINSICS, points)
-        if len(pixel_coords.shape) == 1:
-            pixel_coords = np.expand_dims(pixel_coords, axis=1)
+        pixel_coords_flipped = np.matmul(GraphGenerator.CAMERA_INTRINSICS, tag_corners_in_flipped_phone[:3, :])
 
         # Normalize values so that first and second rows contain the actual pixel values
-        for col_idx in range(pixel_coords.shape[1]):
-            if pixel_coords[2, col_idx] == 0:
+        for col_idx in range(pixel_coords_flipped.shape[1]):
+            if pixel_coords_flipped[2, col_idx] == 0:
                 # Avoid divide-by-zero by setting pixels to -1 (corresponds to non-visible observation)
-                pixel_coords[:, col_idx] = -1
-            pixel_coords[:, col_idx] = pixel_coords[:, col_idx] / pixel_coords[2, col_idx]
+                pixel_coords_flipped[:, col_idx] = -1
+            pixel_coords_flipped[:, col_idx] = pixel_coords_flipped[:, col_idx] / pixel_coords_flipped[2, col_idx]
 
-        # Copy values into argument if provided
-        if isinstance(pixel_vals, np.ndarray):
-            pixel_vals[:, :] = pixel_coords[:2, :]
+        pixel_vals[:, :] = pixel_coords_flipped[:2, :]
 
         # Check if all pixel coordinates are within the sensor's bounds
-        return not (
-                np.any(pixel_coords[0:2, :] < 0) or
-                np.any(pixel_coords[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]) or
-                np.any(pixel_coords[1, :] > GraphGenerator._double_camera_intrinsics[1, 2])
-        )
+        if np.any(pixel_coords_flipped[0:2, :] < 0) or \
+                np.any(pixel_coords_flipped[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]) or \
+                np.any(pixel_coords_flipped[1, :] > GraphGenerator._double_camera_intrinsics[1, 2]):
+            return False
+
+        # Now, we need the tag_in_phone transform to use the OpenCV reference frame convention
+        opencv_tag_in_phone = np.matmul(np.linalg.inv(AR_TO_OPENCV), tag_in_phone)
+        tag_corners_in_opencv_phone = np.matmul(opencv_tag_in_phone, self._tag_corners_in_tag)
+
+        # 3xN array of N points' pixel coordinates (accurate only after subsequent normalization)
+        pixel_coords_opencv = np.matmul(GraphGenerator.CAMERA_INTRINSICS, tag_corners_in_opencv_phone[:3, :])
+
+        # Normalize values so that first and second rows contain the actual pixel values
+        for col_idx in range(pixel_coords_opencv.shape[1]):
+            if pixel_coords_opencv[2, col_idx] == 0:
+                # Avoid divide-by-zero by setting pixels to -1 (corresponds to non-visible observation)
+                pixel_coords_opencv[:, col_idx] = -1
+            pixel_coords_opencv[:, col_idx] = pixel_coords_opencv[:, col_idx] / pixel_coords_opencv[2, col_idx]
+
+        opencv_pixel_vals = pixel_coords_opencv[:2, :] + np.random.randn(2, 4) * self._obs_noise_var
+        _, r_vec, t_vec = cv2.solvePnP(self._tag_corners_for_pnp, np.transpose(opencv_pixel_vals),
+                                       self.CAMERA_INTRINSICS, None, flags=cv2.SOLVEPNP_IPPE_SQUARE)
+        if np.isnan(np.sum(r_vec)):
+            return False  # TODO: figure out why NaN numbers show up sometimes
+        rot_mat, _ = cv2.Rodrigues(r_vec)
+
+        new_transform = np.zeros((4, 4))
+        new_transform[:3, :3] = rot_mat.transpose()
+        new_transform[:3, 3] = t_vec.transpose()
+        new_transform[3, 3] = 1
+        new_transform[:, :] = np.matmul(AR_TO_OPENCV, new_transform)  # Undo the conversion to the OpenCV frame
+        tag_in_phone[:, :] = new_transform
+        return True
+
+    # -- Static methods --
 
     @staticmethod
     def xz_path_ellipsis_four_by_two(t_vec: np.ndarray, path_args: Dict[str, Union[float, Tuple[float, float]]]) \

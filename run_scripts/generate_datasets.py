@@ -106,7 +106,7 @@ def make_parser() -> argparse.ArgumentParser:
         default=100,
     )
     p.add_argument(
-        "--noise",
+        "--odom_noise",
         type=str,
         help="Length-4 tuple of floating point values that specifies the variance parameters (in units of 1/deltaT) "
              "for the odometry noise model's distributions. Example input: '0.01, 0.01, 0.01, 0.001'. The variance for "
@@ -116,6 +116,13 @@ def make_parser() -> argparse.ArgumentParser:
              "distribution and is used to construct a perturbing transform that is applied to each odometry pose. "
              "Therefore, the odometry path diverges from the specified path.",
         default="0, 0, 0, 0"
+    )
+    p.add_argument(
+        "--obs_noise",
+        type=float,
+        help="Variance parameter for the observation model. Specifies the variance for the distribution from which "
+             "pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the simulated "
+             "tag observation poses are re-derived from these noise pixel observations."
     )
     p.add_argument(
         "-v",
@@ -196,12 +203,12 @@ if __name__ == "__main__":
     args: argparse.Namespace = parser.parse_args()
 
     try:
-        odom_noise_tuple = parse_str_as_tuple(args.noise, 4)
+        odom_noise_tuple = parse_str_as_tuple(args.odom_noise, 4)
         odom_noise = {noise_param_enum: odom_noise_tuple[i] for i, noise_param_enum in
                       enumerate(GraphGenerator.OdomNoiseDims.ordering())}
     except ValueError as ve:
-        raise Exception(f"Could not parse the '--noise' argument due to the following exception raised when parsing "
-                        f"it: {ve}")
+        raise Exception(f"Could not parse the '--odom_noise' argument due to the following exception raised when "
+                        f"parsing it: {ve}")
 
     if args.p == "e":  # e specifies an elliptical path, so acquire the arguments
         path_arguments = extract_parameterized_path_args(args)
@@ -210,7 +217,7 @@ if __name__ == "__main__":
         gg = GraphGenerator(path_from=GraphGenerator.PARAMETERIZED_PATH_ALIAS_TO_CALLABLE[args.p], dataset_name=args.t,
                             parameterized_path_args=path_arguments, t_max=args.t_max, n_poses=args.np,
                             tag_poses=GraphGenerator.TAG_DATASETS[args.t], tag_size=ASSUMED_TAG_SIZE,
-                            odometry_noise=odom_noise)
+                            odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
         if args.v:
             gg.visualize()
 
@@ -227,7 +234,7 @@ if __name__ == "__main__":
         for map_info in matching_maps:
             data_set_parsed = UGDataSet(**map_info.map_dct)
             gg = GraphGenerator(path_from=data_set_parsed, dataset_name=args.t, tag_size=ASSUMED_TAG_SIZE,
-                                odometry_noise=odom_noise)
+                                odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
             if args.v:
                 gg.visualize()
 

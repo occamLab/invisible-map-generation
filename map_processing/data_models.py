@@ -22,8 +22,15 @@ from map_processing.transform_utils import FLIP_Y_AND_Z_AXES
 
 
 def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], is_optional: bool = False):
-    if is_optional and v is None:
-        return v
+    if v is None:
+        if is_optional:
+            return v
+        else:
+            raise ValueError("Value provided that was marked as non-optionally None is None")
+
+    if np.any(v == np.nan):
+        raise ValueError("Numpy array cannot contain any NaN values")
+
     v_sqz: np.ndarray = np.squeeze(v)
     if v_sqz.ndim != 2:
         raise ValueError(
@@ -42,6 +49,10 @@ def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], i
 
 def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
     v_sqz: np.ndarray = np.squeeze(v)
+
+    if np.any(v == np.nan):
+        raise ValueError("Numpy array cannot contain any NaN values")
+
     if v_sqz.ndim != 1:
         raise ValueError(
             f"field that should have been a vector was found to not have the right dimensions (number of dims found to "
@@ -252,9 +263,9 @@ class UGTagDatum(BaseModel):
     """
     timestamp: float
     tag_pose: conlist(Union[float, int], min_items=16, max_items=16)
-    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [1, ] * 3
-    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [1, ] * 4
-    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = [1, ] * 49
+    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [0, ] * 3
+    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [0, ] * 4
+    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = list(np.eye(7).flatten())
 
     @property
     def tag_pose_as_matrix(self) -> np.ndarray:
@@ -293,6 +304,17 @@ class UGDataSet(BaseModel):
     tag_data: List[List[UGTagDatum]] = []
 
     # TODO: Add documentation for the following properties
+
+    @property
+    def num_tags(self) -> int:
+        return len(np.unique(self.tag_ids))
+
+    @property
+    def num_observations(self) -> int:
+        num_observations = 0
+        for tag_obs_list in self.tag_data:
+            num_observations += len(tag_obs_list)
+        return num_observations
 
     @property
     def pose_data_len(self) -> int:
