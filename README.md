@@ -14,6 +14,10 @@
       ```
   - The script will automatically source your virtual environment if it exists. If your virtual environment is not in a folder called `./venv/`, then update the `VENV_DIR_REL_PATH` variable in the script such that it can find your virtual environment. Otherwise, the `g2o.cpython-*.so` file will be installed globally.
 - Additional Python requirements can be installed using [requirements.txt](requirements.txt): `python3 -m pip install -r requirements.txt`.
+  - If you get an error about Matplotlib having a non-GUI backend, run:
+    ```shell
+    sudo apt-get install -y python3-tk
+    ```
 
 ## Repository Overview
 
