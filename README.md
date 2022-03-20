@@ -8,6 +8,10 @@
 
 - [OCCaM Lab fork of g2opy](https://github.com/occamLab/g2opy) to work with the graphs.
   - Run the [setup_g2opy.sh](setup_g2opy.sh) script to set up this dependency.
+    - You may need to install some additional dependencies for the g2opy build to work:
+      ```shell
+      sudo apt-get -y install cmake build-essential qt5-default libeigen3-dev libsuitesparse-dev python3-dev
+      ```
   - The script will automatically source your virtual environment if it exists. If your virtual environment is not in a folder called `./venv/`, then update the `VENV_DIR_REL_PATH` variable in the script such that it can find your virtual environment. Otherwise, the `g2o.cpython-*.so` file will be installed globally.
 - Additional Python requirements can be installed using [requirements.txt](requirements.txt): `python3 -m pip install -r requirements.txt`.
 

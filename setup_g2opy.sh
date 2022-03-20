@@ -38,4 +38,3 @@ cd ..
 echo "Using python version: $(python3 --version)"
 python3 setup.py install || exit
 cd "${REPODIR}" || exit
-
