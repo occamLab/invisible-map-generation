@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import numpy as np
 
-from map_processing.data_models import UGDataSet, Weights, OG2oOptimizer
+from map_processing.data_models import UGDataSet, Weights, OG2oOptimizer, OConfig, OComputeInfParams
 
 CURR_FILE_DIR = Path(os.path.abspath(__file__)).absolute().parent
 TEST_FILES_DIR = os.path.join(CURR_FILE_DIR, "test_files")
@@ -41,3 +41,15 @@ def test_og2o_optimizer():
     )
     json_str = o.json(indent=2)
     OG2oOptimizer.parse_raw(json_str)
+
+
+def test_oconfig():
+    oconfig = OConfig(is_sba=False)
+    json_str = oconfig.json(indent=2)
+    OConfig.parse_raw(json_str)
+
+
+def test_ocompute_inf_params():
+    o = OComputeInfParams()
+    json_str = o.json()
+    OComputeInfParams.parse_raw(json_str)

@@ -5,11 +5,73 @@ Plotting utilities for graph optimization.
 from typing import *
 
 import numpy as np
-from g2o import Quaternion, SE3Quat
+from g2o import SE3Quat
 from matplotlib import pyplot as plt, cm
 
-from . import graph_opt_utils, transform_utils
 from map_processing.data_models import OG2oOptimizer
+from map_processing.transform_utils import transform_vector_to_matrix, transform_gt_to_have_common_reference
+
+# Arrays for use in drawing reference frames
+X_HAT_1X3 = np.array(((1, 0, 0),))
+Y_HAT_1X3 = np.array(((0, 1, 0),))
+Z_HAT_1X3 = np.array(((0, 0, 1),))
+BASES_COLOR_CODES = ("r", "g", "b")
+
+
+def draw_frames(poses: np.ndarray, plt_axes: plt.Axes, colors: Tuple[str, str, str] = BASES_COLOR_CODES) -> None:
+    """Draw an arbitrary number (N) of reference frames at given translation offsets.
+
+    Args:
+        poses: Pose(s) whose basis vectors are plotted. Can be provided in one of a few formats: (1) A Nx7 vector of N
+         SE3Quat vectors, (2) a length-7 1-dimensional SE3Quat vector, (3) a Nx4x4 array of N homogenous transform
+         matrices, or (4) a 4x4 2-dimensional transform matrix.
+        plt_axes: Matplotlib axes to plot on
+        colors: Tuple of color codes to use for the first, second, and third dimensions' basis vector arrows,
+         respectively.
+
+    Raises:
+        ValueError: if the input array shapes are not as expected
+    """
+    rot_mats: Optional[np.ndarray] = None
+    offsets: Optional[np.ndarray] = None
+
+    if len(poses.shape) == 1 and poses.shape[0] == 7:
+        pose_mat = transform_vector_to_matrix(poses)
+        rot_mats = np.expand_dims(pose_mat[:3, :3], 1)
+        offsets = pose_mat[:3, 3].transpose()
+    elif len(poses.shape) == 2:
+        if poses.shape[1] == 7:
+            pose_mats = np.zeros([poses.shape[0], 4, 4])
+            for frame_idx in range(poses.shape[0]):
+                pose_mats[frame_idx, :, :] = transform_vector_to_matrix(poses[frame_idx, :])
+            rot_mats = pose_mats[:, :3, :3]
+            offsets = pose_mats[:, :3, 3].transpose()
+        elif poses.shape == (4, 4):
+            rot_mats = np.expand_dims(poses[:3, :3], 0)
+            offsets = np.expand_dims(poses[:3, 3].transpose(), 1)
+    elif len(poses.shape) == 3 and poses.shape[1:] == (4, 4):
+        rot_mats = poses[:, :3, :3]
+        offsets = poses[:, :3, 3].transpose()
+
+    if rot_mats is None or offsets is None:
+        raise ValueError(f"poses argument was of an invalid shape: {poses.shape}")
+
+    for b in range(3):
+        basis_vecs = (rot_mats[:, :, b]).transpose()
+
+        plt_axes.quiver(
+            offsets[0, :],
+            offsets[1, :],
+            offsets[2, :],
+            # For each basis vector, dot it with the corresponding basis vector of the reference frame it is within
+            np.matmul(X_HAT_1X3, basis_vecs),
+            np.matmul(Y_HAT_1X3, basis_vecs),
+            np.matmul(Z_HAT_1X3, basis_vecs),
+            length=0.5,
+            arrow_length_ratio=0.3,
+            normalize=True,
+            color=colors[b],
+        )
 
 
 def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False, log_metric: bool = False):
@@ -25,17 +87,20 @@ def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False
 
 
 def plot_optimization_result(
-        locations: np.ndarray,
-        prior_locations: np.ndarray,
-        tag_verts: np.ndarray,
-        tagpoint_positions: np.ndarray,
-        waypoint_verts: Tuple[List, np.ndarray],
-        original_tag_verts: Optional[np.ndarray] = None,
-        ground_truth_tags: Optional[np.ndarray] = None,
-        plot_title: Union[str, None] = None,
-        is_sba: bool = False
+        opt_odometry: np.ndarray,
+        orig_odometry: np.ndarray,
+        opt_tag_verts: np.ndarray,
+        opt_tag_corners: np.ndarray,
+        opt_waypoint_verts: Tuple[List, np.ndarray],
+        orig_tag_verts: Optional[np.ndarray] = None,
+        ground_truth_tags: Optional[List[SE3Quat]] = None,
+        plot_title: Union[str, None] = None
 ) -> None:
     """Visualization used during the optimization routine.
+
+    Notes:
+        Assumes that `ground_truth_tags` has been sorted such that the tags poses are in ascending order according to
+        their tag IDs.
     """
     f = plt.figure()
     ax = f.add_axes([0.1, 0.1, 0.6, 0.75], projection="3d")
@@ -44,58 +109,50 @@ def plot_optimization_result(
     ax.set_zlabel("Z")
     ax.view_init(120, -90)
 
-    plt.plot(prior_locations[:, 0], prior_locations[:, 1], prior_locations[:, 2], "-", c="g",
-             label="Prior Odom Vertices")
-    plt.plot(locations[:, 0], locations[:, 1], locations[:, 2], "-", c="b", label="Odom Vertices")
+    plt.plot(orig_odometry[:, 0], orig_odometry[:, 1], orig_odometry[:, 2], "-", c="g", label="Prior Odom Vertices")
+    plt.plot(opt_odometry[:, 0], opt_odometry[:, 1], opt_odometry[:, 2], "-", c="b", label="Odom Vertices")
+    plt.plot(opt_tag_corners[:, 0], opt_tag_corners[:, 1], opt_tag_corners[:, 2], ".", c="m", label="Tag Corners")
 
-    if original_tag_verts is not None:
-        original_tag_verts = np.array(original_tag_verts)  # Copy to avoid modifying input
-        if is_sba:
-            transform_utils.apply_z_translation_to_lhs_of_se3_vectors(original_tag_verts)
-        plt.plot(original_tag_verts[:, 0], original_tag_verts[:, 1], original_tag_verts[:, 2], "o", c="c",
+    # Plot optimized tag vertices, their reference frames, and their labels
+    draw_frames(opt_tag_verts[:, :7], plt_axes=ax)
+    plt.plot(opt_tag_verts[:, 0], opt_tag_verts[:, 1], opt_tag_verts[:, 2], "o", c="#ff8000",
+             label="Tag Vertices Optimized")
+
+    draw_frames(orig_tag_verts[:, :-1], plt_axes=ax)
+    for vert in opt_tag_verts:
+        ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color="#663300")
+
+    # Plot original tag vertices and their labels
+    if orig_tag_verts is not None:
+        plt.plot(orig_tag_verts[:, 0], orig_tag_verts[:, 1], orig_tag_verts[:, 2], "o", c="c",
                  label="Tag Vertices Original")
+        for vert in orig_tag_verts:
+            ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color="#006666")
 
-    # Fix the 1-meter offset on the tag anchors
-    if is_sba:
-        tag_verts = np.array(tag_verts)  # Copy to avoid modifying input
-        transform_utils.apply_z_translation_to_lhs_of_se3_vectors(tag_verts)
-
+    # Plot ground truth vertices and their labels
     if ground_truth_tags is not None:
         # noinspection PyTypeChecker
-        tag_list: List = tag_verts.tolist()
-        tag_list.sort(key=lambda x: x[-1])
-        ordered_tags = np.asarray([tag[0:-1] for tag in tag_list])
+        opt_tag_list: List = opt_tag_verts.tolist()
+        opt_tag_list.sort(key=lambda x: x[-1])  # Sort by tag IDs
+        ordered_opt_tags_array = np.asarray([tag[0:-1] for tag in opt_tag_list])
 
-        anchor_tag = 0
-        anchor_tag_se3quat = SE3Quat(ordered_tags[anchor_tag])
-        to_world = anchor_tag_se3quat * ground_truth_tags[anchor_tag].inverse()
-        world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_tags])
-        print("\nAverage translation difference:", graph_opt_utils.ground_truth_metric(ordered_tags, ground_truth_tags,
-                                                                                       True))
+        anchor_tag_idx = 0  # Select arbitrarily
+        world_frame_ground_truth = transform_gt_to_have_common_reference(
+            anchor_pose=SE3Quat(ordered_opt_tags_array[anchor_tag_idx]),
+            anchor_idx=anchor_tag_idx, ground_truth_tags=ground_truth_tags)
+
         plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
-                 'o', c='k', label=f'Actual Tags')
+                 "o", c="k", label=f"Ground Truth Tags (anchor id={int(opt_tag_list[anchor_tag_idx][-1])})")
+        draw_frames(world_frame_ground_truth, plt_axes=ax)
         for i, tag in enumerate(world_frame_ground_truth):
             ax.text(tag[0], tag[1], tag[2], str(i), c='k')
 
-    plt.plot(tag_verts[:, 0], tag_verts[:, 1], tag_verts[:, 2], "o", c="r", label="Tag Vertices")
-    for tag_vert in tag_verts:
-        R = Quaternion(tag_vert[3:-1]).rotation_matrix()
-        axis_to_color = ["r", "g", "b"]
-        for axis_id in range(3):
-            ax.quiver(tag_vert[0], tag_vert[1], tag_vert[2], R[0, axis_id], R[1, axis_id],
-                      R[2, axis_id], length=1, color=axis_to_color[axis_id])
-
-    plt.plot(tagpoint_positions[:, 0], tagpoint_positions[:, 1], tagpoint_positions[:, 2], ".", c="m",
-             label="Tag Corners")
-
-    for vert in tag_verts:
-        ax.text(vert[0], vert[1], vert[2], str(int(vert[-1])), color="black")
-
-    plt.plot(waypoint_verts[1][:, 0], waypoint_verts[1][:, 1], waypoint_verts[1][:, 2], "o", c="y",
+    # Plot waypoint vertices and their labels
+    plt.plot(opt_waypoint_verts[1][:, 0], opt_waypoint_verts[1][:, 1], opt_waypoint_verts[1][:, 2], "o", c="y",
              label="Waypoint Vertices")
-    for vert_idx in range(len(waypoint_verts[0])):
-        vert = waypoint_verts[1][vert_idx]
-        waypoint_name = waypoint_verts[0][vert_idx]["name"]
+    for vert_idx in range(len(opt_waypoint_verts[0])):
+        vert = opt_waypoint_verts[1][vert_idx]
+        waypoint_name = opt_waypoint_verts[0][vert_idx]["name"]
         ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
 
     # Archive of plotting commands:

@@ -22,7 +22,7 @@ import sys
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
-from typing import Tuple, List, Dict
+from typing import Tuple, Dict, List, Callable, Iterable, Any
 import argparse
 from firebase_admin import credentials
 import map_processing
@@ -35,18 +35,34 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 import datetime
 import json
-import pickle
+import multiprocessing as mp
 
-import concurrent.futures
-
-from map_processing.data_models import OComputeInfParams, Weights, OConfig
+from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet
 
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
-NUM_SWEEP_THREADS = 12
-ODOM_TAG_RATIO_GEOMSPACE_ARGS = [0.01, 10, 5]
-ANG_VEL_VAR_LINSPACE_ARGS = [-3, 3, 10]
-LIN_VEL_VAR_LINSPACE_ARGS = [-3, 3, 10]
+NUM_SWEEP_PROCESSES: int = 1
+IS_SBA = True
+ORDERED_SWEEP_CONFIG_KEYS = [
+    "odom_tag_ratio_arr",
+    "lin_vel_var_arr",
+    "ang_vel_var_arr",
+    "grav_mag_arr",
+]
+
+PLOT_XY_AXES = [ORDERED_SWEEP_CONFIG_KEYS[1], ORDERED_SWEEP_CONFIG_KEYS[2]]
+"""
+Note: if this is changed, then the indexing of the results array to create the `zz` variable needs to be updated 
+accordingly.
+"""
+
+# TODO: revisit the use of np.exp(.) around the lin_ and ang_vel_var arrays
+SWEEP_CONFIG: Dict[str, Tuple[Callable, Iterable[Any]]] = {
+    "odom_tag_ratio_arr": (np.geomspace, [0.01, 10, 2]),
+    "lin_vel_var_arr": (np.linspace, [0.01, 3, 2]),
+    "ang_vel_var_arr": (np.linspace, [0.01, 3, 2]),
+    "grav_mag_arr": (np.linspace, [0.01, 3, 2]),
+}
 
 
 def make_parser():
@@ -189,104 +205,112 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     """TODO: Documentation and add SBA weighting to the sweeping
     """
     graph_to_opt = Graph.as_graph(mi.map_dct)
+    base_oconfig = OConfig(is_sba=IS_SBA, scale_by_edge_amount=scale_by_edge_amount)
 
-    odom_tag_ratio_arr = np.geomspace(*ODOM_TAG_RATIO_GEOMSPACE_ARGS)
-    odom_tag_ratio_arr_idx_map: Dict[float, int] = {}
-    ang_vel_arr = np.exp(np.linspace(*ANG_VEL_VAR_LINSPACE_ARGS))
-    ang_vel_arr_idx_map: Dict[float, int] = {}
-    lin_vel_arr = np.exp(np.linspace(*LIN_VEL_VAR_LINSPACE_ARGS))
-    lin_vel_arr_idx_map: Dict[float, int] = {}
+    sweep_arrs: Dict[str, np.ndarray] = {}
+    for key, value in SWEEP_CONFIG.items():
+        sweep_arrs[key] = value[0](*value[1])
 
-    sweep_args_list: List[Tuple[float, float, float, Graph, dict, bool,
-                                List[Tuple[float, Tuple[float, float, float]]]]] = []
-    results_list: List[Tuple[float, Tuple[float, float, float]]] = []
-    for i_idx, i in enumerate(odom_tag_ratio_arr):
-        odom_tag_ratio_arr_idx_map[i] = i_idx
-        for j_idx, j in enumerate(ang_vel_arr):
-            if j not in ang_vel_arr_idx_map:
-                ang_vel_arr_idx_map[j] = j_idx
-            for k_idx, k in enumerate(lin_vel_arr):
-                if k not in lin_vel_arr_idx_map:
-                    lin_vel_arr_idx_map[k] = k_idx
-                sweep_args_list.append((i, j, k, graph_to_opt, ground_truth_data, scale_by_edge_amount, results_list))
+    product_args = []
+    for key in ORDERED_SWEEP_CONFIG_KEYS:
+        product_args.append(sweep_arrs[key])
 
-    with concurrent.futures.ThreadPoolExecutor(NUM_SWEEP_THREADS) as executor:
-        executor.map(sweep_target, sweep_args_list)
+    # Set default value of [1, ] for any un-specified sweep parameter
+    for key in set(ORDERED_SWEEP_CONFIG_KEYS).difference(sweep_arrs.keys()):
+        sweep_arrs[key] = np.array([1, ])
 
-    # Put results in a numpy array
-    results_arr = np.zeros([ODOM_TAG_RATIO_GEOMSPACE_ARGS[2], ANG_VEL_VAR_LINSPACE_ARGS[2],
-                            LIN_VEL_VAR_LINSPACE_ARGS[2]])
-    for result in results_list:
-        result_params = result[1]
-        results_arr[odom_tag_ratio_arr_idx_map[result_params[0]], ang_vel_arr_idx_map[result_params[1]],
-                    lin_vel_arr_idx_map[result_params[2]]] = result[0]
+    products = []
+    oconfigs = []
+    for product, oconfig in OConfig.oconfig_sweep_generator(base_oconfig=base_oconfig, product_args=product_args):
+        products.append(product)
+        oconfigs.append(oconfig)
+    if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
+        raise Exception("Non-unique set of optimization configurations generated")
+
+    # Create these mappings so that the ordering of the arguments to the cartesian product in
+    # `OConfig.oconfig_sweep_generator` is arbitrary with respect to the ordering of ORDERED_SWEEP_CONFIG_KEYS
+    sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]] = {}
+    for key in ORDERED_SWEEP_CONFIG_KEYS:
+        sweep_param_to_result_idx_mappings[key] = {sweep_arg: sweep_idx for sweep_idx, sweep_arg in
+                                                   enumerate(sweep_arrs[key])}
+
+    sweep_args = []
+    for i, oconfig in enumerate(oconfigs):
+        sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs))))
+
+    # Run the parameter sweep
+    if NUM_SWEEP_PROCESSES == 1:  # Skip multiprocessing if only one process is specified
+        results_tuples = [sweep_target(sweep_arg) for sweep_arg in sweep_args]
+    else:
+        with mp.Pool(processes=NUM_SWEEP_PROCESSES) as pool:
+            results_tuples = pool.map(sweep_target, sweep_args)
+    results: List[float] = []
+    results_indices: List[int] = []
+    for result_tuple in results_tuples:
+        results.append(result_tuple[0])
+        results_indices.append(result_tuple[1])
+
+    results_arr_dims = [len(sweep_arrs[key]) for key in ORDERED_SWEEP_CONFIG_KEYS]
+    results_arr = np.ones(results_arr_dims) * -1
+    for result, result_idx in results_tuples:
+        result_arr_idx = []
+        for key_idx, key in enumerate(ORDERED_SWEEP_CONFIG_KEYS):
+            result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
+        results_arr[result_arr_idx] = result
+    if np.any(results_arr < 0):
+        raise Exception("Array of results was not completely populated")
+
+    print(results_arr)
+
+    # Find what the minimum ground truth value is and what produced it
+    min_ground_truth = np.min(results_arr)
+    # noinspection PyTypeChecker
+    where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(results_arr == min_ground_truth)
+    where_min = tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
+    args_producing_min = {}
+    for i, key in enumerate(ORDERED_SWEEP_CONFIG_KEYS):
+        args_producing_min[key] = sweep_arrs[key][where_min[i]]
+
+    print(f"\nMinimum ground truth value: {min_ground_truth:.3f} with args:\n" + json.dumps(args_producing_min,
+                                                                                            indent=2))
+
+    # Plot a heatmap of the ground truth metric against a 2D projection of the search space
+    xx, yy = np.meshgrid(sweep_arrs[PLOT_XY_AXES[0]], sweep_arrs[PLOT_XY_AXES[1]])
+    zz = results_arr[where_min[0], :, :, where_min[3]]  # Ground truth metric
+    ax: plt.Axes
+    fig: plt.Figure
+    fig, ax = plt.subplots()
+    ax.set_title(f"Param sweep with min. ground truth={min_ground_truth}")
+    ax.set_xlabel(PLOT_XY_AXES[0])
+    ax.set_ylabel(PLOT_XY_AXES[1])
+    c = ax.pcolor(xx, yy, zz, shading="auto")
+    fig.colorbar(c, ax=ax)
 
     results_target_folder = os.path.join(repository_root, "saved_sweeps", map_info.map_name)
     if not os.path.exists(results_target_folder):
         os.mkdir(results_target_folder)
-
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_{map_info.map_name}_sweep"
-    results_args_dict = {
-        "ODOM_TAG_RATIO_GEOMSPACE_ARGS": ODOM_TAG_RATIO_GEOMSPACE_ARGS,
-        "ANG_VEL_VAR_LINSPACE_ARGS": ANG_VEL_VAR_LINSPACE_ARGS,
-        "LIN_VEL_VAR_LINSPACE_ARGS": LIN_VEL_VAR_LINSPACE_ARGS
-    }
-    with open(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".json"), "w") as f:
-        json.dump(obj=results_args_dict, fp=f, indent=2)
-
-    with open(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".pickle"), "wb") as f:
-        pickle.dump(obj=results_arr, file=f, protocol=pickle.HIGHEST_PROTOCOL)
-
-    # noinspection PyArgumentList
-    min_ground_truth = results_arr.min()
-
-    # noinspection PyTypeChecker
-    where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(results_arr == min_ground_truth)
-    where_min = tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
-    print(f"Minimum ground truth value: {min_ground_truth} (with odom-tag ratio of {odom_tag_ratio_arr[where_min[0]]}, "
-          f"lin-vel-var of {lin_vel_arr[where_min[1]]}, and ang-vel-var of {ang_vel_arr[where_min[2]]})")
-
-    xx, yy = np.meshgrid(ang_vel_arr, lin_vel_arr)
-    # Get rid of the first dimension by indexing into it where the minimum occurs
-    zz = results_arr[where_min[0], :, :]  # Ground truth metric
-    ax: plt.Axes
-    fig: plt.Figure
-    fig, ax = plt.subplots()
-    ax.set_title(f"Ground truth metric vs. ang. and\nlin. vel. variance (odom-tag ratio="
-                 f"{odom_tag_ratio_arr[where_min[0]]})")
-    ax.set_xlabel("Angular velocity variance")
-    ax.set_ylabel("Linear velocity variance")
-    c = ax.pcolor(xx, yy, zz, shading="auto")
-    fig.colorbar(c, ax=ax)
     plt.savefig(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".png"), dpi=300)
     plt.show()
 
 
-def sweep_target(sweep_args_tuple: Tuple[float, float, float, Graph, dict, bool,
-                                         List[Tuple[float, Tuple[float, float, float]]]]) -> None:
+def sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
     """
     Args:
-        sweep_args_tuple: Odom-tag ratio, angular velocity variance, linear velocity variance, and the graph object to
-         optimize. Note: the graph object is deep-copied before being passed as the argument.
+        sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
+         as the argument), (2) the optimization configuration, and (3) the ground truth tags dictionary.
 
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    optimization_config = OConfig(
-        is_sba=True,
-        weights=Weights(gravity=np.array([0.1, 4, 0.1]),
-                        odom_tag_ratio=sweep_args_tuple[0]), obs_chi2_filter=-1,
-        compute_inf_params=OComputeInfParams(
-            ang_vel_var=sweep_args_tuple[1],
-            lin_vel_var=sweep_args_tuple[2] * np.ones(3)),
-        scale_by_edge_amount=sweep_args_tuple[5]
-    )
-    results = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[3]), visualize=False,
-                                          optimization_config=optimization_config)
+    print("\n")
+    results = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), visualize=False,
+                                          optimization_config=sweep_args_tuple[1])
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
         optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1].tags),
-        ground_truth_tags=sweep_args_tuple[4], verbose=False)
-    sweep_args_tuple[-1].append((gt_result, (sweep_args_tuple[0], sweep_args_tuple[1], sweep_args_tuple[2])))
+        ground_truth_tags=sweep_args_tuple[2], verbose=False)
+    # print(f"Completed sweep {sweep_args_tuple[3][0] + 1}/{sweep_args_tuple[3][1]}")
+    return gt_result, sweep_args_tuple[3][0]
 
 
 if __name__ == "__main__":
@@ -339,13 +363,15 @@ if __name__ == "__main__":
             if args.c:
                 graph_manager.compare_weights(map_info, args.v)
             else:
+                gt_data = cms.find_ground_truth_data_from_map_info(map_info)
                 opt_results = graph_manager.process_map(
                     map_info=map_info, visualize=args.v, upload=args.F, fixed_vertices=tuple(fixed_tags),
-                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params)
+                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params,
+                    gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None
+                    else None)
                 if not args.g:
                     continue
 
-                gt_data = cms.find_ground_truth_data_from_map_info(map_info)
                 if gt_data is None:
                     print(f"Could not find any ground truth for the map {map_info.map_name}")
                     continue
@@ -358,5 +384,5 @@ if __name__ == "__main__":
                     optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1].tags),
                     ground_truth_tags=gt_data, verbose=False
                 )
-                print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt} (delta of "
-                      f"{ground_truth_metric_opt - ground_truth_metric_pre} from pre-optimization)")
+                print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt:.3f} (delta of "
+                      f"{ground_truth_metric_opt - ground_truth_metric_pre:.3f} from pre-optimization)")

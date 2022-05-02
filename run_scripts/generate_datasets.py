@@ -14,7 +14,7 @@ from typing import Tuple, Dict, Union
 
 import numpy as np
 
-from map_processing import ASSUMED_TAG_SIZE
+from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS
 from map_processing.graph_generator import GraphGenerator
 from map_processing.data_models import UGDataSet
 from run_scripts import graph_manager_user
@@ -91,7 +91,7 @@ def make_parser() -> argparse.ArgumentParser:
              "defined at the point at the floor beneath the tag of ID 0 where the z-axis is pointing out of the wall."
              "If facing the tag, then the x-axis points to the right.",
         default="3line",
-        choices=[key for key in GraphGenerator.TAG_DATASETS.keys()]
+        choices=[key for key in GT_TAG_DATASETS.keys()]
     )
     p.add_argument(
         "--t_max",
@@ -216,7 +216,7 @@ if __name__ == "__main__":
         # noinspection PyUnboundLocalVariable
         gg = GraphGenerator(path_from=GraphGenerator.PARAMETERIZED_PATH_ALIAS_TO_CALLABLE[args.p], dataset_name=args.t,
                             parameterized_path_args=path_arguments, t_max=args.t_max, n_poses=args.np,
-                            tag_poses=GraphGenerator.TAG_DATASETS[args.t], tag_size=ASSUMED_TAG_SIZE,
+                            tag_poses=GT_TAG_DATASETS[args.t], tag_size=ASSUMED_TAG_SIZE,
                             odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
         if args.v:
             gg.visualize()
@@ -233,7 +233,7 @@ if __name__ == "__main__":
 
         for map_info in matching_maps:
             data_set_parsed = UGDataSet(**map_info.map_dct)
-            gg = GraphGenerator(path_from=data_set_parsed, dataset_name=args.t, tag_size=ASSUMED_TAG_SIZE,
+            gg = GraphGenerator(path_from=data_set_parsed, dataset_name=map_info.map_name, tag_size=ASSUMED_TAG_SIZE,
                                 odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
             if args.v:
                 gg.visualize()
