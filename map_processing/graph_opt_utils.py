@@ -3,7 +3,7 @@ Utility functions for graph optimization.
 """
 
 import math
-from typing import Union, List, Optional, Set
+from typing import Union, List, Optional, Set, Type
 
 import g2o
 import numpy as np
@@ -14,6 +14,7 @@ from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, V
 from . import graph_util_get_neighbors, VertexType
 from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet, \
     OG2oOptimizer
+from .transform_utils import transform_gt_to_have_common_reference
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> OG2oOptimizer:
@@ -185,7 +186,8 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, Edge
 
 
 def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True,
-                             edge_type_filter: Optional[Set[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]] =
+                             edge_type_filter: Optional[Set[Union[Type[Union[EdgeProjectPSI2UV, EdgeSE3Expmap,
+                                                                       EdgeSE3Gravity]]]]] =
                              None, log_normalization: bool = False) -> float:
     """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.
 
@@ -235,8 +237,8 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
 
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-        to_world: SE3Quat = anchor_tag_se3quat * SE3Quat(ground_truth_tags[anchor_tag]).inverse()
-        world_frame_ground_truth = np.asarray([(to_world * tag).to_vector() for tag in ground_truth_as_se3])[:, :3]
+        world_frame_ground_truth = transform_gt_to_have_common_reference(anchor_tag_se3quat, anchor_tag,
+                                                                         ground_truth_as_se3)[:, :3]
         sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))
@@ -245,7 +247,7 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     return avg
 
 
-def make_processed_map_JSON(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
+def make_processed_map_json(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
         -> str:
     """Serializes the result of an optimization into a JSON that is of an acceptable format for uploading to the
     database.

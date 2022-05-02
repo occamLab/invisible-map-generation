@@ -145,5 +145,8 @@ class Edge:
     def get_start_vertex_type(self, vertices: Dict[int, Vertex]) -> VertexType:
         return vertices[self.startuid].mode
 
-    def get_end_vertex_type(self, vertices: Dict[int, Vertex]) -> VertexType:
-        return vertices[self.enduid].mode
+    def get_end_vertex_type(self, vertices: Dict[int, Vertex]) -> Optional[VertexType]:
+        if self.enduid is None:  # Is the case when the edge is a gravity edge
+            return None
+        else:
+            return vertices[self.enduid].mode

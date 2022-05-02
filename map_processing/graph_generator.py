@@ -5,24 +5,22 @@ script for a CLI interface using this class.
 
 import json
 import random
-from enum import Enum, auto
+from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from g2o import SE3Quat
 from mpl_toolkits.mplot3d import Axes3D
 import cv2.cv2 as cv2
+from copy import deepcopy
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GTTagPose
-from map_processing.transform_utils import norm_array_cols, FLIP_Y_AND_Z_AXES, AR_TO_OPENCV, transform_matrix_to_vector, \
-    transform_vector_to_matrix
+from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet
+from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
+from map_processing.graph_opt_plot_utils import draw_frames
 
 matplotlib.rcParams['figure.dpi'] = 500
-
-SQRT_2_OVER_2 = np.sqrt(2) / 2
 
 
 class GraphGenerator:
@@ -54,14 +52,16 @@ class GraphGenerator:
          pose.
         _observation_pixels: Nx2x4 array containing the pixel coordinates corresponding to the pose observations
          recorded in _observation_poses.
-        _tag_corners_in_tag: Applying the tag-in-phone transform with the y and z-axes negated to this 4x4 matrix yields
-         a 4x4 matrix where the first 3 rows correspond to the tag corners' locations in the (y- and z-axis negated)
-         reference frame.
+        _tag_corners_in_tag: 4x4 array where the first 3 elements of each row give the x, y, and z coordinates of the
+         tag corners in the tag's reference frame. The 4th element is always a 1.
+        _odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
+         noise in that direction.
+        _obs_noise_var: Variance for the observation noise.
     """
 
     class PathType(Enum):
-        RECORDED = auto()
-        PARAMETERIZED = auto()
+        RECORDED = 0
+        PARAMETERIZED = 1
 
     class OdomNoiseDims(Enum):
         X = 0
@@ -74,53 +74,6 @@ class GraphGenerator:
             ordered = [GraphGenerator.OdomNoiseDims.X, GraphGenerator.OdomNoiseDims.Y, GraphGenerator.OdomNoiseDims.Z,
                        GraphGenerator.OdomNoiseDims.RVert]
             return ordered
-
-    # noinspection GrazieInspection
-    TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
-        "3line": {
-            0: np.array([
-                [1, 0, 0, -3],
-                [0, 1, 0, 0],
-                [0, 0, 1, -4],
-                [0, 0, 0, 1]
-            ]),
-            1: np.array([
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, -4],
-                [0, 0, 0, 1]
-            ]),
-            2: np.array([
-                [1, 0, 0, 3],
-                [0, 1, 0, 0],
-                [0, 0, 1, -4],
-                [0, 0, 0, 1]
-            ])
-        },
-        "occam": {
-            # The ground truth tags for the 6-17-21 OCCAM Room. Keyed by tag ID. Measurements in meters (measurements
-            # were taken in inches and converted to meters by multiplying by 0.0254). Measurements are in a right-handed
-            # coordinate system with its origin at the floor beneath tag id=0 (+Z pointing out of the wall and +X
-            # pointing to the right).
-            0: transform_vector_to_matrix(SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]).to_vector()),
-            1: transform_vector_to_matrix(
-                SE3Quat([269 * 0.0254, 48.5 * 0.0254, -31.25 * 0.0254, 0, 0, 0, 1]).to_vector()),
-            2: transform_vector_to_matrix(
-                SE3Quat([350 * 0.0254, 58.25 * 0.0254, 86.25 * 0.0254, 0, SQRT_2_OVER_2, 0,
-                         -SQRT_2_OVER_2]).to_vector()),
-            3: transform_vector_to_matrix(
-                SE3Quat([345.5 * 0.0254, 58 * 0.0254, 357.75 * 0.0254, 0, 1, 0, 0]).to_vector()),
-            4: transform_vector_to_matrix(
-                SE3Quat([240 * 0.0254, 86 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]).to_vector()),
-            5: transform_vector_to_matrix(
-                SE3Quat([104 * 0.0254, 31.75 * 0.0254, 393 * 0.0254, 0, 1, 0, 0]).to_vector()),
-            6: transform_vector_to_matrix(
-                SE3Quat([-76.75 * 0.0254, 56.5 * 0.0254, 316.75 * 0.0254, 0, SQRT_2_OVER_2, 0,
-                         SQRT_2_OVER_2]).to_vector()),
-            7: transform_vector_to_matrix(SE3Quat([-76.75 * 0.0254, 54 * 0.0254, 75 * 0.0254, 0, SQRT_2_OVER_2, 0,
-                                                   SQRT_2_OVER_2]).to_vector()),
-        }
-    }
 
     CAMERA_INTRINSICS_VEC = [
         1458.0604248046875,  # fx (camera focal length in the x-axis)
@@ -137,10 +90,10 @@ class GraphGenerator:
     _double_camera_intrinsics = 2 * CAMERA_INTRINSICS
 
     TAG_CORNERS_SIZE_2 = np.transpose(np.array([
-        [-1, 1, 0, 1],  # Top left
-        [1, 1, 0, 1],  # Top right
-        [1, -1, 0, 1],  # Bottom right
-        [-1, -1, 0, 1],  # Bottom left
+        [-1, -1, 0, 1],
+        [1, -1, 0, 1],
+        [1, 1, 0, 1],
+        [-1, 1, 0, 1],
     ]).astype(float))
 
     TAG_CORNERS_SIZE_2_FOR_CV_PNP = np.array([
@@ -150,6 +103,12 @@ class GraphGenerator:
         [-1, -1, 0],
     ]).astype(float)
 
+    NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE = np.array([
+        [1, -1, -1],
+        [1, -1, -1],
+        [1, -1, -1],
+    ])
+
     PHONE_IN_FRENET = np.array([
         [0, -1, 0, 0],
         [0, 0, 1, 0],
@@ -157,18 +116,14 @@ class GraphGenerator:
         [0, 0, 0, 1]
     ])
 
-    PATH_LINEAR_DELTA_T = 0.0001  # Time span over which the path can be assumed to be approximately linear
-    X_HAT_1X3 = np.array(((1, 0, 0),))
-    Y_HAT_1X3 = np.array(((0, 1, 0),))
-    Z_HAT_1X3 = np.array(((0, 0, 1),))
-    BASES_COLOR_CODES = ("r", "g", "b")
+    PATH_LINEAR_DELTA_T = 0.0001  # Time span over which a parameterized path can be assumed to be approximately linear
 
-    def __init__(self,
-                 path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet], dataset_name: str,
-                 parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None,
-                 t_max: float = 0, n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None,
-                 dist_threshold: float = 3.7, aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
-                 odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None, obs_noise_var: float = 0.0):
+    def __init__(
+            self, path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet], dataset_name: str,
+            parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None, t_max: float = 0,
+            n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None, dist_threshold: float = 3.7,
+            aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
+            odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None, obs_noise_var: float = 0.0):
         """Initializes a GraphGenerator instance and automatically invokes the `generate` method.
 
         Args:
@@ -225,10 +180,11 @@ class GraphGenerator:
                 self._tag_poses = {}
             else:
                 self._tag_poses = self._path.approx_tag_in_global_by_id
+        self._tag_poses_orig = deepcopy(self._tag_poses)
 
-        self._tag_poses_arr = np.zeros((len(self._tag_poses), 4, 4))
+        self._orig_tag_poses_arr = np.zeros((len(self._tag_poses), 4, 4))
         for i, pose in enumerate(self._tag_poses.values()):
-            self._tag_poses_arr[i, :, :] = pose
+            self._orig_tag_poses_arr[i, :, :] = pose
 
         self._odometry_poses: Optional[np.ndarray] = None
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
@@ -255,7 +211,7 @@ class GraphGenerator:
                 GraphGenerator.OdomNoiseDims.Z: 0,
                 GraphGenerator.OdomNoiseDims.RVert: 0,
             }
-        self._obs_noise_var = obs_noise_var
+        self._obs_noise_var: float = obs_noise_var if obs_noise_var is not None else 0
 
         self.generate()
 
@@ -287,7 +243,6 @@ class GraphGenerator:
                     tag_data.append(list())
                     tag_data_idx += 1
                 looped = True
-
                 tag_data[tag_data_idx].append(
                     UGTagDatum(
                         tag_corners_pixel_coordinates=list(
@@ -297,31 +252,10 @@ class GraphGenerator:
                         camera_intrinsics=list(np.array(GraphGenerator.CAMERA_INTRINSICS_VEC)),
                         # Intentionally skipping position and orientation variance
                         timestamp=self._odometry_t_vec[pose_idx],
-                        tag_pose=list(np.matmul(FLIP_Y_AND_Z_AXES,
-                                                self._observation_poses[pose_idx][tag_id]).flatten(order="C")),
+                        tag_pose=list(self._observation_poses[pose_idx][tag_id].flatten(order="C")),
                         # Intentionally skipping joint covariance
                     )
                 )
-
-        # Construct data for the GTDataSet initialization: arbitrarily select a tag to use as the origin of the
-        # coordinate system in which the rest of the tags are represented.
-        ground_truth_tags = []
-        origin_key: int = 0
-        for key in self._tag_poses.keys():
-            origin_key = key
-            break
-        if len(self._tag_poses) != 0:
-            origin_inv = np.linalg.inv(self._tag_poses[origin_key])
-        for item in self._tag_poses.items():
-            # This point will only be reached if there are a nonzero number of tag poses (so origin_inv is guaranteed to
-            # be defined
-            # noinspection PyUnboundLocalVariable
-            ground_truth_tags.append(
-                GTTagPose(
-                    tag_id=item[0],
-                    pose=list(transform_matrix_to_vector(np.matmul(origin_inv, item[1])))
-                )
-            )
 
         return UGDataSet(
             # Intentionally skipping location data
@@ -329,9 +263,7 @@ class GraphGenerator:
             # Intentionally skipping plane data
             pose_data=pose_data,
             tag_data=tag_data
-        ), GTDataSet(
-            poses=ground_truth_tags
-        )
+        ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
     def export_to_map_processing_cache(self) -> None:
         """Serializes the graph into a json file and saves it to the target destination as set by the TODO
@@ -341,8 +273,9 @@ class GraphGenerator:
         map_str = json.dumps(map_dict, indent=2)
 
         map_name = map_dict["map_id"]
-        print(f"Generated new data set '{map_name}' containing {map_obj.pose_data_len} poses, {map_obj.num_tags} "
-              f"tags, and {map_obj.num_observations} observations")
+        print(f"Generated new data set '{map_name}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
+              f"tags observed a total of {map_obj.num_observations} "
+              f"{'times' if map_obj.num_observations > 1 else 'time'}.")
 
         if self._cms is None:
             self._cms = CacheManagerSingleton()
@@ -360,7 +293,7 @@ class GraphGenerator:
         """Visualizes the generated graph by plotting the path, the poses on the path, the tags, and the observations of
          those tags.
 
-         TODO: add plot legend.
+        TODO: add plot legend.
 
         Args:
             plus_minus_lim: Value for the x-, y-, and z-lim3d parameters of the matplotlib 3d axes.
@@ -377,25 +310,26 @@ class GraphGenerator:
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
-        GraphGenerator.draw_frames((self._odometry_poses[:, :3, 3]).transpose(), self._odometry_poses[:, :3, :3], ax)
-        GraphGenerator.draw_frames((self._tag_poses_arr[:, :3, 3]).transpose(), self._tag_poses_arr[:, :3, :3], ax,
-                                   colors=("m", "m", "m"))
+        draw_frames(self._odometry_poses, plt_axes=ax)
+        draw_frames(self._orig_tag_poses_arr, plt_axes=ax, colors=("m", "m", "m"))
 
         # Get observation vectors in the global frame and plot them
         for i, dct in enumerate(self._observation_poses):
             pose = self._obs_from_poses[i, :, :]
             line_start = pose[:3, 3]
             for obs in dct.values():
-                # If transforms are computed correctly, then obs_in_global should be equivalent to the original tag pose
-                # definition
-                obs_in_global = np.matmul(pose, obs)
+                # Apply NEGATE_Y_AND_Z_AXES multiplication here because to mirror what happens when poses are ingested
+                # in the `Graph.as_graph` method (via the `UGDataSet.tag_edge_measurements_matrix` property). It undoes
+                # the NEGATE_Y_AND_Z_AXES left-multiplication in the `observe_tag_by_pixels` method (it is its own
+                # inverse).
+                obs_in_global = np.matmul(pose, np.matmul(NEGATE_Y_AND_Z_AXES, obs))
+                draw_frames(obs_in_global, plt_axes=ax)
                 line_end = obs_in_global[:3, 3]
                 ax.plot(
                     xs=[line_start[0], line_end[0]],
                     ys=[line_start[1], line_end[1]],
                     zs=[line_start[2], line_end[2]],
-                    color="c"
-                )
+                    color="c")
         plt.show()
 
     # noinspection Pydantic
@@ -534,55 +468,46 @@ class GraphGenerator:
         Returns:
             True if all points are visible according to the camera intrinsics.
         """
-        # Flip the y and z because the math for the camera intrinsics assumes that +z is increasing depth from the
-        # camera (and the AR kit has +z facing out of the screen).
-        flipped_tag_in_phone = np.matmul(FLIP_Y_AND_Z_AXES, tag_in_phone)
-        tag_corners_in_flipped_phone = np.matmul(flipped_tag_in_phone, self._tag_corners_in_tag)
-
-        # 3xN array of N points' pixel coordinates (accurate only after subsequent normalization)
-        pixel_coords_flipped = np.matmul(GraphGenerator.CAMERA_INTRINSICS, tag_corners_in_flipped_phone[:3, :])
-
-        # Normalize values so that first and second rows contain the actual pixel values
-        for col_idx in range(pixel_coords_flipped.shape[1]):
-            if pixel_coords_flipped[2, col_idx] == 0:
+        # Compute the pixel_vals values first. Note the slightly different computation between this and the pixels 
+        # computed for solvePnP
+        pixel_vals_tmp = np.matmul(GraphGenerator.CAMERA_INTRINSICS,
+                                   np.matmul(np.matmul(NEGATE_Y_AND_Z_AXES, tag_in_phone),
+                                             self._tag_corners_in_tag)[:3, :])
+        for col_idx in range(pixel_vals_tmp.shape[1]):
+            if pixel_vals_tmp[2, col_idx] == 0:
                 # Avoid divide-by-zero by setting pixels to -1 (corresponds to non-visible observation)
-                pixel_coords_flipped[:, col_idx] = -1
-            pixel_coords_flipped[:, col_idx] = pixel_coords_flipped[:, col_idx] / pixel_coords_flipped[2, col_idx]
+                pixel_vals_tmp[:, col_idx] = -1
+            pixel_vals_tmp[:, col_idx] = pixel_vals_tmp[:, col_idx] / pixel_vals_tmp[2, col_idx]
 
-        pixel_vals[:, :] = pixel_coords_flipped[:2, :]
+        # Add pixel noise and record in provided array
+        pixel_vals_tmp[:2, :] += np.random.randn(2, 4) * self._obs_noise_var
+        pixel_vals[:, :] = pixel_vals_tmp[:2, :]
 
         # Check if all pixel coordinates are within the sensor's bounds
-        if np.any(pixel_coords_flipped[0:2, :] < 0) or \
-                np.any(pixel_coords_flipped[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]) or \
-                np.any(pixel_coords_flipped[1, :] > GraphGenerator._double_camera_intrinsics[1, 2]):
+        if np.any(pixel_vals_tmp[0:2, :] < 0) or \
+                np.any(pixel_vals_tmp[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]) or \
+                np.any(pixel_vals_tmp[1, :] > GraphGenerator._double_camera_intrinsics[1, 2]):
             return False
 
-        # Now, we need the tag_in_phone transform to use the OpenCV reference frame convention
-        opencv_tag_in_phone = np.matmul(np.linalg.inv(AR_TO_OPENCV), tag_in_phone)
-        tag_corners_in_opencv_phone = np.matmul(opencv_tag_in_phone, self._tag_corners_in_tag)
+        # Recompute the pose using solvePnP
+        t_vec = np.expand_dims(tag_in_phone[:3, 3], 1)
+        r_vec = cv2.Rodrigues(tag_in_phone[:3, :3])[0]
+        success, r_vec, t_vec = cv2.solvePnP(
+            objectPoints=self._tag_corners_for_pnp, imagePoints=np.transpose(pixel_vals_tmp[:2, :]),
+            cameraMatrix=self.CAMERA_INTRINSICS, rvec=r_vec, tvec=t_vec,
+            distCoeffs=None, flags=cv2.SOLVEPNP_IPPE_SQUARE, useExtrinsicGuess=True)
+        if not success:
+            return False  # TODO: figure out why this doesn't work every time that it can reasonably be expected to
 
-        # 3xN array of N points' pixel coordinates (accurate only after subsequent normalization)
-        pixel_coords_opencv = np.matmul(GraphGenerator.CAMERA_INTRINSICS, tag_corners_in_opencv_phone[:3, :])
-
-        # Normalize values so that first and second rows contain the actual pixel values
-        for col_idx in range(pixel_coords_opencv.shape[1]):
-            if pixel_coords_opencv[2, col_idx] == 0:
-                # Avoid divide-by-zero by setting pixels to -1 (corresponds to non-visible observation)
-                pixel_coords_opencv[:, col_idx] = -1
-            pixel_coords_opencv[:, col_idx] = pixel_coords_opencv[:, col_idx] / pixel_coords_opencv[2, col_idx]
-
-        opencv_pixel_vals = pixel_coords_opencv[:2, :] + np.random.randn(2, 4) * self._obs_noise_var
-        _, r_vec, t_vec = cv2.solvePnP(self._tag_corners_for_pnp, np.transpose(opencv_pixel_vals),
-                                       self.CAMERA_INTRINSICS, None, flags=cv2.SOLVEPNP_IPPE_SQUARE)
-        if np.isnan(np.sum(r_vec)):
-            return False  # TODO: figure out why NaN numbers show up sometimes
         rot_mat, _ = cv2.Rodrigues(r_vec)
-
         new_transform = np.zeros((4, 4))
-        new_transform[:3, :3] = rot_mat.transpose()
+        # This operation reverses the effect that the incorrect* tag corner order has on solvePnP (*solvePnP expects
+        # corners in a different order to compute the correct pose). However, the sparse bundle adjustment code expects
+        # a different tag corner order than solvePnP. Therefore, to maintain consistency in how the additive pixel noise 
+        # is applied, the tag corner order SBA expects is used, thus necessitating this correction.
+        new_transform[:3, :3] = np.multiply(GraphGenerator.NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE, rot_mat)
         new_transform[:3, 3] = t_vec.transpose()
         new_transform[3, 3] = 1
-        new_transform[:, :] = np.matmul(AR_TO_OPENCV, new_transform)  # Undo the conversion to the OpenCV frame
         tag_in_phone[:, :] = new_transform
         return True
 
@@ -618,35 +543,6 @@ class GraphGenerator:
     PARAMETERIZED_PATH_ALIAS_TO_CALLABLE: Dict[str, Callable[[np.ndarray, Dict[str, float]], np.ndarray]] = {
         "e": xz_path_ellipsis_four_by_two.__func__
     }
-
-    @staticmethod
-    def draw_frames(offsets: np.ndarray, frames: np.ndarray, plt_axes: plt.Axes,
-                    colors: Tuple[str, str, str] = ("r", "g", "b")) -> None:
-        """Draw N reference frames at given translation offsets.
-
-        Args:
-            offsets: Translation offsets of the frames. Expected to be a 3xN matrix where the rows from top to bottom
-             encode the translation offset in the first, second, and third dimensions, respectively.
-            frames: Nx3x3 array of rotation matrices.
-            plt_axes: Matplotlib axes to plot on
-            colors: Tuple of color codes to use for the first, second, and third dimensions' basis vector arrows,
-             respectively.
-        """
-        for b in range(3):
-            basis_vectors_transposed = (frames[:, :, b]).transpose()
-            plt_axes.quiver(
-                offsets[0, :],
-                offsets[1, :],
-                offsets[2, :],
-                # For each basis vector, dot it with the corresponding basis vector of the reference frame it is within
-                np.matmul(GraphGenerator.X_HAT_1X3, basis_vectors_transposed),
-                np.matmul(GraphGenerator.Y_HAT_1X3, basis_vectors_transposed),
-                np.matmul(GraphGenerator.Z_HAT_1X3, basis_vectors_transposed),
-                length=0.5,
-                arrow_length_ratio=0.3,
-                normalize=True,
-                color=colors[b],
-            )
 
     @staticmethod
     def frenet_frames(t_vec: np.ndarray,

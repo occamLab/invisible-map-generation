@@ -14,7 +14,7 @@ sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pard
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.graph_manager import GraphManager, PrescalingOptEnum
 from map_processing.graph import Graph
-from map_processing.graph_opt_utils import make_processed_map_JSON
+from map_processing.graph_opt_utils import make_processed_map_json
 from firebase_admin import credentials
 
 from map_processing.data_models import OConfig
@@ -35,7 +35,7 @@ def for_each_map_info(map_info: MapInfo) -> None:
     optimization_config = OConfig(
         is_sba=False, weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
     opt_chi2, opt_result, _ = GraphManager.optimize_graph(graph=graph, optimization_config=optimization_config)
-    json_str = make_processed_map_JSON(opt_result)
+    json_str = make_processed_map_json(opt_result)
     cms.upload(map_info, json_str)
 
 

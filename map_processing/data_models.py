@@ -13,12 +13,14 @@ Notes:
 
 import itertools
 from typing import List, Dict, Union, Optional, Tuple
+from map_processing.transform_utils import transform_matrix_to_vector
+from g2o import SE3Quat
 
 import numpy as np
 from pydantic import BaseModel, conlist, Field, confloat, validator
 
 from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
-from map_processing.transform_utils import FLIP_Y_AND_Z_AXES
+from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES
 
 
 def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], is_optional: bool = False):
@@ -85,7 +87,7 @@ class Weights(BaseModel):
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
     @validator("odom_tag_ratio")
-    def odom_tag_ratio_pre_validator(cls, v):
+    def odom_tag_ratio_pre_validator(self, v):
         if isinstance(v, np.ndarray):
             return np.squeeze(v)[0]
         return v
@@ -349,8 +351,8 @@ class UGDataSet(BaseModel):
         # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
         # measurements. Additionally, note that the matrix here is recorded in row-major format.
         return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
-            np.matmul(FLIP_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
-                                                    self.tag_data]).reshape([-1, 4, 4]))
+            np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
+                                                      self.tag_data]).reshape([-1, 4, 4], order="C"))
 
     @property
     def timestamps(self) -> np.ndarray:
@@ -445,9 +447,62 @@ class GTTagPose(BaseModel):
     tag_id: int
     pose: conlist(Union[float, int], min_items=7, max_items=7)
 
+    @property
+    def pose_as_se3quat(self) -> SE3Quat:
+        return SE3Quat(np.array([self.pose[i] for i in range(7)]))
+
+    @property
+    def pose_as_se3_array(self) -> np.ndarray:
+        return self.pose_as_se3quat.to_vector()
+
 
 class GTDataSet(BaseModel):
-    poses: List[GTTagPose]
+    poses: List[GTTagPose] = []
+
+    @property
+    def sorted_poses_as_se3quat_list(self) -> List[SE3Quat]:
+        return [pose.pose_as_se3quat for pose in sorted(self.poses, key=lambda pose: pose.tag_id)]
+
+    @property
+    def pose_ids_as_list(self) -> List[int]:
+        return [tag_pose.tag_id for tag_pose in self.poses]
+
+    @property
+    def as_dict_of_se3_arrays(self) -> Dict[int, np.ndarray]:
+        return {tag_pose.tag_id: tag_pose.pose_as_se3_array for tag_pose in self.poses}
+    
+    @classmethod
+    def gt_data_set_from_dict_of_arrays(cls, dct: Dict[int, np.ndarray]) -> "GTDataSet":
+        """Generate a GTDataSet from a dict of tag data.
+
+        Notes:
+            Arbitrarily selects one of the poses to be the origin of the data set (i.e., one of the pose transforms in
+            the resulting data set will be the identity).
+
+        Args:
+            dct: Dictionary mapping tag IDs to their poses in some arbitrary reference frame. The poses are expected to
+             either 4x4 matrices or length-7 SE3 vectors.
+        """
+        if len(dct) == 0:
+            return GTDataSet()
+
+        # create new dict in case se3 vectors need to be converted to 4x4 transform matrices
+        new_dict: Dict[int, np.ndarray] = {}
+        for item in dct.items():
+            if item[1].shape == (4, 4):
+                new_dict[item[0]] = SE3Quat(transform_matrix_to_vector(item[1])).to_vector()
+            else:
+                new_dict[item[0]] = item[1]
+
+        ground_truth_tags = []
+        for item in new_dict.items():
+            ground_truth_tags.append(
+                GTTagPose(
+                    tag_id=item[0],
+                    pose=item[1].tolist()
+                )
+            )
+        return GTDataSet(poses=ground_truth_tags)
 
 
 class PGTranslation(BaseModel):
@@ -526,6 +581,45 @@ class OConfig(BaseModel):
     weights: Weights = Weights()
     graph_plot_title: str = ""
     chi2_plot_title: str = ""
+
+    # Need this class with the `json_encoders` field to be present so that the sub-models' (`Weights` and
+    # OComputeInfParams) numpy arrays can be serializable, even though in isolation they are already serializable.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+
+    @classmethod
+    def oconfig_sweep_generator(cls, base_oconfig: "OConfig", product_args: List[np.ndarray]) -> \
+            Tuple[List[float], "OConfig"]:
+        """Generator that yields OConfig objects according to the cartesian product of the `*_sweep` arguments.
+
+        Notes:
+             What is meant by "`*_sweep` arguments" is all the arguments whose parameter names end with "_sweep".
+
+        Args:
+            base_oconfig: Any optimization configuration parameters not covered by the `*_sweep` are inherited from this
+             model.
+            product_args: List of arrays to be used as the argument to the cartesian product function.
+        """
+        len_3_unit_vec = np.ones(3) * np.sqrt(1 / 3)
+        for this_product in itertools.product(*product_args, repeat=1):
+            yield this_product, OConfig(
+                is_sba=base_oconfig.is_sba,
+                obs_chi2_filter=base_oconfig.obs_chi2_filter,
+                compute_inf_params=OComputeInfParams(
+                    lin_vel_var=this_product[0] * np.ones(3),
+                    ang_vel_var=this_product[1],
+                ),
+                scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
+                weights=Weights(
+                    gravity=len_3_unit_vec * this_product[2],
+                    odom_tag_ratio=this_product[3],
+                ),
+                graph_plot_title=base_oconfig.graph_plot_title,
+                chi2_plot_title=base_oconfig.chi2_plot_title,
+            )
+
+    def __hash__(self):
+        return self.json().__hash__()
 
 
 class OG2oOptimizer(BaseModel):

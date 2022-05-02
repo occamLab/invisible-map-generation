@@ -22,7 +22,7 @@ import sys
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
-from typing import Tuple, List, Dict
+from typing import Tuple, Dict, List
 import argparse
 from firebase_admin import credentials
 import map_processing
@@ -39,7 +39,7 @@ import pickle
 
 import concurrent.futures
 
-from map_processing.data_models import OComputeInfParams, Weights, OConfig
+from map_processing.data_models import OComputeInfParams, Weights, OConfig, GTDataSet
 
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
@@ -339,13 +339,15 @@ if __name__ == "__main__":
             if args.c:
                 graph_manager.compare_weights(map_info, args.v)
             else:
+                gt_data = cms.find_ground_truth_data_from_map_info(map_info)
                 opt_results = graph_manager.process_map(
                     map_info=map_info, visualize=args.v, upload=args.F, fixed_vertices=tuple(fixed_tags),
-                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params)
+                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params,
+                    gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None
+                    else None)
                 if not args.g:
                     continue
 
-                gt_data = cms.find_ground_truth_data_from_map_info(map_info)
                 if gt_data is None:
                     print(f"Could not find any ground truth for the map {map_info.map_name}")
                     continue
@@ -358,5 +360,5 @@ if __name__ == "__main__":
                     optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1].tags),
                     ground_truth_tags=gt_data, verbose=False
                 )
-                print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt} (delta of "
-                      f"{ground_truth_metric_opt - ground_truth_metric_pre} from pre-optimization)")
+                print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt:.3f} (delta of "
+                      f"{ground_truth_metric_opt - ground_truth_metric_pre:.3f} from pre-optimization)")

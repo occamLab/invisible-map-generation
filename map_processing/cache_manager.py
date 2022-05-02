@@ -15,6 +15,7 @@ from firebase_admin import storage
 from varname import nameof
 
 from map_processing.data_models import GTDataSet
+from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
 
 
 class MapInfo:
@@ -77,15 +78,6 @@ class CacheManagerSingleton:
         "storageBucket": "invisible-map.appspot.com"
     }
 
-    GROUND_TRUTH_MAPPING_STARTING_PT: Dict[str, List[str]] = {
-        "occam": ["duncan-occam-room-10-1-21-2-38 267139330396791",
-                  "duncan-occam-room-10-1-21-2-48 26773176629225"]
-    }
-    """
-    This dictionary is used as the default ground truth dataset-to-map-name mapping when one does not already exist
-    in the ground_truth/ sub-directory of the cache.
-    """
-
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
@@ -123,6 +115,8 @@ class CacheManagerSingleton:
         """
         if cls.__instance is None:
             cls.__instance = super(CacheManagerSingleton, cls).__new__(cls)
+            # Generate all ground truth data files from hard-coded data
+            CacheManagerSingleton.export_all_ground_truth_data()
         return cls.__instance
 
     # -- Properties --
@@ -401,6 +395,13 @@ class CacheManagerSingleton:
             return False
 
     @staticmethod
+    def export_all_ground_truth_data():
+        for dataset_name, dataset in GT_TAG_DATASETS.items():
+            CacheManagerSingleton.cache_ground_truth_data(
+                gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(dataset),
+                dataset_name=dataset_name)
+
+    @staticmethod
     def find_ground_truth_data_from_map_info(map_info: MapInfo) -> Optional[Dict]:
         """Uses the ground truth mapping to find the dataset matching the map_info object.
 
@@ -418,7 +419,7 @@ class CacheManagerSingleton:
             with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "r") as f:
                 gt_mapping_dict = json.load(f)
         else:
-            gt_mapping_dict = CacheManagerSingleton.GROUND_TRUTH_MAPPING_STARTING_PT
+            gt_mapping_dict = GROUND_TRUTH_MAPPING_STARTING_PT
 
         for item in gt_mapping_dict.items():
             for map_name in item[1]:
@@ -448,20 +449,20 @@ class CacheManagerSingleton:
         return ret
 
     @staticmethod
-    def cache_ground_truth_data(gt_data: GTDataSet, dataset_name: str, corresponding_map_names: List[str]) -> None:
+    def cache_ground_truth_data(gt_data: GTDataSet, dataset_name: str,
+                                corresponding_map_names: Optional[List[str]] = None) -> None:
         """Serialize the ground truth data object and save it in the ground truth directory under the name
         gt_{dataset_name}.json.
 
-        # TODO: update documentation with more information about the corresponding_map_names parameter
-
         Args:
-            gt_data:
-            dataset_name:
-            corresponding_map_names:
-
-        Returns:
-
+            gt_data: Ground truth data set
+            dataset_name: Name to associate with the ground truth data
+            corresponding_map_names: Map names associated with the ground truth data. If the ground truth data cache
+             already contains this data set and other corresponding map names, then this list extends that list.
         """
+        if corresponding_map_names is None:
+            corresponding_map_names = []
+
         if not os.path.exists(CacheManagerSingleton.GROUND_TRUTH_PATH):
             os.mkdir(CacheManagerSingleton.GROUND_TRUTH_PATH)
         gt_dict = gt_data.dict()
@@ -474,7 +475,7 @@ class CacheManagerSingleton:
             with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "r") as f:
                 ground_truth_mapping_dict = json.load(f)
         else:
-            ground_truth_mapping_dict = dict(CacheManagerSingleton.GROUND_TRUTH_MAPPING_STARTING_PT)
+            ground_truth_mapping_dict = dict(GROUND_TRUTH_MAPPING_STARTING_PT)
 
         if dataset_name in ground_truth_mapping_dict:
             ground_truth_mapping_dict[dataset_name].extend(corresponding_map_names)
