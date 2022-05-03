@@ -86,8 +86,9 @@ class Weights(BaseModel):
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
+    @classmethod
     @validator("odom_tag_ratio")
-    def odom_tag_ratio_pre_validator(self, v):
+    def odom_tag_ratio_pre_validator(cls, v):
         if isinstance(v, np.ndarray):
             return np.squeeze(v)[0]
         return v
