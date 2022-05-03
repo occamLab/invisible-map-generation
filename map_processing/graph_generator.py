@@ -310,8 +310,6 @@ class GraphGenerator:
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
-        draw_frames(self._odometry_poses, plt_axes=ax)
-        draw_frames(self._orig_tag_poses_arr, plt_axes=ax, colors=("m", "m", "m"))
 
         # Get observation vectors in the global frame and plot them
         for i, dct in enumerate(self._observation_poses):

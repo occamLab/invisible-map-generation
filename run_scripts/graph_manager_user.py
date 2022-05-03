@@ -37,39 +37,33 @@ import datetime
 import json
 import multiprocessing as mp
 
-from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet
+from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet, SweepResults
 
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
-NUM_SWEEP_PROCESSES: int = 1
+NUM_SWEEP_PROCESSES: int = 12
 IS_SBA = True
-ORDERED_SWEEP_CONFIG_KEYS = [
+ORDERED_SWEEP_CONFIG_KEYS: List[str] = [
     "odom_tag_ratio_arr",
     "lin_vel_var_arr",
     "ang_vel_var_arr",
     "grav_mag_arr",
 ]
 
-PLOT_XY_AXES = [ORDERED_SWEEP_CONFIG_KEYS[1], ORDERED_SWEEP_CONFIG_KEYS[2]]
-"""
-Note: if this is changed, then the indexing of the results array to create the `zz` variable needs to be updated 
-accordingly.
-"""
-
 # TODO: revisit the use of np.exp(.) around the lin_ and ang_vel_var arrays
 SWEEP_CONFIG: Dict[str, Tuple[Callable, Iterable[Any]]] = {
-    "odom_tag_ratio_arr": (np.geomspace, [0.01, 10, 2]),
-    "lin_vel_var_arr": (np.linspace, [0.01, 3, 2]),
-    "ang_vel_var_arr": (np.linspace, [0.01, 3, 2]),
-    "grav_mag_arr": (np.linspace, [0.01, 3, 2]),
+    "odom_tag_ratio_arr": (np.linspace,  [0.01, 1000, 2]),
+    "lin_vel_var_arr":    (np.linspace,  [0.01, 1000, 2]),
+    "ang_vel_var_arr":    (np.linspace,  [0.01, 1000, 2]),
+    "grav_mag_arr":       (np.linspace,  [0.01, 1000, 2]),
 }
 
 
-def make_parser():
+def make_parser() -> argparse.ArgumentParser:
     """Makes an argument p object for this program
 
     Returns:
-        Argument p
+        Argument parser
     """
     p = argparse.ArgumentParser(description="Graph optimization utility for optimizing, plotting, and database "
                                             "upload/download", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -197,11 +191,7 @@ def make_parser():
     return p
 
 
-def download_maps(event):
-    cms.get_map_from_unprocessed_map_event(event)
-
-
-def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: bool):
+def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: bool) -> None:
     """TODO: Documentation and add SBA weighting to the sweeping
     """
     graph_to_opt = Graph.as_graph(mi.map_dct)
@@ -240,10 +230,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
 
     # Run the parameter sweep
     if NUM_SWEEP_PROCESSES == 1:  # Skip multiprocessing if only one process is specified
-        results_tuples = [sweep_target(sweep_arg) for sweep_arg in sweep_args]
+        results_tuples = [_sweep_target(sweep_arg) for sweep_arg in sweep_args]
     else:
         with mp.Pool(processes=NUM_SWEEP_PROCESSES) as pool:
-            results_tuples = pool.map(sweep_target, sweep_args)
+            results_tuples = pool.map(_sweep_target, sweep_args)
     results: List[float] = []
     results_indices: List[int] = []
     for result_tuple in results_tuples:
@@ -256,45 +246,32 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
         result_arr_idx = []
         for key_idx, key in enumerate(ORDERED_SWEEP_CONFIG_KEYS):
             result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
-        results_arr[result_arr_idx] = result
+        results_arr[tuple(result_arr_idx)] = result
     if np.any(results_arr < 0):
         raise Exception("Array of results was not completely populated")
 
-    print(results_arr)
-
-    # Find what the minimum ground truth value is and what produced it
-    min_ground_truth = np.min(results_arr)
-    # noinspection PyTypeChecker
-    where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(results_arr == min_ground_truth)
-    where_min = tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
-    args_producing_min = {}
-    for i, key in enumerate(ORDERED_SWEEP_CONFIG_KEYS):
-        args_producing_min[key] = sweep_arrs[key][where_min[i]]
-
-    print(f"\nMinimum ground truth value: {min_ground_truth:.3f} with args:\n" + json.dumps(args_producing_min,
-                                                                                            indent=2))
-
-    # Plot a heatmap of the ground truth metric against a 2D projection of the search space
-    xx, yy = np.meshgrid(sweep_arrs[PLOT_XY_AXES[0]], sweep_arrs[PLOT_XY_AXES[1]])
-    zz = results_arr[where_min[0], :, :, where_min[3]]  # Ground truth metric
-    ax: plt.Axes
-    fig: plt.Figure
-    fig, ax = plt.subplots()
-    ax.set_title(f"Param sweep with min. ground truth={min_ground_truth}")
-    ax.set_xlabel(PLOT_XY_AXES[0])
-    ax.set_ylabel(PLOT_XY_AXES[1])
-    c = ax.pcolor(xx, yy, zz, shading="auto")
-    fig.colorbar(c, ax=ax)
+    sweep_results = SweepResults(
+        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
+        sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
+        sweep_config_keys_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
+    print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with args:\n" +
+          json.dumps(sweep_results.args_producing_min, indent=2))
+    fig = sweep_results.visualize_results_heatmap()
+    plt.show()
 
     results_target_folder = os.path.join(repository_root, "saved_sweeps", map_info.map_name)
     if not os.path.exists(results_target_folder):
         os.mkdir(results_target_folder)
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_{map_info.map_name}_sweep"
-    plt.savefig(os.path.join(results_target_folder, results_cache_file_name_no_ext + ".png"), dpi=300)
-    plt.show()
+    results_cache_file_path_no_ext = os.path.join(results_target_folder, results_cache_file_name_no_ext)
+
+    fig.savefig(results_cache_file_path_no_ext + ".png", dpi=500)
+    with open(results_cache_file_path_no_ext + ".json", "w") as f:
+        s = sweep_results.json(indent=2)
+        f.write(s)
 
 
-def sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
+def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
     """
     Args:
         sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed

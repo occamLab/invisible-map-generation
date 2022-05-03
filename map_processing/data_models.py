@@ -13,17 +13,19 @@ Notes:
 
 import itertools
 from typing import List, Dict, Union, Optional, Tuple
-from map_processing.transform_utils import transform_matrix_to_vector
-from g2o import SE3Quat
 
 import numpy as np
+from g2o import SE3Quat
+from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, validator
 
 from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
-from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES
+from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector
 
 
-def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], is_optional: bool = False):
+def _is_arr_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False):
+    expected_num_dims = len(shape)
+
     if v is None:
         if is_optional:
             return v
@@ -34,15 +36,15 @@ def _is_matrix_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, int], i
         raise ValueError("Numpy array cannot contain any NaN values")
 
     v_sqz: np.ndarray = np.squeeze(v)
-    if v_sqz.ndim != 2:
+    if v_sqz.ndim != expected_num_dims:
         raise ValueError(
-            f"Field that should have been a matrix was found to not have the right dimensions (number of dims found to "
+            f"Field that should have been an array was found to not have the right dimensions (number of dims found to "
             f"be {v_sqz.ndim} after squeezing the array)"
         )
     for dim_idx, dim in enumerate(shape):
         if 0 <= shape[dim_idx] != v_sqz.shape[dim_idx]:
             raise ValueError(
-                f"Field that should have had a matrix of shape {shape} had a shape of {v_sqz.shape} (note that "
+                f"Field that should have had an array of shape {shape} had a shape of {v_sqz.shape} (note that "
                 f"negative expected dimensions, if there are any, mean that the matrix can be of any size along that "
                 f"axis)"
             )
@@ -645,17 +647,17 @@ class OG2oOptimizer(BaseModel):
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr.flatten(order="C"))}
 
     _check_locations_is_correct_shape_matrix = validator("locations", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 9)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 9)))
     _check_tags_is_correct_shape_matrix = validator("tags", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 8)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 8)))
     _check_tagpoints_is_correct_shape_matrix = validator("tagpoints", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 3)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 3)))
     _check_waypoints_arr_is_correct_shape_matrix = validator("waypoints_arr", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 8)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 8)))
     _check_locationsAdjChi2_is_correct_shape_matrix = validator("locationsAdjChi2", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 1), is_optional=True))
+        lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
     _check_visibleTagsCount_is_correct_shape_matrix = validator("visibleTagsCount", allow_reuse=True)(
-        lambda v: _is_matrix_of_right_shape(v, (-1, 1), is_optional=True))
+        lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
 
     _deserialize_locations_matrix_if_needed = validator("locations", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 9]))
@@ -667,3 +669,125 @@ class OG2oOptimizer(BaseModel):
             lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
     _deserialize_visibleTagsCount_matrix_if_needed = validator("visibleTagsCount", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
+
+
+class SweepResults(BaseModel):
+    gt_results_arr_shape: List[int]
+    sweep_config: Dict[str, List[float]]
+    gt_results_list: List[float]
+    sweep_config_keys_order: List[str]
+    base_oconfig: OConfig
+
+    # Need this class with the `json_encoders` field to be present so that the base_oconfig's numpy arrays can be
+    # serializable, even though in isolation base_oconfig is already serializable.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+
+    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
+    # some reason...)
+    # noinspection PyMethodParameters
+    @validator("sweep_config_keys_order")
+    def sweep_config_keys_must_be_same_as_sweep_config_keys_order(cls, v, values):
+        sweep_config = values["sweep_config"]
+        for key in v:
+            if key not in sweep_config:
+                raise ValueError("sweep_config_keys_order contains a string that is not a key in the sweep_config dict")
+        if len(sweep_config) != len(v):
+            raise ValueError("the number of items in the sweep_config dictionary must be the same as the number of "
+                             "items in the sweep_config_keys_order list")
+        return v
+
+    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
+    # some reason...)
+    # noinspection PyMethodParameters
+    @validator("gt_results_list")
+    def validate_length_of_gt_results_list(cls, v, values):
+        gt_results_arr_shape = values["gt_results_arr_shape"]
+        expected_length = np.product(gt_results_arr_shape)
+        if len(v) != expected_length:
+            raise ValueError(f"gt_results_list cannot be of length {len(v)} if gt_results_arr_shape is "
+                             f"{gt_results_arr_shape} (expected length is {expected_length})")
+        return v
+
+    @property
+    def sweep_config_dict(self) -> Dict[str, List[float]]:
+        return {item[0]: item[1] for item in self.sweep_config}
+
+    @property
+    def sweep_variables(self) -> List[str]:
+        return [item[0] for item in self.sweep_config]
+
+    @property
+    def gt_results_arr(self) -> np.ndarray:
+        return np.array(self.gt_results_list).reshape(self.gt_results_arr_shape, order="C")
+
+    @property
+    def min_gt_result(self) -> float:
+        return np.min(self.gt_results_list)
+
+    @property
+    def where_min(self) -> Tuple[int, ...]:
+        # noinspection PyTypeChecker
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(self.gt_results_arr == self.min_gt_result)
+        return tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
+
+    @property
+    def args_producing_min(self) -> Dict[str, float]:
+        args_producing_min: Dict[str, float] = {}
+        for i, key in enumerate(self.sweep_config_keys_order):
+            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
+        return args_producing_min
+
+    def visualize_results_heatmap(self) -> plt.Figure:
+        """Generate (but do not show) a figure of subplots where each subplot shows a heatmap of the ground truth metric
+        for a 2D slice of the search space.
+
+        Raises:
+            Exception: If the number of dimensions swept is <2.
+        """
+        if len(self.sweep_config_keys_order) < 2:
+            raise Exception("Cannot create heatmap of results as implemented when <2 variables are swept.")
+
+        num_vars = len(self.sweep_config_keys_order)
+
+        # Generate all possible combinations of slices
+        idcs_plot_against_list: List[Tuple[int, int]] = []
+        for idx_1 in range(num_vars):
+            for idx_2 in range(idx_1 + 1, num_vars):
+                idcs_plot_against_list.append((idx_1, idx_2))
+
+        # Figure out dimensions of subplot grid
+        subplot_height = int(np.floor(np.sqrt(num_vars)))
+        subplot_width = subplot_height
+        if num_vars % subplot_width != 0:
+            subplot_width += 1
+
+        # In each subplot, make a heatmap from the 2D cross-section of the search space that intersects the minimum
+        # value
+        where_min = self.where_min
+        fig, axs = plt.subplots(subplot_height, subplot_width, figsize=(8, 8), constrained_layout=True)
+        for i, ax in enumerate(axs.flat):
+            idcs_plot_against = idcs_plot_against_list[i]
+
+            x_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[0]]]
+            y_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[1]]]
+
+            xx, yy = np.meshgrid(x_vec, y_vec)
+            plot_against_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
+                set(idcs_plot_against))))
+            zz = self.gt_results_arr.take(indices=where_min[plot_against_dims[0]], axis=plot_against_dims[0])
+            zz = zz.take(indices=where_min[plot_against_dims[1] - 1], axis=plot_against_dims[1] - 1).T
+            ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
+            ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
+            c = ax.pcolormesh(xx, yy, zz, shading="auto")
+
+            # Annotate the heatmap with a red dot showing the coordinates that produce the minimum value
+            ax.plot(x_vec[where_min[idcs_plot_against[0]]], y_vec[where_min[idcs_plot_against[1]]], "ro")
+
+        # Ignore unbound variable warning for color bar
+        # noinspection PyUnboundLocalVariable
+        cbar = fig.colorbar(c, ax=axs)
+        cbar.set_label("Ground Truth Metric")
+        fig.suptitle(f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
+                     f"\n(red dots show min. value coordinates)")
+        return fig
