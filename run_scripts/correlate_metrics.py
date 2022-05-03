@@ -92,23 +92,24 @@ def do_sweeping(sweep: np.ndarray):
         )
         
         print("optimizing...")
-        opt_chi2 = gm.optimize_and_give_chi2_metric(graph, weights)
+
+        opt_chi2 = gm.optimize_from_weights(graph, weights).chi2s.chi2_all_after
         single_graph_chi2[run] = opt_chi2
 
         print("standard optimization ground truth:")
-        single_graph_gt[run] = gm.optimize_and_get_ground_truth_error_metric(weights=weights, graph=graph,
-                                                                             ground_truth_tags=ground_truth_dict)
+        single_graph_gt[run] = gm.optimize_and_get_ground_truth_error_metric(
+            weights=weights, graph=graph, ground_truth_tags=ground_truth_dict).gt_metric_opt
 
         print("subgraph pair optimization...")
         for second_subgraph_weights_key in subgraph_pair_chi2_diff.keys():
             print(second_subgraph_weights_key)
             subgraph_pair_chi2_diff[second_subgraph_weights_key].append(
-                gm.subgraph_pair_optimize_and_get_chi2_diff(
+                gm.subgraph_pair_optimize(
                     subgraph_0_weights=weights,
                     subgraphs=(sg0, sg1),
                     subgraph_1_weights=GraphManager.weights_dict[second_subgraph_weights_key],
                     verbose=True
-                )
+                ).chi2_diff
             )
 
         print(f"An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:")

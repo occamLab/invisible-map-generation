@@ -671,7 +671,51 @@ class OG2oOptimizer(BaseModel):
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
 
 
-class SweepResults(BaseModel):
+
+class OResultChi2Values(BaseModel):
+    chi2_all_before: float
+    chi2_gravity_before: float
+    chi2_all_after: float
+    chi2_gravity_after: float
+
+    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
+    # some reason...)
+    # noinspection PyMethodParameters
+    @validator("*")
+    def validate_float_is_geq_0(cls, v):
+        if isinstance(v, float):
+            assert (v >= 0, "all floating point members must be positive")
+        return v
+
+
+class OResult(BaseModel):
+    oconfig: OConfig
+    map_pre: OG2oOptimizer
+    map_opt: OG2oOptimizer
+    chi2s: OResultChi2Values
+    gt_metric_opt: Optional[float] = None
+    gt_metric_pre: Optional[float] = None
+
+    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
+    # serializable, even though the models this model is composed of are already serializable on their own.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+
+
+class OSGPairResult(BaseModel):
+    sg1_oresult: OResult
+    sg2_oresult: OResult
+
+    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
+    # serializable, even though the models this model is composed of are already serializable on their own.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+
+    @property
+    def chi2_diff(self) -> float:
+        return self.sg2_oresult.chi2s.chi2_all_after - self.sg1_oresult.chi2s.chi2_all_after
+
+class OSweepResults(BaseModel):
     gt_results_arr_shape: List[int]
     sweep_config: Dict[str, List[float]]
     gt_results_list: List[float]

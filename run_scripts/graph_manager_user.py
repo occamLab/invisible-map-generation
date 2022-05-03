@@ -37,7 +37,7 @@ import datetime
 import json
 import multiprocessing as mp
 
-from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet, SweepResults
+from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet, OSweepResults
 
 NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 
@@ -250,11 +250,11 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     if np.any(results_arr < 0):
         raise Exception("Array of results was not completely populated")
 
-    sweep_results = SweepResults(
+    sweep_results = OSweepResults(
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
-    print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with args:\n" +
+    print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with parameters:\n" +
           json.dumps(sweep_results.args_producing_min, indent=2))
     fig = sweep_results.visualize_results_heatmap()
     plt.show()
@@ -280,13 +280,12 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    print("\n")
-    results = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), visualize=False,
+    oresult = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), visualize=False,
                                           optimization_config=sweep_args_tuple[1])
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(results[1].tags),
+        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2], verbose=False)
-    # print(f"Completed sweep {sweep_args_tuple[3][0] + 1}/{sweep_args_tuple[3][1]}")
+    print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
     return gt_result, sweep_args_tuple[3][0]
 
 
@@ -341,25 +340,11 @@ if __name__ == "__main__":
                 graph_manager.compare_weights(map_info, args.v)
             else:
                 gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-                opt_results = graph_manager.process_map(
+                opt_result = graph_manager.holistic_optimize(
                     map_info=map_info, visualize=args.v, upload=args.F, fixed_vertices=tuple(fixed_tags),
                     obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params,
                     gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None
                     else None)
-                if not args.g:
-                    continue
 
-                if gt_data is None:
-                    print(f"Could not find any ground truth for the map {map_info.map_name}")
-                    continue
-
-                ground_truth_metric_pre = graph_manager.ground_truth_metric_with_tag_id_intersection(
-                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[2].tags),
-                    ground_truth_tags=gt_data, verbose=False
-                )
-                ground_truth_metric_opt = graph_manager.ground_truth_metric_with_tag_id_intersection(
-                    optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(opt_results[1].tags),
-                    ground_truth_tags=gt_data, verbose=False
-                )
-                print(f"Ground truth metric for {map_info.map_name}: {ground_truth_metric_opt:.3f} (delta of "
-                      f"{ground_truth_metric_opt - ground_truth_metric_pre:.3f} from pre-optimization)")
+                print(f"Ground truth metric for {map_info.map_name}: {opt_result.gt_metric_opt:.3f} (delta of "
+                      f"{opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)")

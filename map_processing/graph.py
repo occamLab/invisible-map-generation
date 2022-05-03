@@ -21,7 +21,7 @@ from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE, VertexType
-from .data_models import UGDataSet, OComputeInfParams, Weights
+from .data_models import UGDataSet, OComputeInfParams, Weights, OResultChi2Values
 from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
     transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, pose_to_isometry
@@ -180,7 +180,7 @@ class Graph:
             adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])
         return adj_chi2, num_tags_visible
 
-    def optimize_graph(self, verbose: bool = True) -> float:
+    def optimize_graph(self, verbose: bool = False) -> OResultChi2Values:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
         optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
 
@@ -194,21 +194,20 @@ class Graph:
         self.optimized_graph.initialize_optimization()
         run_status = self.optimized_graph.optimize(1024)
         self.g2o_status = run_status
-        optimized_chi_sqr = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)
-
+        unoptimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False)
+        unoptimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
+            self.unoptimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
+        optimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)
+        optimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
+            self.optimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
+        chi2_result = OResultChi2Values(
+            chi2_all_before=unoptimized_chi2,
+            chi2_gravity_before=unoptimized_gravity_chi2,
+            chi2_all_after=optimized_chi2,
+            chi2_gravity_after=optimized_gravity_chi2)
         if verbose:
-            print("unoptimized edges' chi2 sum:         " +
-                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False)))
-
-            print("unoptimized gravity edges' chi2 sum: " +
-                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False,
-                                                               edge_type_filter={EdgeSE3Gravity})))
-            print("  optimized edges' chi2 sum:         " + str(optimized_chi_sqr))
-
-            print("  optimized gravity edges' chi2 sum: " +
-                  str(graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False,
-                                                               edge_type_filter={EdgeSE3Gravity})))
-        return optimized_chi_sqr
+            print(chi2_result.json(indent=2))
+        return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:
         """Convert a :class: graph to a :class: SparseOptimizer.  Only the edges and vertices fields need to be
