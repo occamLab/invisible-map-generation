@@ -14,8 +14,8 @@ from firebase_admin import db
 from firebase_admin import storage
 from varname import nameof
 
-from map_processing.data_models import GTDataSet
 from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
+from map_processing.data_models import GTDataSet
 
 
 class MapInfo:
@@ -102,7 +102,7 @@ class CacheManagerSingleton:
         self.__bucket: Optional[firebase_admin.storage.storage.Bucket] = None
         self.__db_ref: Optional[db.Reference] = None
         if firebase_creds is not None:
-            self.set_credentials(firebase_creds)
+            self._set_credentials(firebase_creds)
 
         # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
         self.__listen_kill_timer: Timer = Timer(0, lambda x: x)
@@ -119,29 +119,7 @@ class CacheManagerSingleton:
             CacheManagerSingleton.export_all_ground_truth_data()
         return cls.__instance
 
-    # -- Properties --
-
-    @property
-    def cache_path(self):
-        return CacheManagerSingleton.CACHE_PATH
-
     # -- Public instance methods --
-
-    def set_credentials(self, credentials: firebase_admin.credentials.Certificate) -> None:
-        """Instantiates a firebase app with the credentials. If the app has already been initialized, then no action is
-        taken.
-
-        Notes:
-            Acquires the __synch_mutex (calling from another thread will block until this completes).
-
-        Args:
-            credentials: Firebase credentials
-        """
-        with self.__synch_mutex:
-            if self.__app is None:
-                self.__app = firebase_admin.initialize_app(credentials, self.__app_initialize_dict)
-                self.__bucket = storage.bucket(app=self.__app)
-                self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
 
     def map_info_from_path(self, map_json_path: str) -> Union[MapInfo, None]:
         """
@@ -157,21 +135,21 @@ class CacheManagerSingleton:
         if not map_json_path.endswith(".json"):
             map_json_path += ".json"
         if not os.path.isabs(map_json_path):
-            map_json_path = os.path.join(self.cache_path, map_json_path)
+            map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
 
         if not os.path.exists(map_json_path):
             return None
 
-        map_json_path = os.path.join(self.cache_path, map_json_path)
+        map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
         with open(map_json_path, "r") as json_string_file:
             json_string = json_string_file.read()
             json_string_file.close()
 
         map_json_blob_name = os.path.sep.join(
-            map_json_path.split(os.path.sep)[len(self.cache_path.split(os.path.sep)) + 1:]
+            map_json_path.split(os.path.sep)[len(CacheManagerSingleton.CACHE_PATH.split(os.path.sep)) + 1:]
         )
         map_dct = json.loads(json_string)
-        map_name = self.read_cache_directory(os.path.basename(map_json_blob_name))
+        map_name = self._read_cache_directory(os.path.basename(map_json_blob_name))
 
         last_folder = map_json_path.split('/')[-2]
         if last_folder == self.UNPROCESSED_MAPS_PARENT:
@@ -195,7 +173,7 @@ class CacheManagerSingleton:
         """
         matching_filepaths = glob.glob(
             os.path.join(
-                self.cache_path, os.path.join(
+                CacheManagerSingleton.CACHE_PATH, os.path.join(
                     CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_only_unprocessed else "", "**", pattern
                 )
             ),
@@ -240,27 +218,6 @@ class CacheManagerSingleton:
             self.__firebase_listen_sem.acquire()
             thread_obj.join()
 
-    def read_cache_directory(self, key: str) -> Union[str, None]:
-        """Reads the dictionary stored as a json file in <cache folder>/directory.json and returns the value
-        associated with the specified key. The key-value pairs in the directory.json map file names to map names.
-
-        Note that no error handling is implemented.
-
-        Args:
-            key (str): Key to query the dictionary
-
-        Returns:
-            Value associated with the key
-        """
-        with open(os.path.join(self.cache_path, "directory.json"), "r") as directory_file:
-            directory_json = json.loads(directory_file.read())
-            directory_file.close()
-            loaded = True
-        if loaded:
-            return directory_json.get(key)
-        else:
-            return None
-
     def upload(self, map_info: MapInfo, json_string: str) -> None:
         """Uploads the map json string into the Firebase __bucket under the path
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
@@ -286,7 +243,7 @@ class CacheManagerSingleton:
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
             print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
                 map_info.map_name))
-            self.cache_map(self.PROCESSED_UPLOAD_TO, map_info, json_string)
+            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, json_string)
 
     def download_all_maps(self):
         """Downloads all maps from Firebase.
@@ -296,8 +253,7 @@ class CacheManagerSingleton:
     def get_map_from_unprocessed_map_event(
             self, event: firebase_admin.db.Event,
             map_info_callback: Union[Callable[[MapInfo], None], None] = None,
-            ignore_dict: bool = False
-    ) -> None:
+            ignore_dict: bool = False) -> None:
         """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
 
         Arguments:
@@ -327,8 +283,11 @@ class CacheManagerSingleton:
                         if map_info_callback is not None and map_info is not None:
                             map_info_callback(map_info)
 
-    def cache_map(self, parent_folder: str, map_info: MapInfo, json_string: str, file_suffix: Union[
-            str, None] = None) -> bool:
+    # -- Public static methods --
+
+    @staticmethod
+    def cache_map(parent_folder: str, map_info: MapInfo, json_string: str,
+                  file_suffix: Union[str, None] = None) -> bool:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
@@ -358,9 +317,9 @@ class CacheManagerSingleton:
             if not isinstance(arg, str):
                 raise ValueError("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
 
-        if not self._resolve_cache_dir():
+        if not CacheManagerSingleton._resolve_cache_dir():
             raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
-                                     .format(self.cache_path))
+                                     .format(CacheManagerSingleton.CACHE_PATH))
 
         file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
         map_json_to_use = str(map_info.map_json_blob_name)
@@ -372,13 +331,14 @@ class CacheManagerSingleton:
             else:
                 map_json_to_use = map_json_to_use[:-5] + file_suffix_str + ".json"
 
-        cached_file_path = os.path.join(self.cache_path, parent_folder, map_json_to_use)
+        cached_file_path = os.path.join(CacheManagerSingleton.CACHE_PATH, parent_folder, map_json_to_use)
         try:
             cache_to = os.path.join(parent_folder, map_json_to_use)
             cache_to_split = cache_to.split(os.path.sep)
             cache_to_split_idx = 0
             while cache_to_split_idx < len(cache_to_split) - 1:
-                dir_to_check = os.path.join(self.cache_path, os.path.sep.join(cache_to_split[:cache_to_split_idx + 1]))
+                dir_to_check = os.path.join(CacheManagerSingleton.CACHE_PATH,
+                                            os.path.sep.join(cache_to_split[:cache_to_split_idx + 1]))
                 if not os.path.exists(dir_to_check):
                     os.mkdir(dir_to_check)
                 cache_to_split_idx += 1
@@ -387,7 +347,7 @@ class CacheManagerSingleton:
                 map_json_file.write(json_string)
                 map_json_file.close()
 
-            self._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
+            CacheManagerSingleton._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
             print("Successfully cached {}".format(cached_file_path))
             return True
         except Exception as ex:
@@ -484,7 +444,100 @@ class CacheManagerSingleton:
         with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "w") as f:
             json.dump(ground_truth_mapping_dict, f, indent=2)
 
+    # -- Private static methods
+
+    @staticmethod
+    def _read_cache_directory(key: str) -> Union[str, None]:
+        """Reads the dictionary stored as a json file in <cache folder>/directory.json and returns the value
+        associated with the specified key. The key-value pairs in the directory.json map file names to map names.
+
+        Note that no error handling is implemented.
+
+        Args:
+            key (str): Key to query the dictionary
+
+        Returns:
+            Value associated with the key
+        """
+        with open(os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"), "r") as directory_file:
+            directory_json = json.loads(directory_file.read())
+            directory_file.close()
+            loaded = True
+        if loaded:
+            return directory_json.get(key)
+        else:
+            return None
+
+    @staticmethod
+    def _resolve_cache_dir() -> bool:
+        """Returns true if the cache folder exists, and attempts to create a new one if there is none.
+
+        A file named directory.json is also created in the cache folder.
+
+        This method catches all exceptions associated with creating new directories/files and displays a corresponding
+        diagnostic message.
+
+        Returns:
+            True if no exceptions were caught and False otherwise
+        """
+        if not os.path.exists(CacheManagerSingleton.CACHE_PATH):
+            try:
+                os.mkdir(CacheManagerSingleton.CACHE_PATH)
+            except Exception as ex:
+                print(f"Could not create a cache directory at {CacheManagerSingleton.CACHE_PATH} due to error: {ex}")
+                return False
+
+        directory_path = os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json")
+        if not os.path.exists(directory_path):
+            try:
+                with open(os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"), "w") as directory_file:
+                    directory_file.write(json.dumps({}))
+                    directory_file.close()
+                return True
+            except Exception as ex:
+                print("Could not create {} file due to error: {}".format(directory_path, ex))
+        else:
+            return True
+
+    @staticmethod
+    def _append_to_cache_directory(key: str, value: str) -> None:
+        """Appends the specified key-value pair to the dictionary stored as a json file in
+        <cache folder>/directory.json.
+
+        If the key already exists in the dictionary, its value is overwritten. Note that no error handling is
+        implemented.
+
+        Args:
+            key (str): Key to store value in
+            value (str): Value to store under key
+        """
+        directory_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json")
+        with open(directory_json_path, "r") as directory_file_read:
+            directory_json = json.loads(directory_file_read.read())
+            directory_file_read.close()
+        directory_json[key] = value
+        new_directory_json = json.dumps(directory_json, indent=2)
+        with open(directory_json_path, "w") as directory_file_write:
+            directory_file_write.write(new_directory_json)
+            directory_file_write.close()
+
     # -- Private instance methods --
+
+    def _set_credentials(self, credentials: firebase_admin.credentials.Certificate) -> None:
+        """Instantiates a firebase app with the credentials. If the app has already been initialized, then no action is
+        taken.
+
+        Notes:
+            Acquires the __synch_mutex (calling from another thread will block until this completes).
+
+        Args:
+            credentials: Firebase credentials
+        """
+        with self.__synch_mutex:
+            if self.__app is None:
+                self.__app = firebase_admin.initialize_app(credentials, self.__app_initialize_dict)
+                self.__bucket = storage.bucket(app=self.__app)
+                self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
 
     def _download_all_maps_recur(self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None):
         """Recursive function for downloading all maps from Firebase.
@@ -528,59 +581,8 @@ class CacheManagerSingleton:
             json_data = json_blob.download_as_bytes()
             json_dct = json.loads(json_data)
             map_info.map_dct = json_dct
-            self.cache_map(self.UNPROCESSED_MAPS_PARENT, map_info, json.dumps(json_dct, indent=2))
+            CacheManagerSingleton.cache_map(self.UNPROCESSED_MAPS_PARENT, map_info, json.dumps(json_dct, indent=2))
             return map_info
         else:
             print("Map '{}' was missing".format(map_info.map_name))
             return None
-
-    def _resolve_cache_dir(self) -> bool:
-        """Returns true if the cache folder exists, and attempts to create a new one if there is none.
-
-        A file named directory.json is also created in the cache folder.
-
-        This method catches all exceptions associated with creating new directories/files and displays a corresponding
-        diagnostic message.
-
-        Returns:
-            True if no exceptions were caught and False otherwise
-        """
-        if not os.path.exists(self.cache_path):
-            try:
-                os.mkdir(self.cache_path)
-            except Exception as ex:
-                print("Could not create a cache directory at {} due to error: {}".format(self.cache_path, ex))
-                return False
-
-        directory_path = os.path.join(self.cache_path, "directory.json")
-        if not os.path.exists(directory_path):
-            try:
-                with open(os.path.join(self.cache_path, "directory.json"), "w") as directory_file:
-                    directory_file.write(json.dumps({}))
-                    directory_file.close()
-                return True
-            except Exception as ex:
-                print("Could not create {} file due to error: {}".format(directory_path, ex))
-        else:
-            return True
-
-    def _append_to_cache_directory(self, key: str, value: str) -> None:
-        """Appends the specified key-value pair to the dictionary stored as a json file in
-        <cache folder>/directory.json.
-
-        If the key already exists in the dictionary, its value is overwritten. Note that no error handling is
-        implemented.
-
-        Args:
-            key (str): Key to store value in
-            value (str): Value to store under key
-        """
-        directory_json_path = os.path.join(self.cache_path, "directory.json")
-        with open(directory_json_path, "r") as directory_file_read:
-            directory_json = json.loads(directory_file_read.read())
-            directory_file_read.close()
-        directory_json[key] = value
-        new_directory_json = json.dumps(directory_json, indent=2)
-        with open(directory_json_path, "w") as directory_file_write:
-            directory_file_write.write(new_directory_json)
-            directory_file_write.close()

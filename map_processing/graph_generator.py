@@ -5,20 +5,20 @@ script for a CLI interface using this class.
 
 import json
 import random
+from copy import deepcopy
 from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
 
+import cv2.cv2 as cv2
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
-import cv2.cv2 as cv2
-from copy import deepcopy
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet
-from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
 from map_processing.graph_opt_plot_utils import draw_frames
+from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
 
 matplotlib.rcParams['figure.dpi'] = 500
 
@@ -277,9 +277,7 @@ class GraphGenerator:
               f"tags observed a total of {map_obj.num_observations} "
               f"{'times' if map_obj.num_observations > 1 else 'time'}.")
 
-        if self._cms is None:
-            self._cms = CacheManagerSingleton()
-        self._cms.cache_map(
+        CacheManagerSingleton.cache_map(
             parent_folder="generated",
             map_info=MapInfo(
                 map_name=map_name,
@@ -287,7 +285,8 @@ class GraphGenerator:
             ),
             json_string=map_str
         )
-        self._cms.cache_ground_truth_data(gt_obj, dataset_name=self._dataset_name, corresponding_map_names=[map_name])
+        CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._dataset_name,
+                                                      corresponding_map_names=[map_name])
 
     def visualize(self, plus_minus_lim=5) -> None:
         """Visualizes the generated graph by plotting the path, the poses on the path, the tags, and the observations of

@@ -671,7 +671,6 @@ class OG2oOptimizer(BaseModel):
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
 
 
-
 class OResultChi2Values(BaseModel):
     chi2_all_before: float
     chi2_gravity_before: float
@@ -684,7 +683,7 @@ class OResultChi2Values(BaseModel):
     @validator("*")
     def validate_float_is_geq_0(cls, v):
         if isinstance(v, float):
-            assert (v >= 0, "all floating point members must be positive")
+            assert(v >= 0, "all floating point members must be positive")
         return v
 
 
@@ -714,6 +713,7 @@ class OSGPairResult(BaseModel):
     @property
     def chi2_diff(self) -> float:
         return self.sg2_oresult.chi2s.chi2_all_after - self.sg1_oresult.chi2s.chi2_all_after
+
 
 class OSweepResults(BaseModel):
     gt_results_arr_shape: List[int]

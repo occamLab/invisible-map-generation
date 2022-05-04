@@ -228,7 +228,7 @@ if __name__ == "__main__":
         cms = CacheManagerSingleton(firebase_creds=None, max_listen_wait=0)
         matching_maps = cms.find_maps(args.d_p, search_only_unprocessed=True)
         if len(matching_maps) == 0:
-            print(f"No matches for {args.d_p} in recursive search of {cms.cache_path}")
+            print(f"No matches for {args.d_p} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
             exit(0)
 
         for map_info in matching_maps:

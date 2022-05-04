@@ -180,12 +180,9 @@ class Graph:
             adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])
         return adj_chi2, num_tags_visible
 
-    def optimize_graph(self, verbose: bool = False) -> OResultChi2Values:
+    def optimize_graph(self) -> OResultChi2Values:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
         optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
-
-        Args:
-            verbose: Boolean for whether to print diagnostic messages about chi2 sums.
 
         Returns:
             Chi2 sum of optimized graph as returned by the call to `self.sum_optimizer_edges_chi2(self.optimized_graph)`
@@ -205,8 +202,6 @@ class Graph:
             chi2_gravity_before=unoptimized_gravity_chi2,
             chi2_all_after=optimized_chi2,
             chi2_gravity_after=optimized_gravity_chi2)
-        if verbose:
-            print(chi2_result.json(indent=2))
         return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:
@@ -566,7 +561,8 @@ class Graph:
         for uid in self.edges:
             edge = self.edges[uid]
             if self.vertices[edge.startuid].mode != VertexType.ODOMETRY \
-                    or self.vertices[edge.enduid].mode != VertexType.ODOMETRY:
+                    or ((edge.enduid is not None) and (self.vertices[edge.enduid].mode != VertexType.ODOMETRY)) \
+                    or edge.enduid is None:
                 continue
             start_found = end_found = False
             start_found_idx = end_found_idx = 0

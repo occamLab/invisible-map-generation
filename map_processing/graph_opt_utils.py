@@ -216,7 +216,7 @@ def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = Tru
     return total_chi2
 
 
-def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray, verbose: bool = False) \
+def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \
         -> float:
     """Error metric for tag pose accuracy.
 
@@ -226,7 +226,6 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
     Args:
         optimized_tag_verts: A n-by-7 numpy array containing length-7 pose vectors.
         ground_truth_tags: A n-by-7 numpy array containing length-7 pose vectors.
-        verbose: A boolean representing whether to print the full comparisons for each tag.
 
     Returns:
         A float representing the average difference in tag positions (translation only) in meters.
@@ -242,8 +241,6 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
         sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))
-    if verbose:
-        print(f'Ground truth metric is {avg}')
     return avg
 
 

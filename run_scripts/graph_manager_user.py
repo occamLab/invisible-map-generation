@@ -280,11 +280,11 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    oresult = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), visualize=False,
-                                          optimization_config=sweep_args_tuple[1])
+    oresult = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), optimization_config=sweep_args_tuple[1],
+                                          visualize=False)
     gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
         optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
-        ground_truth_tags=sweep_args_tuple[2], verbose=False)
+        ground_truth_tags=sweep_args_tuple[2])
     print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
     return gt_result, sweep_args_tuple[3][0]
 
@@ -320,7 +320,7 @@ if __name__ == "__main__":
 
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
     if len(matching_maps) == 0:
-        print(f"No matches for {map_pattern} in recursive search of {cms.cache_path}")
+        print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)
 
     compute_inf_params = OComputeInfParams()
@@ -336,15 +336,11 @@ if __name__ == "__main__":
         else:
             graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso,
                                          scale_by_edge_amount=args.sbea)
+            compare: bool = False
             if args.c:
-                graph_manager.compare_weights(map_info, args.v)
-            else:
-                gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-                opt_result = graph_manager.holistic_optimize(
-                    map_info=map_info, visualize=args.v, upload=args.F, fixed_vertices=tuple(fixed_tags),
-                    obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params,
-                    gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None
-                    else None)
-
-                print(f"Ground truth metric for {map_info.map_name}: {opt_result.gt_metric_opt:.3f} (delta of "
-                      f"{opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)")
+                compare = True
+            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
+            opt_result = graph_manager.holistic_optimize(
+                map_info=map_info, visualize=args.v, upload=args.F, compare=compare, fixed_vertices=tuple(fixed_tags),
+                obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params, verbose=True,
+                gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None)
