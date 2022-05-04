@@ -78,40 +78,70 @@ def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> \
 
 
 class Weights(BaseModel):
-    gravity: np.ndarray = Field(default_factory=lambda: np.ones(3))
-    odometry: np.ndarray = Field(default_factory=lambda: np.ones(6))
-    tag: np.ndarray = Field(default_factory=lambda: np.ones(6))
-    tag_sba: np.ndarray = Field(default_factory=lambda: np.ones(2))
+    orig_gravity: np.ndarray = Field(default_factory=lambda: np.ones(3))
+    orig_odometry: np.ndarray = Field(default_factory=lambda: np.ones(6))
+    orig_tag: np.ndarray = Field(default_factory=lambda: np.ones(6))
+    orig_tag_sba: np.ndarray = Field(default_factory=lambda: np.ones(2))
     odom_tag_ratio: confloat(ge=0.00001) = 1.0
+    normalize: bool = False
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
-    @classmethod
-    @validator("odom_tag_ratio")
-    def odom_tag_ratio_pre_validator(cls, v):
-        if isinstance(v, np.ndarray):
-            return np.squeeze(v)[0]
-        return v
-
     # Vector validators
-    _check_gravity_is_correct_length_vector = validator("gravity", allow_reuse=True)(
+    _check_gravity_is_correct_length_vector = validator("orig_gravity", allow_reuse=True)(
         lambda v: _is_vector_of_right_length(v, 3))
-    _check_odometry_is_correct_length_vector = validator("odometry", allow_reuse=True)(
+    _check_odometry_is_correct_length_vector = validator("orig_odometry", allow_reuse=True)(
         lambda v: _is_vector_of_right_length(v, 6))
-    _check_tag_is_correct_length_vector = validator("tag", allow_reuse=True)(
+    _check_tag_is_correct_length_vector = validator("orig_tag", allow_reuse=True)(
         lambda v: _is_vector_of_right_length(v, 6))
-    _check_tag_sba_is_correct_length_vector = validator("tag_sba", allow_reuse=True)(
+    _check_tag_sba_is_correct_length_vector = validator("orig_tag_sba", allow_reuse=True)(
         lambda v: _is_vector_of_right_length(v, 2))
-    _deserialize_gravity_vector_if_needed = validator("gravity", allow_reuse=True, pre=True)(
+    _deserialize_gravity_vector_if_needed = validator("orig_gravity", allow_reuse=True, pre=True)(
         _validator_for_numpy_array_deserialization)
-    _deserialize_odometry_vector_if_needed = validator("odometry", allow_reuse=True, pre=True)(
+    _deserialize_odometry_vector_if_needed = validator("orig_odometry", allow_reuse=True, pre=True)(
         _validator_for_numpy_array_deserialization)
-    _deserialize_tag_vector_if_needed = validator("tag", allow_reuse=True, pre=True)(
+    _deserialize_tag_vector_if_needed = validator("orig_tag", allow_reuse=True, pre=True)(
         _validator_for_numpy_array_deserialization)
-    _deserialize_tag_sba_vector_if_needed = validator("tag_sba", allow_reuse=True, pre=True)(
+    _deserialize_tag_sba_vector_if_needed = validator("orig_tag_sba", allow_reuse=True, pre=True)(
         _validator_for_numpy_array_deserialization)
+
+    @property
+    def odometry(self) -> np.ndarray:
+        odom_mag = 1
+        if self.normalize:
+            odom_mag = np.linalg.norm(self.orig_odometry)
+            if odom_mag == 0:  # Avoid divide by zero error
+                odom_mag = 1
+        return self.orig_odometry * self.odom_tag_ratio / odom_mag
+
+    @property
+    def gravity(self) -> np.ndarray:
+        grav_mag = 1
+        if self.normalize:
+            grav_mag = np.linalg.norm(self.orig_gravity)
+            if grav_mag == 0:
+                grav_mag = 1
+        return self.orig_gravity / grav_mag
+
+    @property
+    def tag(self) -> np.ndarray:
+        tag_mag = 1
+        if self.normalize:
+            tag_mag = np.linalg.norm(self.orig_tag)
+            if tag_mag == 0:
+                tag_mag = 1
+        return self.orig_tag / tag_mag
+
+    @property
+    def tag_sba(self) -> np.ndarray:
+        tag_sba_mag = 1
+        if self.normalize:
+            tag_sba_mag = np.linalg.norm(self.orig_tag_sba)
+            if tag_sba_mag == 0:
+                tag_sba_mag= 1
+        return self.orig_tag_sba / (tag_sba_mag * ASSUMED_FOCAL_LENGTH)
 
     @property
     def tag_odom_ratio(self):
@@ -124,6 +154,9 @@ class Weights(BaseModel):
     @staticmethod
     def legacy_weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
         """Construct a normalized weight dictionary from a given array of values using the legacy approach.
+
+        TODO: refactor places where this is function is used to not use this approach of constructing weights from a
+         single numpy array
         """
         weights = Weights().dict()
         length = array.size if isinstance(array, np.ndarray) else len(array)
@@ -131,74 +164,44 @@ class Weights(BaseModel):
         has_ratio = length % 2 == 1
 
         if length == 1:  # ratio
-            weights['odom_tag_ratio'] = array[0]
+            weights['orig_odom_tag_ratio'] = array[0]
         elif length == 2:  # tag/odom pose:rot/tag-sba x:y, ratio
-            weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['tag'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['tag_sba'] = np.array([array[0], 1])
+            weights['orig_odometry'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['orig_tag'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['orig_tag_sba'] = np.array([array[0], 1])
             weights['odom_tag_ratio'] = array[1]
         elif length == 3:  # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
-            weights['odometry'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['tag'] = np.array([array[1]] * 3 + [1] * 3)
-            weights['tag_sba'] = np.array([array[1], 1])
+            weights['orig_odometry'] = np.array([array[0]] * 3 + [1] * 3)
+            weights['orig_tag'] = np.array([array[1]] * 3 + [1] * 3)
+            weights['orig_tag_sba'] = np.array([array[1], 1])
             weights['odom_tag_ratio'] = array[2]
         elif half_len == 2:  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
-            weights['odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
-            weights['tag'] = np.array([array[2]] * 3 + [array[3]] * 3)
-            weights['tag_sba'] = np.array(array[2:])
+            weights['orig_odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
+            weights['orig_tag'] = np.array([array[2]] * 3 + [array[3]] * 3)
+            weights['orig_tag_sba'] = np.array(array[2:])
             weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
         elif half_len == 3:  # odom x y z qx qy, tag-sba x, (ratio)
-            weights['odometry'] = np.array(array[:5])
-            weights['tag_sba'] = np.array([array[5]])
+            weights['orig_odometry'] = np.array(array[:5])
+            weights['orig_tag_sba'] = np.array([array[5]])
             weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
         elif length == 4:  # odom, tag-sba, (ratio)
-            weights['odometry'] = np.array(array[:6])
-            weights['tag_sba'] = np.array(array[6:])
+            weights['orig_odometry'] = np.array(array[:6])
+            weights['orig_tag_sba'] = np.array(array[6:])
             weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
         elif length == 5:  # odom x y z qx qy, tag x y z qx qy, (ratio)
-            weights['odometry'] = np.array(array[:5])
-            weights['tag'] = np.array(array[5:])
+            weights['orig_odometry'] = np.array(array[:5])
+            weights['orig_tag'] = np.array(array[5:])
             weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
         elif length == 6:  # odom, tag, (ratio)
-            weights['odometry'] = np.array(array[:6])
-            weights['tag'] = np.array(array[6:])
+            weights['orig_odometry'] = np.array(array[:6])
+            weights['orig_tag'] = np.array(array[6:])
             weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
         else:
             raise Exception(f'Weight length of {length} is not supported')
 
+        weights["normalize"] = True
         w = Weights(**weights)
-        w.scale_tag_and_odom_weights(normalize=True)
         return w.dict()
-
-    def scale_tag_and_odom_weights(self, normalize: bool = False):
-        """Apply the odom-to-tag ratio as a scaling factor to the odometry and tag vectors; divide the tag_sba vector
-         by the camera's focal length.
-
-        Args:
-            normalize: If true, add a multiplicative factor that is the reciprocal of each vector's magnitude.
-        """
-        if normalize:
-            odom_mag = np.linalg.norm(self.odometry)
-            if odom_mag == 0:  # Avoid divide by zero error
-                odom_mag = 1
-
-            sba_mag = np.linalg.norm(self.tag_sba)
-            if sba_mag == 0:
-                sba_mag = 1  # Avoid divide by zero error
-
-            tag_mag = np.linalg.norm(self.tag)
-            if tag_mag == 0:  # Avoid divide by zero error
-                tag_mag = 1
-        else:
-            odom_mag = 1
-            sba_mag = 1
-            tag_mag = 1
-
-        self.odometry *= self.odom_tag_ratio / odom_mag
-        # TODO: The below implements what was previously in place for SBA weighting. Should it be changed? Why is
-        #  such a low weighting so effective?
-        self.tag_sba *= 1 / (sba_mag * ASSUMED_FOCAL_LENGTH)
-        self.tag *= 1 / tag_mag
 
     def get_weights_from_end_vertex_mode(self, end_vertex_mode: Optional[VertexType]):
         """
@@ -614,7 +617,7 @@ class OConfig(BaseModel):
                 ),
                 scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                 weights=Weights(
-                    gravity=len_3_unit_vec * this_product[2],
+                    orig_gravity=len_3_unit_vec * this_product[2],
                     odom_tag_ratio=this_product[3],
                 ),
                 graph_plot_title=base_oconfig.graph_plot_title,
@@ -672,19 +675,10 @@ class OG2oOptimizer(BaseModel):
 
 
 class OResultChi2Values(BaseModel):
-    chi2_all_before: float
-    chi2_gravity_before: float
-    chi2_all_after: float
-    chi2_gravity_after: float
-
-    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
-    # some reason...)
-    # noinspection PyMethodParameters
-    @validator("*")
-    def validate_float_is_geq_0(cls, v):
-        if isinstance(v, float):
-            assert(v >= 0, "all floating point members must be positive")
-        return v
+    chi2_all_before: confloat(ge=0)
+    chi2_gravity_before: confloat(ge=0)
+    chi2_all_after: confloat(ge=0)
+    chi2_gravity_after: confloat(ge=0)
 
 
 class OResult(BaseModel):
@@ -721,6 +715,7 @@ class OSweepResults(BaseModel):
     gt_results_list: List[float]
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
+    map_name: str
 
     # Need this class with the `json_encoders` field to be present so that the base_oconfig's numpy arrays can be
     # serializable, even though in isolation base_oconfig is already serializable.
@@ -817,13 +812,15 @@ class OSweepResults(BaseModel):
             y_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[1]]]
 
             xx, yy = np.meshgrid(x_vec, y_vec)
-            plot_against_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
+            remove_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
                 set(idcs_plot_against))))
-            zz = self.gt_results_arr.take(indices=where_min[plot_against_dims[0]], axis=plot_against_dims[0])
-            zz = zz.take(indices=where_min[plot_against_dims[1] - 1], axis=plot_against_dims[1] - 1).T
+            zz = self.gt_results_arr
+            for ith_dim, remove_dim in enumerate(remove_dims):
+                zz = zz.take(indices=where_min[remove_dim], axis=remove_dim - ith_dim)
+
             ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
             ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
-            c = ax.pcolormesh(xx, yy, zz, shading="auto")
+            c = ax.pcolormesh(xx, yy, zz.T, shading="auto")
 
             # Annotate the heatmap with a red dot showing the coordinates that produce the minimum value
             ax.plot(x_vec[where_min[idcs_plot_against[0]]], y_vec[where_min[idcs_plot_against[1]]], "ro")

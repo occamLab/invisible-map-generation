@@ -461,7 +461,6 @@ class Graph:
         """
         self._weights = copy.deepcopy(weights)
         if not scale_by_edge_amount:
-            self._weights.scale_tag_and_odom_weights()
             return
 
         num_odom_edges = 0
@@ -474,7 +473,6 @@ class Graph:
 
         # Compute the ratio and normalize
         self._weights.odom_tag_ratio *= num_tag_edges / num_odom_edges
-        self._weights.scale_tag_and_odom_weights()
 
     def get_weights(self):
         return self._weights

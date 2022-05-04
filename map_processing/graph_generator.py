@@ -133,8 +133,8 @@ class GraphGenerator:
              a dictionary specifying path parameters (the contents of which is function-specific). If a `UGDataSet`
              instance, then it defines a path and set of tags according to the data in the data set.
             dataset_name: String used as the name for the dataset when caching the ground truth data
-            parameterized_path_args: Dictionary to pass as the second positional argument to the `path` if it is a
-             callable (if the `path` argument is not a callable, then this argument is ignored).
+            parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
+             it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
             t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
             n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
              argument is ignored.

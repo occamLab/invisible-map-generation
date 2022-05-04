@@ -65,21 +65,23 @@ class GraphManager:
         TRUST_GRAVITY = 7
 
     weights_dict: Dict[WeightSpecifier, Weights] = {
-        WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(odometry=np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),
-                                                          tag=np.exp(-np.array([18, 18, 0, 0, 0, 0])),
-                                                          tag_sba=np.exp(-np.array([18, 18])), gravity=np.ones(3)),
-        WeightSpecifier.TRUST_ODOM: Weights(odometry=np.exp(-np.array([-3., -3., -3., -3., -3., -3.])),
-                                            tag=np.exp(-np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6])),
-                                            tag_sba=np.exp(-np.array([10.6, 10.6])), gravity=np.ones(3)),
-        WeightSpecifier.TRUST_TAGS: Weights(odometry=np.exp(-np.array([10, 10, 10, 10, 10, 10])),
-                                            tag=np.exp(-np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6])),
-                                            tag_sba=np.exp(-np.array([-10.6, -10.6])), gravity=np.ones(3)),
+        WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(
+            orig_odometry=np.exp(-np.array([-6., -6., -6., -6., -6., -6.])),
+            orig_tag=np.exp(-np.array([18, 18, 0, 0, 0, 0])),
+            orig_tag_sba=np.exp(-np.array([18, 18])), orig_gravity=np.ones(3)),
+        WeightSpecifier.TRUST_ODOM: Weights(orig_odometry=np.exp(-np.array([-3., -3., -3., -3., -3., -3.])),
+                                            orig_tag=np.exp(-np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6])),
+                                            orig_tag_sba=np.exp(-np.array([10.6, 10.6])), orig_gravity=np.ones(3)),
+        WeightSpecifier.TRUST_TAGS: Weights(orig_odometry=np.exp(-np.array([10, 10, 10, 10, 10, 10])),
+                                            orig_tag=np.exp(-np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6])),
+                                            orig_tag_sba=np.exp(-np.array([-10.6, -10.6])), orig_gravity=np.ones(3)),
         # Only used for SBA - no non-SBA tag weights
-        WeightSpecifier.GENETIC_RESULTS: Weights(odometry=np.exp(-np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08])),
-                                                 tag_sba=np.exp(-np.array([9.91, 8.88])), gravity=np.ones(3)),
+        WeightSpecifier.GENETIC_RESULTS: Weights(
+            orig_odometry=np.exp(-np.array([9.25, -7.96, -1.27, 7.71, -1.7, -0.08])),
+            orig_tag_sba=np.exp(-np.array([9.91, 8.88])), orig_gravity=np.ones(3)),
         WeightSpecifier.BEST_SWEEP: Weights.legacy_from_array(np.exp(np.array([8.5, 10]))),
         WeightSpecifier.IDENTITY: Weights(),
-        WeightSpecifier.TRUST_GRAVITY: Weights(gravity=1 * np.ones(3))
+        WeightSpecifier.TRUST_GRAVITY: Weights(orig_gravity=1 * np.ones(3))
     }
     _comparison_graph1_subgraph_weights: List[WeightSpecifier] = [
         WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS,

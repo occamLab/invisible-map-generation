@@ -253,7 +253,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     sweep_results = OSweepResults(
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
-        sweep_config_keys_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
+        sweep_config_keys_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig, map_name=map_info.map_name)
     print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with parameters:\n" +
           json.dumps(sweep_results.args_producing_min, indent=2))
     fig = sweep_results.visualize_results_heatmap()
