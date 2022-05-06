@@ -4,7 +4,7 @@ script for a CLI interface using this class.
 """
 
 import json
-import random
+import datetime
 from copy import deepcopy
 from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
@@ -16,7 +16,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet
+from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GenerateParams
 from map_processing.graph_opt_plot_utils import draw_frames
 from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
 
@@ -27,24 +27,13 @@ class GraphGenerator:
     """Generates synthetic datasets simulating tag observations.
 
     Attributes:
-        _path: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve at,
-         and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
+        _path_from: Defines a parameterized path. Takes as input an N-length vector of parameters to evaluate the curve
+         at, and returns a 3xN array where the rows from top to bottom are the x, y, and z coordinates respectively.
         _path_type: The type of the `_path` attribute as specified by the `GraphGenerator.PathType` enumeration.
-        _t_max: Max parameter value to use when evaluating a parameterized path. If a recorded path is prescribed, then
-         this is ignored.
-        _delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
-         a recorded path, then this value is set to 0 arbitrarily.
         _odometry_t_vec: The vector of pose time stamps, either generated from _t_max and _n_poses in the case of a
          parameterized path or copied from the 'timestamp' fields of the data set otherwise.
-        _n_poses: Number of poses to sample a parameterized path at (referenced as N in the array dimensions described
-         for other attributes); if the path is a recorded path, then this is set to the number of poses in that data
-         set.
         _tag_poses: A Mx4x4 array of M tag poses defined in the global reference frame using homogenous transform
          matrices.
-        _dist_threshold: Maximum distance from which a tag can be considered observable.
-        _aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
-         of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
-         phone.
         _odometry_poses: Nx4x4 array of N homogenous transforms representing the poses sampled along the path.
         _observation_poses: A list of length N where N is the number of poses sampled along the path. Each element of
          the list is a dictionary mapping tag IDs to their corresponding transforms that give their position in the
@@ -54,26 +43,12 @@ class GraphGenerator:
          recorded in _observation_poses.
         _tag_corners_in_tag: 4x4 array where the first 3 elements of each row give the x, y, and z coordinates of the
          tag corners in the tag's reference frame. The 4th element is always a 1.
-        _odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
-         noise in that direction.
-        _obs_noise_var: Variance for the observation noise.
+
     """
 
     class PathType(Enum):
         RECORDED = 0
         PARAMETERIZED = 1
-
-    class OdomNoiseDims(Enum):
-        X = 0
-        Y = 1
-        Z = 2
-        RVert = 3
-
-        @staticmethod
-        def ordering() -> List:
-            ordered = [GraphGenerator.OdomNoiseDims.X, GraphGenerator.OdomNoiseDims.Y, GraphGenerator.OdomNoiseDims.Z,
-                       GraphGenerator.OdomNoiseDims.RVert]
-            return ordered
 
     CAMERA_INTRINSICS_VEC = [
         1458.0604248046875,  # fx (camera focal length in the x-axis)
@@ -119,11 +94,8 @@ class GraphGenerator:
     PATH_LINEAR_DELTA_T = 0.0001  # Time span over which a parameterized path can be assumed to be approximately linear
 
     def __init__(
-            self, path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet], dataset_name: str,
-            parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None, t_max: float = 0,
-            n_poses: int = 100, tag_poses: Optional[Dict[int, np.ndarray]] = None, dist_threshold: float = 3.7,
-            aoa_threshold: float = np.pi / 4, tag_size: float = 0.7,
-            odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None, obs_noise_var: float = 0.0):
+            self, path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet],
+            gen_params: GenerateParams, tag_poses_for_parameterized: Optional[Dict[int, np.ndarray]] = None):
         """Initializes a GraphGenerator instance and automatically invokes the `generate` method.
 
         Args:
@@ -132,54 +104,37 @@ class GraphGenerator:
              the rows from top to bottom are the x, y, and z coordinates respectively; the second positional argument is
              a dictionary specifying path parameters (the contents of which is function-specific). If a `UGDataSet`
              instance, then it defines a path and set of tags according to the data in the data set.
-            dataset_name: String used as the name for the dataset when caching the ground truth data
-            parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
-             it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
-            t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
-            n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
-             argument is ignored.
-            tag_poses: A dictionary mapping tag IDs to their poses in the global reference frame using homogenous
-             transform matrices; if a recorded path is provided, then this argument overrides the data set's tag poses
-             if it is not none.
-            dist_threshold: Maximum distance from which a tag can be considered observable.
-            aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
-             of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
-             phone.
-            tag_size: Height/width dimension of the (square) tags in meters.
-            obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
-             from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
-             simulated tag observation poses are re-derived from these noise pixel observations.
+            gen_params: Container for parameters of the graph generation.
+            tag_poses_for_parameterized: For simulating a data set that is not derived from a recorded data set: A
+             dictionary mapping tag IDs to their poses in the global reference frame using homogenous transform
+             matrices; if a recorded path is provided, then this argument overrides the data set's tag poses if it is
+             not none.
 
         Raises:
             ValueError - If `path_from` is a `UGDataSet` instance and `t_max` is negative.
             ValueError - If `path_from` is a `UGDataSet` instance and `n_poses` is <2
         """
-        self._path: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet] = path_from
-        self._path_type = GraphGenerator.PathType.PARAMETERIZED if isinstance(self._path, Callable) else \
+        self._path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet] = path_from
+        self._path_type = GraphGenerator.PathType.PARAMETERIZED if isinstance(self._path_from, Callable) else \
             GraphGenerator.PathType.RECORDED
-        self._dataset_name: str = dataset_name
-        self._dist_threshold = dist_threshold
-        self._aoa_threshold = aoa_threshold
 
-        self._parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = \
-            dict(parameterized_path_args) if parameterized_path_args is not None else None
+        self._gen_params = gen_params
+        self._tag_corners_in_tag = np.array(GraphGenerator.TAG_CORNERS_SIZE_2)
+        self._tag_corners_in_tag[:3, :] *= self._gen_params.tag_size / 2
+        self._tag_corners_for_pnp = GraphGenerator.TAG_CORNERS_SIZE_2_FOR_CV_PNP * self._gen_params.tag_size / 2
+        self._n_poses = self._gen_params.n_poses if isinstance(self._path_from, Callable) else \
+            len(self._path_from.pose_data)
 
-        if t_max < 0:
-            raise ValueError("'t_max' argument cannot be less than 0")
-        self._t_max = t_max
-
-        if n_poses < 2:
-            raise ValueError("'n_poses' argument cannot be less than 2")
-        self._n_poses = n_poses if isinstance(self._path, Callable) else len(self._path.pose_data)
+        self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
+        self._obs_from_poses: Optional[np.ndarray] = None
+        self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
 
         self._tag_poses: Dict[int, np.ndarray]
-        if tag_poses is not None:
-            self._tag_poses = tag_poses
+
+        if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
+            self._tag_poses = {} if tag_poses_for_parameterized is None else tag_poses_for_parameterized
         else:
-            if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
-                self._tag_poses = {}
-            else:
-                self._tag_poses = self._path.approx_tag_in_global_by_id
+            self._tag_poses = self._path_from.approx_tag_in_global_by_id
         self._tag_poses_orig = deepcopy(self._tag_poses)
 
         self._orig_tag_poses_arr = np.zeros((len(self._tag_poses), 4, 4))
@@ -188,30 +143,11 @@ class GraphGenerator:
 
         self._odometry_poses: Optional[np.ndarray] = None
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
-            self._odometry_t_vec = np.arange(0, self._t_max, self._t_max / self._n_poses)
-            self._delta_t = self._t_max / (self._n_poses - 1)
+            self._odometry_t_vec = np.arange(0, self._gen_params.t_max, self._gen_params.t_max / 
+                                             self._gen_params.n_poses)
         else:
-            self._odometry_t_vec = self._path.timestamps
+            self._odometry_t_vec = self._path_from.timestamps
             self._delta_t = 0
-
-        self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
-        self._obs_from_poses: Optional[np.ndarray] = None
-        self._observation_pixels: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
-
-        self._tag_corners_in_tag = GraphGenerator.TAG_CORNERS_SIZE_2
-        self._tag_corners_in_tag[:3, :] *= tag_size / 2
-        self._tag_corners_for_pnp = GraphGenerator.TAG_CORNERS_SIZE_2_FOR_CV_PNP * tag_size / 2
-
-        self._cms: Optional[CacheManagerSingleton] = None
-
-        self._odometry_noise_var: Dict[GraphGenerator.OdomNoiseDims, float] = \
-            odometry_noise if odometry_noise is not None else {
-                GraphGenerator.OdomNoiseDims.X: 0,
-                GraphGenerator.OdomNoiseDims.Y: 0,
-                GraphGenerator.OdomNoiseDims.Z: 0,
-                GraphGenerator.OdomNoiseDims.RVert: 0,
-            }
-        self._obs_noise_var: float = obs_noise_var if obs_noise_var is not None else 0
 
         self.generate()
 
@@ -259,10 +195,11 @@ class GraphGenerator:
 
         return UGDataSet(
             # Intentionally skipping location data
-            map_id="generated_" + str(random.randint(0, int(1e9))),  # arbitrary integer for unique id-ing
+            map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S"),
             # Intentionally skipping plane data
             pose_data=pose_data,
-            tag_data=tag_data
+            tag_data=tag_data,
+            generated_from=self._gen_params
         ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
     def export_to_map_processing_cache(self) -> None:
@@ -285,7 +222,7 @@ class GraphGenerator:
             ),
             json_string=map_str
         )
-        CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._dataset_name,
+        CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._gen_params.dataset_name,
                                                       corresponding_map_names=[map_name])
 
     def visualize(self, plus_minus_lim=5) -> None:
@@ -329,30 +266,29 @@ class GraphGenerator:
                     color="c")
         plt.show()
 
-    # noinspection Pydantic
     def generate(self) -> None:
         """Populate the _odometry_poses attribute with the poses sampled at the given parameter values, then the
         _observation_poses attribute is populated with the tag observations at each of the poses.
 
         Raises:
-            ValueError - If `_path` is not a Callable or a UGDataSet.
+            ValueError - If `_path_from` is not a Callable or a UGDataSet.
         """
-        if isinstance(self._path, Callable):
-            positions = self._path(self._odometry_t_vec, self._parameterized_path_args)  # 3xN array
+        if isinstance(self._path_from, Callable):
+            positions = self._path_from(self._odometry_t_vec, self._gen_params.parameterized_path_args)  # 3xN array
             # Nx3x3 array
-            frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path,
-                                                         self._parameterized_path_args)
+            frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path_from,
+                                                         self._gen_params.parameterized_path_args)
             true_poses = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
             true_poses[:, 3, 3] = 1
             true_poses[:, :3, 3] = positions.transpose()
             true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
             self._odometry_poses = self._apply_noise(true_poses)
             self._obs_from_poses = true_poses
-        elif isinstance(self._path, UGDataSet):
-            self._odometry_poses = self._apply_noise(self._path.pose_matrices)
-            self._obs_from_poses = self._path.pose_matrices
+        elif isinstance(self._path_from, UGDataSet):
+            self._odometry_poses = self._apply_noise(self._path_from.pose_matrices)
+            self._obs_from_poses = self._path_from.pose_matrices
         else:
-            raise ValueError(f"'_path' attribute is not of a known type")
+            raise ValueError(f"'_path_from' attribute is not of a known type")
 
         self._observation_poses = []
         self._observation_pixels = []
@@ -382,9 +318,9 @@ class GraphGenerator:
         # Noise model: assume that noise variance is proportional to the elapsed time. noisy_transforms contains the
         # pose-to-pose transforms except with noise applied.
         noisy_transforms = np.zeros((true_poses.shape[0] - 1, 4, 4))
-        odom_noise_x = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.X]
-        odom_noise_y = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Y]
-        odom_noise_z = self._odometry_noise_var[GraphGenerator.OdomNoiseDims.Z]
+        odom_noise_x = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
+        odom_noise_y = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
+        odom_noise_z = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
         for i in range(0, true_poses.shape[0] - 1):
             this_delta_t = self._odometry_t_vec[i + 1] - self._odometry_t_vec[i]
             noise_as_transform = np.zeros((4, 4))
@@ -394,8 +330,8 @@ class GraphGenerator:
                 np.random.normal(0, np.sqrt(this_delta_t * odom_noise_y)),
                 np.random.normal(0, np.sqrt(this_delta_t * odom_noise_z))
             ])
-            theta = np.random.normal(0, np.sqrt(this_delta_t *
-                                                self._odometry_noise_var[GraphGenerator.OdomNoiseDims.RVert]))
+            theta = np.random.normal(
+                0, np.sqrt(this_delta_t * self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVert]))
             # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
             noise_as_transform[:3, :3] = np.array([
                 [1, 0, 0],
@@ -432,7 +368,7 @@ class GraphGenerator:
 
         vector_phone_to_tag = tag_in_phone[:3, 3]
         dist_to_tag = np.linalg.norm(vector_phone_to_tag)
-        if dist_to_tag > self._dist_threshold:
+        if dist_to_tag > self._gen_params.dist_threshold:
             return np.array([]), np.array([])
 
         # Calculate aoa in the range [0, pi] rad. The angle of attack is found by computing the arccos of
@@ -445,7 +381,7 @@ class GraphGenerator:
         else:
             aoa = np.arccos(dot_for_aoa / dist_to_tag) if dot_for_aoa > 0 else \
                 (np.pi - np.arccos(dot_for_aoa / dist_to_tag))
-        if aoa > self._aoa_threshold:
+        if aoa > self._gen_params.aoa_threshold:
             return np.array([]), np.array([])
 
         tag_pixels = np.zeros((2, 4))
@@ -477,7 +413,7 @@ class GraphGenerator:
             pixel_vals_tmp[:, col_idx] = pixel_vals_tmp[:, col_idx] / pixel_vals_tmp[2, col_idx]
 
         # Add pixel noise and record in provided array
-        pixel_vals_tmp[:2, :] += np.random.randn(2, 4) * self._obs_noise_var
+        pixel_vals_tmp[:2, :] += np.random.randn(2, 4) * self._gen_params.obs_noise_var
         pixel_vals[:, :] = pixel_vals_tmp[:2, :]
 
         # Check if all pixel coordinates are within the sensor's bounds

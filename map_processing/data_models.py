@@ -13,11 +13,12 @@ Notes:
 
 import itertools
 from typing import List, Dict, Union, Optional, Tuple
+from enum import Enum
 
 import numpy as np
 from g2o import SE3Quat
 from matplotlib import pyplot as plt
-from pydantic import BaseModel, conlist, Field, confloat, validator
+from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
 from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
 from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector
@@ -140,7 +141,7 @@ class Weights(BaseModel):
         if self.normalize:
             tag_sba_mag = np.linalg.norm(self.orig_tag_sba)
             if tag_sba_mag == 0:
-                tag_sba_mag= 1
+                tag_sba_mag = 1
         return self.orig_tag_sba / (tag_sba_mag * ASSUMED_FOCAL_LENGTH)
 
     @property
@@ -302,14 +303,102 @@ class UGLocationDatum(BaseModel):
     pose_id: int
 
 
+class GenerateParams(BaseModel):
+    # noinspection PyUnresolvedReferences
+    """
+        Attributes:
+            dataset_name: String used as the name for the dataset when caching the ground truth data
+            parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
+             it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
+            t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
+            n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
+             argument is ignored.
+            dist_threshold: Maximum distance from which a tag can be considered observable.
+            aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
+             of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
+             phone.
+            tag_size: Height/width dimension of the (square) tags in meters.
+            obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
+             from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
+             simulated tag observation poses are re-derived from these noise pixel observations.
+            odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
+             noise in that direction.
+
+        Properties:
+            delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
+             a recorded path, then this value is set to 0 arbitrarily.
+        """
+
+    class OdomNoiseDims(str, Enum):
+        X = "x"
+        Y = "y"
+        Z = "z"
+        RVert = "rvert"
+
+        @staticmethod
+        def ordering() -> List:
+            return [GenerateParams.OdomNoiseDims.X, GenerateParams.OdomNoiseDims.Y, GenerateParams.OdomNoiseDims.Z,
+                    GenerateParams.OdomNoiseDims.RVert]
+
+    dataset_name: str
+    dist_threshold: confloat(ge=0) = 3.7
+    aoa_threshold: confloat(ge=0, le=np.pi) = np.pi / 4
+    tag_size: confloat(gt=0) = 0.7
+    odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None
+    obs_noise_var: confloat(ge=0) = 0.0
+
+    t_max: Optional[confloat(gt=0)] = None
+    n_poses: Optional[conint(ge=2)] = None
+    parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None
+
+    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
+    # some reason...)
+    # noinspection PyMethodParameters
+    @validator("parameterized_path_args")
+    def validate_interdependent_null_values(cls, v, values):
+        v_is_none = v is None
+        t_max_is_none = values["t_max"] is None
+        n_poses_is_none = values["n_poses"] is None
+
+        if not ((v_is_none and t_max_is_none and n_poses_is_none) or
+                (not v_is_none and not t_max_is_none and not n_poses_is_none)):
+            raise ValueError("tag_poses_for_parameterized, t_max, n_poses, and parameterized_path_args members must "
+                             "both be None or not None.")
+        return v
+
+    @property
+    def odometry_noise_var(self) -> Dict[OdomNoiseDims, float]:
+        return self.odometry_noise if self.odometry_noise is not None else {
+            GenerateParams.OdomNoiseDims.X: 0,
+            GenerateParams.OdomNoiseDims.Y: 0,
+            GenerateParams.OdomNoiseDims.Z: 0,
+            GenerateParams.OdomNoiseDims.RVert: 0,
+        }
+
+    @property
+    def delta_t(self):
+        """If t_max is not None, then a delta-time value is computed from t_max and the number of specified poses
+
+        """
+        if self.t_max is not None:
+            return self.t_max / (self.n_poses - 1)
+        else:
+            return 0
+
+
 class UGDataSet(BaseModel):
     """Represents an unprocessed graph dataset.
+
+    Notes:
+        All attributes except `generated_from` are necessary for deserializing data from the datasets generated by the
+         client app. The `generated_from` attribute is only used when the data set generated is synthetic.
     """
     location_data: List[UGLocationDatum] = []
     map_id: str
     plane_data: List = []
     pose_data: List[UGPoseDatum]
     tag_data: List[List[UGTagDatum]] = []
+    generated_from: Optional[GenerateParams] = None
 
     # TODO: Add documentation for the following properties
 
@@ -629,12 +718,23 @@ class OConfig(BaseModel):
 
 
 class OG2oOptimizer(BaseModel):
-    """
+    """Record of map state.
+
+    TODO: The names of (a subset of) these fields were specifically chosen according to previously chosen
+     variable names, but they should be refactored to better reflect what they actually represent.
+
     Class Attributes:
-        locations: (n, 9) array containing x, y, z, qx, qy, qz, qw locations of the phone as well as the vertex uid at
-         n points.
+        locations: (n, 9) array containing n odometry poses (x, y, z, qx, qy, qz, qw) well as the vertex
+         index and uid in the 7th and 8th positions, respectively.
+        tags: (m, 8) array containing m tag poses (x, y, z, qx, qy, qz, qw) as well as the tag id in the
+         7th position.
+        tagpoints: (m, 3) array containing the m tag corners' global xyz coordinates.
+        waypoints_arr: (w, 8) array containing w waypoint poses (x, y, z, qx, qy, qz, qw).
         locationsAdjChi2: Optionally associated with each odometry node is a chi2 calculated from the
          `map_odom_to_adj_chi2` method of the `Graph` class, which is stored in this vector.
+        waypoints_metadata: Length-w list of waypoint metadata.
+        visibleTagsCount: Optionally associated with each odometry node is an integer indicating the number
+         of tags visible at that given pose.
     """
 
     locations: np.ndarray = Field(default_factory=lambda: np.zeros((0, 9)))
@@ -675,6 +775,9 @@ class OG2oOptimizer(BaseModel):
 
 
 class OResultChi2Values(BaseModel):
+    """Container to store the chi2 values
+    """
+
     chi2_all_before: confloat(ge=0)
     chi2_gravity_before: confloat(ge=0)
     chi2_all_after: confloat(ge=0)
@@ -682,12 +785,22 @@ class OResultChi2Values(BaseModel):
 
 
 class OResult(BaseModel):
+    # noinspection PyUnresolvedReferences
+    """
+    Attributes:
+        oconfig: The optimization configuration
+        map_pre: The state of the map pre-optimization
+        map_opt: The state of the optimized map
+        chi2s: The chi2 metrics before and after optimization
+        gt_metric_pre: Ground truth metric of the pre-optimized map
+        gt_metric_opt: Ground truth metric of the optimized map
+    """
     oconfig: OConfig
     map_pre: OG2oOptimizer
     map_opt: OG2oOptimizer
     chi2s: OResultChi2Values
-    gt_metric_opt: Optional[float] = None
     gt_metric_pre: Optional[float] = None
+    gt_metric_opt: Optional[float] = None
 
     # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
     # serializable, even though the models this model is composed of are already serializable on their own.
@@ -710,12 +823,22 @@ class OSGPairResult(BaseModel):
 
 
 class OSweepResults(BaseModel):
+    """Used to store the results of a parameter sweep.
+
+    Notes:
+        For generated data sets, it may be important to know the parameters used to generate them. Though this can be
+        achieved by looking up the path of the unprocessed graph json from the map_name attribute, deserializing it, and
+        accessing the GenerateParams member, the `generated_params` attribute exists here to be a convenient place to
+        store a copy that data.
+    """
+
     gt_results_arr_shape: List[int]
     sweep_config: Dict[str, List[float]]
     gt_results_list: List[float]
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
     map_name: str
+    generated_params: Optional[GenerateParams] = None
 
     # Need this class with the `json_encoders` field to be present so that the base_oconfig's numpy arrays can be
     # serializable, even though in isolation base_oconfig is already serializable.
