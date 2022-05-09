@@ -3,10 +3,11 @@
 
 from enum import Enum
 from typing import Dict, List
+
 import numpy as np
 from g2o import SE3Quat
-from map_processing.transform_utils import transform_vector_to_matrix
 
+from map_processing.transform_utils import transform_vector_to_matrix
 
 ASSUMED_FOCAL_LENGTH = 1464
 
@@ -95,3 +96,4 @@ GROUND_TRUTH_MAPPING_STARTING_PT: Dict[str, List[str]] = {
 This dictionary is used as the default ground truth dataset-to-map-name mapping when one does not already exist
 in the ground_truth/ sub-directory of the cache.
 """
+TIME_FORMAT = "%y-%m-%d-%H-%M-%S"

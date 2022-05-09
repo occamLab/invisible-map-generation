@@ -11,10 +11,11 @@ sys.path.append(repository_root)
 import argparse
 import re
 from typing import Tuple, Dict, Union
+import datetime
 
 import numpy as np
 
-from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS
+from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS, TIME_FORMAT
 from map_processing.graph_generator import GraphGenerator
 from map_processing.data_models import UGDataSet, GenerateParams
 from run_scripts import graph_manager_user
@@ -211,6 +212,8 @@ if __name__ == "__main__":
         raise Exception(f"Could not parse the '--odom_noise' argument due to the following exception raised when "
                         f"parsing it: {ve}")
 
+    file_name_save_under = "generated_" + datetime.datetime.now().strftime(TIME_FORMAT),
+
     if args.p == "e":  # e specifies an elliptical path, so acquire the arguments
         path_arguments = extract_parameterized_path_args(args)
         # Ignore unbound local variable warning for odometry_noise (it is guaranteed to be defined)
@@ -225,10 +228,7 @@ if __name__ == "__main__":
 
         gg.export_to_map_processing_cache()
     elif args.p == "d":  # d specifies a data set-based path, so get a CacheManagerSingleton instance ready
-        # Fetch the service account key JSON file contents
-
-        cms = CacheManagerSingleton(firebase_creds=None, max_listen_wait=0)
-        matching_maps = cms.find_maps(args.d_p, search_only_unprocessed=True)
+        matching_maps = CacheManagerSingleton.find_maps(args.d_p, search_only_unprocessed=True)
         if len(matching_maps) == 0:
             print(f"No matches for {args.d_p} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
             exit(0)

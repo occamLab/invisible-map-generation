@@ -315,3 +315,4 @@ NEGATE_Y_AND_Z_AXES = np.array(
         [0, 0, 0, 1]
     ]
 )
+LEN_3_UNIT_VEC = np.ones(3) * np.sqrt(1 / 3)

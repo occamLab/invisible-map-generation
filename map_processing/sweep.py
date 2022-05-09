@@ -9,33 +9,31 @@ from typing import Dict, List, Tuple, Callable, Iterable, Any
 import numpy as np
 from matplotlib import pyplot as plt
 
+from map_processing import TIME_FORMAT
 from map_processing.cache_manager import MapInfo
 from map_processing.data_models import OConfig, OSweepResults, UGDataSet
 from map_processing.graph import Graph
 from map_processing.graph_manager import GraphManager
 
-
 REPOSITORY_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(REPOSITORY_ROOT)
 
-
-NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 NUM_SWEEP_PROCESSES: int = 12
 IS_SBA = True
 
 # TODO: revisit the use of np.exp(.) around the lin_ and ang_vel_var arrays
-SWEEP_CONFIG: Dict[OConfig.SweepParamsEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR: (np.linspace, [0.01, 3, 5]),
-    OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR: (np.linspace, [0.01, 3, 20]),
-    OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR: (np.linspace, [0.01, 3, 20]),
-    OConfig.SweepParamsEnum.GRAV_MAG_ARR: (np.linspace, [0.01, 3, 5]),
+SWEEP_CONFIG: Dict[OConfig.OconfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    OConfig.OconfigEnum.ODOM_TAG_RATIO: (np.linspace, [0.01, 3, 5]),
+    OConfig.OconfigEnum.LIN_VEL_VAR: (np.linspace, [0.01, 3, 20]),
+    OConfig.OconfigEnum.ANG_VEL_VAR: (np.linspace, [0.01, 3, 20]),
+    OConfig.OconfigEnum.GRAV_MAG: (np.linspace, [0.01, 3, 5]),
 }
 
-ORDERED_SWEEP_CONFIG_KEYS: List[OConfig.SweepParamsEnum] = [
-    OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR,
-    OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR,
-    OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR,
-    OConfig.SweepParamsEnum.GRAV_MAG_ARR,
+ORDERED_SWEEP_CONFIG_KEYS: List[OConfig.OconfigEnum] = [
+    OConfig.OconfigEnum.ODOM_TAG_RATIO,
+    OConfig.OconfigEnum.LIN_VEL_VAR,
+    OConfig.OconfigEnum.ANG_VEL_VAR,
+    OConfig.OconfigEnum.GRAV_MAG,
 ]
 
 
@@ -45,13 +43,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     graph_to_opt = Graph.as_graph(mi.map_dct)
     base_oconfig = OConfig(is_sba=IS_SBA, scale_by_edge_amount=scale_by_edge_amount)
 
-    sweep_arrs: Dict[OConfig.SweepParamsEnum, np.ndarray] = {}
+    sweep_arrs: Dict[OConfig.OconfigEnum, np.ndarray] = {}
     for key, value in SWEEP_CONFIG.items():
         sweep_arrs[key] = value[0](*value[1])
 
     print("Generating list of optimization sweeping parameters...")
-    products, oconfigs = OConfig.oconfig_sweep_generator(
-        sweep_arrs=sweep_arrs, sweep_config_key_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
+    products, oconfigs = OConfig.oconfig_generator(
+        param_multiplicands=sweep_arrs, param_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
 
     if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
         raise Exception("Non-unique set of optimization configurations generated")
@@ -105,7 +103,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     results_target_folder = os.path.join(REPOSITORY_ROOT, "saved_sweeps", mi.map_name)
     if not os.path.exists(results_target_folder):
         os.mkdir(results_target_folder)
-    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_{mi.map_name}_sweep"
+    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     results_cache_file_path_no_ext = os.path.join(results_target_folder, results_cache_file_name_no_ext)
 
     fig.savefig(results_cache_file_path_no_ext + ".png", dpi=500)

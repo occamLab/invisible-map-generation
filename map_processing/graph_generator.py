@@ -3,8 +3,8 @@ Contains the GraphGenerator class used for generating artificial datasets for op
 script for a CLI interface using this class.
 """
 
-import json
 import datetime
+import json
 from copy import deepcopy
 from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
@@ -195,35 +195,37 @@ class GraphGenerator:
 
         return UGDataSet(
             # Intentionally skipping location data
-            map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S"),
+            map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S") if self._gen_params.map_id \
+                is None else self._gen_params.map_id,
             # Intentionally skipping plane data
             pose_data=pose_data,
             tag_data=tag_data,
             generated_from=self._gen_params
         ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
-    def export_to_map_processing_cache(self) -> None:
+    def export_to_map_processing_cache(self, verbose=False) -> None:
         """Serializes the graph into a json file and saves it to the target destination as set by the TODO
         """
         map_obj, gt_obj = self.export()
         map_dict = map_obj.dict()
         map_str = json.dumps(map_dict, indent=2)
 
-        map_name = map_dict["map_id"]
-        print(f"Generated new data set '{map_name}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
-              f"tags observed a total of {map_obj.num_observations} "
-              f"{'times' if map_obj.num_observations > 1 else 'time'}.")
+        map_id = map_dict["map_id"]
+        if verbose:
+            print(f"Generated new data set '{map_id}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
+                  f"tags observed a total of {map_obj.num_observations} "
+                  f"{'times' if map_obj.num_observations > 1 else 'time'}.")
 
         CacheManagerSingleton.cache_map(
             parent_folder="generated",
             map_info=MapInfo(
-                map_name=map_name,
-                map_json_name=map_name,
+                map_name=map_id,
+                map_json_name=map_id,
             ),
             json_string=map_str
         )
         CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._gen_params.dataset_name,
-                                                      corresponding_map_names=[map_name])
+                                                      corresponding_map_names=[map_id])
 
     def visualize(self, plus_minus_lim=5) -> None:
         """Visualizes the generated graph by plotting the path, the poses on the path, the tags, and the observations of
@@ -331,7 +333,7 @@ class GraphGenerator:
                 np.random.normal(0, np.sqrt(this_delta_t * odom_noise_z))
             ])
             theta = np.random.normal(
-                0, np.sqrt(this_delta_t * self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVert]))
+                0, np.sqrt(this_delta_t * self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
             # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
             noise_as_transform[:3, :3] = np.array([
                 [1, 0, 0],

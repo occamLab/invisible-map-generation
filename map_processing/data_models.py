@@ -12,8 +12,8 @@ Notes:
 """
 
 import itertools
-from typing import Union, Optional, Dict, List, Tuple, Callable, Iterable, Any
 from enum import Enum
+from typing import Union, Optional, Dict, List, Tuple, Any
 
 import numpy as np
 from g2o import SE3Quat
@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
 from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
-from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector
+from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector, LEN_3_UNIT_VEC
 
 
 def _is_arr_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False):
@@ -307,7 +307,9 @@ class GenerateParams(BaseModel):
     # noinspection PyUnresolvedReferences
     """
         Attributes:
-            dataset_name: String used as the name for the dataset when caching the ground truth data
+            dataset_name: String provided as the data set name to the cache manager when the generated data set is
+             cached.
+            map_id: String provided as the map_id field in the UGDataSet object when exported.
             parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
              it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
             t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
@@ -333,20 +335,25 @@ class GenerateParams(BaseModel):
         X = "x"
         Y = "y"
         Z = "z"
-        RVert = "rvert"
+        RVERT = "rvert"
 
         @staticmethod
         def ordering() -> List:
             return [GenerateParams.OdomNoiseDims.X, GenerateParams.OdomNoiseDims.Y, GenerateParams.OdomNoiseDims.Z,
-                    GenerateParams.OdomNoiseDims.RVert]
+                    GenerateParams.OdomNoiseDims.RVERT]
 
     dataset_name: str
+    map_id: Optional[str] = None
     dist_threshold: confloat(ge=0) = 3.7
     aoa_threshold: confloat(ge=0, le=np.pi) = np.pi / 4
     tag_size: confloat(gt=0) = 0.7
-    odometry_noise: Optional[Dict[OdomNoiseDims, float]] = None
+    odometry_noise_var: Dict[OdomNoiseDims, float] = Field(default_factory=lambda: {
+            GenerateParams.OdomNoiseDims.X: 0,
+            GenerateParams.OdomNoiseDims.Y: 0,
+            GenerateParams.OdomNoiseDims.Z: 0,
+            GenerateParams.OdomNoiseDims.RVERT: 0,
+        })
     obs_noise_var: confloat(ge=0) = 0.0
-
     t_max: Optional[confloat(gt=0)] = None
     n_poses: Optional[conint(ge=2)] = None
     parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None
@@ -367,15 +374,6 @@ class GenerateParams(BaseModel):
         return v
 
     @property
-    def odometry_noise_var(self) -> Dict[OdomNoiseDims, float]:
-        return self.odometry_noise if self.odometry_noise is not None else {
-            GenerateParams.OdomNoiseDims.X: 0,
-            GenerateParams.OdomNoiseDims.Y: 0,
-            GenerateParams.OdomNoiseDims.Z: 0,
-            GenerateParams.OdomNoiseDims.RVert: 0,
-        }
-
-    @property
     def delta_t(self):
         """If t_max is not None, then a delta-time value is computed from t_max and the number of specified poses
 
@@ -384,6 +382,102 @@ class GenerateParams(BaseModel):
             return self.t_max / (self.n_poses - 1)
         else:
             return 0
+
+    class GenerateParamsEnum(str, Enum):
+        ODOMETRY_NOISE_VAR_X = "odometry_noise_var_x"
+        ODOMETRY_NOISE_VAR_Y = "odometry_noise_var_y"
+        ODOMETRY_NOISE_VAR_Z = "odometry_noise_var_z"
+        ODOMETRY_NOISE_VAR_RVERT = "odometry_noise_var_rvert"
+        OBS_NOISE_VAR = "obs_noise_var"
+
+    # noinspection DuplicatedCode
+    @classmethod
+    def generate_params_generator(
+            cls, param_multiplicands: Dict[GenerateParamsEnum, np.ndarray], param_order: List[GenerateParamsEnum],
+            base_generate_params: "GenerateParams") -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
+        """Generator yielding instances of this class according to the cartesian product of the provided parameters.
+
+        Args:
+            param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian product is
+             taken.
+            param_order: Ordering of the keys in param_multiplicands.
+            base_generate_params: Supplies every parameter not prescribed by param_multiplicands.
+
+        Returns:
+            A list of each tuple of parameters computed from the cartesian product (the length of which is equivalent to
+            the length of param_order) and a list of the generated objects.
+
+        Raises:
+            ValueError: If the keys of param_multiplicands elements of param_order are not the same.
+        """
+        included_params = set(param_order)
+        if set(param_multiplicands.keys()) != included_params:
+            raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
+
+        product_args = []
+        sweep_param_to_product_idx: Dict[GenerateParams.GenerateParamsEnum, int] = {}
+        for i, key in enumerate(param_order):
+            product_args.append(param_multiplicands[key])
+            sweep_param_to_product_idx[key] = i
+
+        products: List[Tuple[Any, ...]] = []
+        generate_params: List[GenerateParams] = []
+        for this_product in itertools.product(*product_args, repeat=1):
+            products.append(this_product)
+
+            # For each of the x, y, z, and rvert elements of the odometry noise, apply the value stored in the
+            # included_params dictionary if it is a key; if not, then default to the value stored in
+            # base_generate_params.
+            odometry_noise = {}
+            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X in included_params:
+                odometry_noise[GenerateParams.OdomNoiseDims.X] = this_product[
+                    sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]]
+            else:
+                odometry_noise[GenerateParams.OdomNoiseDims.X] = \
+                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
+
+            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y in included_params:
+                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                    this_product[sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y]]
+            else:
+                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
+
+            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z in included_params:
+                odometry_noise[GenerateParams.OdomNoiseDims.Z] = this_product[
+                    sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z]]
+            else:
+                odometry_noise[GenerateParams.OdomNoiseDims.Z] = \
+                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
+
+            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT in included_params:
+                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT]]
+            else:
+                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = \
+                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
+
+            generate_params.append(
+                GenerateParams(
+                    dataset_name=base_generate_params.dataset_name,
+                    dist_threshold=base_generate_params.dist_threshold,
+                    aoa_threshold=base_generate_params.aoa_threshold,
+                    tag_size=base_generate_params.tag_size,
+                    odometry_noise=odometry_noise,
+                    obs_noise_var=this_product[sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR]] if
+                    GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR in included_params else
+                    base_generate_params.obs_noise_var,
+                    t_max=base_generate_params.t_max,
+                    n_poses=base_generate_params.n_poses,
+                    parameterized_path_args=base_generate_params.parameterized_path_args
+                )
+            )
+        return products, generate_params
+
+    def __hash__(self):
+        # TODO: there are more efficient ways to do this, but this works for now
+        return self.json().__hash__()
 
 
 class UGDataSet(BaseModel):
@@ -682,48 +776,43 @@ class OConfig(BaseModel):
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
-    class SweepParamsEnum(str, Enum):
-        ODOM_TAG_RATIO_ARR = "odom_tag_ratio_arr"
-        LIN_VEL_VAR_ARR = "lin_vel_var_arr"
-        ANG_VEL_VAR_ARR = "ang_vel_var_arr"
-        GRAV_MAG_ARR = "grav_mag_arr"
+    class OconfigEnum(str, Enum):
+        ODOM_TAG_RATIO = "odom_tag_ratio"
+        LIN_VEL_VAR = "lin_vel_var"
+        ANG_VEL_VAR = "ang_vel_var"
+        GRAV_MAG = "grav_mag"
 
+    # noinspection DuplicatedCode
     @classmethod
-    def oconfig_sweep_generator(cls, sweep_arrs: Dict[SweepParamsEnum, np.ndarray],
-                                sweep_config_key_order: List[SweepParamsEnum], base_oconfig: "OConfig") -> \
-            Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
-        """Generator that yields OConfig objects according to the cartesian product of sweep parameters as prescribed by
-        the sweep_config argument.
+    def oconfig_generator(cls, param_multiplicands: Dict[OconfigEnum, np.ndarray], param_order: List[OconfigEnum],
+                          base_oconfig: "OConfig") -> Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
+        """Generator yielding instances of this class according to the cartesian product of the provided parameters.
 
         Args:
-            sweep_arrs: Dictionary mapping sweep parameters to arrays of values whose cartesian product is taken.
-            sweep_config_key_order: Ordering of the keys in sweep_config.
-            base_oconfig: Supplies every parameter not prescribed by sweep_config.
+            param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian product is
+             taken.
+            param_order: Ordering of the keys in param_multiplicands.
+            base_oconfig: Supplies every parameter not prescribed by param_multiplicands.
 
         Returns:
             A list of each tuple of parameters computed from the cartesian product (the length of which is equivalent to
-            the length of sweep_config_key_order) and a list of the generated OConfig objects.
+            the length of param_order) and a list of the generated objects.
 
         Raises:
-            ValueError: If the sets of sweep_arrs keys and sweep_config_key_order items are not equal.
+            ValueError: If the keys of param_multiplicands elements of param_order are not the same.
         """
-        swept_params = set(sweep_config_key_order)
-        if set(sweep_arrs.keys()) != swept_params:
-            raise ValueError("The sets of sweep_arrs keys and sweep_config_key_order items must be equal")
+        included_params = set(param_order)
+        if set(param_multiplicands.keys()) != included_params:
+            raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
 
         product_args = []
-        sweep_param_to_product_idx: Dict[OConfig.SweepParamsEnum, int] = {}
-        for i, key in enumerate(sweep_config_key_order):
-            product_args.append(sweep_arrs[key])
+        sweep_param_to_product_idx: Dict[OConfig.OconfigEnum, int] = {}
+        for i, key in enumerate(param_order):
+            product_args.append(param_multiplicands[key])
             sweep_param_to_product_idx[key] = i
-
-        # Set default value of [1, ] for any un-specified sweep parameter
-        for key in set(sweep_config_key_order).difference(sweep_arrs.keys()):
-            sweep_arrs[key] = np.array([1, ])
 
         products: List[Tuple[Any, ...]] = []
         oconfigs: List[OConfig] = []
-        len_3_unit_vec = np.ones(3) * np.sqrt(1 / 3)
         for this_product in itertools.product(*product_args, repeat=1):
             products.append(this_product)
             oconfigs.append(
@@ -732,20 +821,20 @@ class OConfig(BaseModel):
                     obs_chi2_filter=base_oconfig.obs_chi2_filter,
                     compute_inf_params=OComputeInfParams(
                         lin_vel_var=(this_product[sweep_param_to_product_idx[
-                            OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR]] if OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR in
-                                swept_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3),
+                            OConfig.OconfigEnum.LIN_VEL_VAR]] if OConfig.OconfigEnum.LIN_VEL_VAR in
+                            included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3),
                         ang_vel_var=this_product[sweep_param_to_product_idx[
-                            OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR]] if OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR in
-                                swept_params else base_oconfig.compute_inf_params.ang_vel_var,
+                            OConfig.OconfigEnum.ANG_VEL_VAR]] if OConfig.OconfigEnum.ANG_VEL_VAR in
+                        included_params else base_oconfig.compute_inf_params.ang_vel_var,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
                         orig_gravity=(this_product[sweep_param_to_product_idx[
-                            OConfig.SweepParamsEnum.GRAV_MAG_ARR]] if OConfig.SweepParamsEnum.GRAV_MAG_ARR in
-                                swept_params else base_oconfig.weights.orig_gravity) * len_3_unit_vec,
+                            OConfig.OconfigEnum.GRAV_MAG]] if OConfig.OconfigEnum.GRAV_MAG in
+                            included_params else base_oconfig.weights.orig_gravity) * LEN_3_UNIT_VEC,
                         odom_tag_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR]] if OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR
-                                in swept_params else base_oconfig.weights.odom_tag_ratio,
+                            OConfig.OconfigEnum.ODOM_TAG_RATIO]] if OConfig.OconfigEnum.ODOM_TAG_RATIO
+                        in included_params else base_oconfig.weights.odom_tag_ratio,
                     ),
                     graph_plot_title=base_oconfig.graph_plot_title,
                     chi2_plot_title=base_oconfig.chi2_plot_title,
@@ -754,6 +843,7 @@ class OConfig(BaseModel):
         return products, oconfigs
 
     def __hash__(self):
+        # TODO: there are more efficient ways to do this, but this works for now
         return self.json().__hash__()
 
 
@@ -809,7 +899,7 @@ class OG2oOptimizer(BaseModel):
     _deserialize_tagpoints_matrix_if_needed = validator("tagpoints", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 3]))
     _deserialize_waypoints_arr_matrix_if_needed = validator("waypoints_arr", allow_reuse=True, pre=True)(
-            lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
     _deserialize_visibleTagsCount_matrix_if_needed = validator("visibleTagsCount", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
 
@@ -995,3 +1085,13 @@ class OSweepResults(BaseModel):
         fig.suptitle(f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
                      f"\n(red dots show min. value coordinates)")
         return fig
+
+
+class OMultiSweepResult(BaseModel):
+    uid_to_generate_params: Dict[int, GenerateParams]
+    sweep_results_by_generate_params_uid: Dict[int, List[OSweepResults]]
+
+    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
+    # serializable, even though the models this model is composed of are already serializable on their own.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}

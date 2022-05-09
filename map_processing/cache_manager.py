@@ -119,76 +119,6 @@ class CacheManagerSingleton:
             CacheManagerSingleton.export_all_ground_truth_data()
         return cls.__instance
 
-    # -- Public instance methods --
-
-    def map_info_from_path(self, map_json_path: str) -> Union[MapInfo, None]:
-        """
-        Parses a json file into a MapInfo instance.
-
-        Args:
-            map_json_path: Path to the json file. If the path is not an absolute path, then the cache directory is
-             prepended. If this path does not end with ".json", then ".json" is appended.
-
-        Returns:
-            MapInfo instance if the specified file exists and is a json file (and None otherwise)
-        """
-        if not map_json_path.endswith(".json"):
-            map_json_path += ".json"
-        if not os.path.isabs(map_json_path):
-            map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
-
-        if not os.path.exists(map_json_path):
-            return None
-
-        map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
-        with open(map_json_path, "r") as json_string_file:
-            json_string = json_string_file.read()
-            json_string_file.close()
-
-        map_json_blob_name = os.path.sep.join(
-            map_json_path.split(os.path.sep)[len(CacheManagerSingleton.CACHE_PATH.split(os.path.sep)) + 1:]
-        )
-        map_dct = json.loads(json_string)
-        map_name = self._read_cache_directory(os.path.basename(map_json_blob_name))
-
-        last_folder = map_json_path.split('/')[-2]
-        if last_folder == self.UNPROCESSED_MAPS_PARENT:
-            return MapInfo(map_name, map_json_blob_name, map_dct)
-        return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
-
-    def find_maps(self, pattern: str, search_only_unprocessed: bool = True) -> Set[MapInfo]:
-        """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
-        directory.
-
-        Notes:
-            Prepends "**" to the pattern and calls `glob.glob` with recursive=True
-
-        Args:
-            pattern: Pattern to match map file paths in any subdirectory of the cache to.
-            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
-             class attribute.
-
-        Returns:
-            Set of matched files as absolute file paths
-        """
-        matching_filepaths = glob.glob(
-            os.path.join(
-                CacheManagerSingleton.CACHE_PATH, os.path.join(
-                    CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_only_unprocessed else "", "**", pattern
-                )
-            ),
-            recursive=True
-        )
-
-        matches: Set[MapInfo] = set()
-        for match in matching_filepaths:
-            if os.path.isdir(match):
-                continue
-            map_info = self.map_info_from_path(match)
-            if isinstance(map_info, MapInfo):
-                matches.add(map_info)
-        return matches
-
     def firebase_listen(self, callback: Union[None, Callable], max_wait_override: Union[int, None] = None):
         """Wait for and act upon events using the Firebase database reference listener.
 
@@ -283,7 +213,76 @@ class CacheManagerSingleton:
                         if map_info_callback is not None and map_info is not None:
                             map_info_callback(map_info)
 
-    # -- Public static methods --
+
+    @staticmethod
+    def map_info_from_path(map_json_path: str) -> Union[MapInfo, None]:
+        """
+        Parses a json file into a MapInfo instance.
+
+        Args:
+            map_json_path: Path to the json file. If the path is not an absolute path, then the cache directory is
+             prepended. If this path does not end with ".json", then ".json" is appended.
+
+        Returns:
+            MapInfo instance if the specified file exists and is a json file (and None otherwise)
+        """
+        if not map_json_path.endswith(".json"):
+            map_json_path += ".json"
+        if not os.path.isabs(map_json_path):
+            map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
+
+        if not os.path.exists(map_json_path):
+            return None
+
+        map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
+        with open(map_json_path, "r") as json_string_file:
+            json_string = json_string_file.read()
+            json_string_file.close()
+
+        map_json_blob_name = os.path.sep.join(
+            map_json_path.split(os.path.sep)[len(CacheManagerSingleton.CACHE_PATH.split(os.path.sep)) + 1:]
+        )
+        map_dct = json.loads(json_string)
+        map_name = CacheManagerSingleton._read_cache_directory(os.path.basename(map_json_blob_name))
+
+        last_folder = map_json_path.split('/')[-2]
+        if last_folder == CacheManagerSingleton.UNPROCESSED_MAPS_PARENT:
+            return MapInfo(map_name, map_json_blob_name, map_dct)
+        return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
+
+    @staticmethod
+    def find_maps(pattern: str, search_only_unprocessed: bool = True) -> Set[MapInfo]:
+        """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
+        directory.
+
+        Notes:
+            Prepends "**" to the pattern and calls `glob.glob` with recursive=True
+
+        Args:
+            pattern: Pattern to match map file paths in any subdirectory of the cache to.
+            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
+             class attribute.
+
+        Returns:
+            Set of matched files as absolute file paths
+        """
+        matching_filepaths = glob.glob(
+            os.path.join(
+                CacheManagerSingleton.CACHE_PATH, os.path.join(
+                    CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_only_unprocessed else "", "**", pattern
+                )
+            ),
+            recursive=True
+        )
+
+        matches: Set[MapInfo] = set()
+        for match in matching_filepaths:
+            if os.path.isdir(match):
+                continue
+            map_info = CacheManagerSingleton.map_info_from_path(match)
+            if isinstance(map_info, MapInfo):
+                matches.add(map_info)
+        return matches
 
     @staticmethod
     def cache_map(parent_folder: str, map_info: MapInfo, json_string: str,
