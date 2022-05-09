@@ -16,47 +16,18 @@ Notes:
   for further processing.
 """
 
-import os
-import sys
-
-repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-sys.path.append(repository_root)
-
-from typing import Tuple, Dict, List, Callable, Iterable, Any
 import argparse
-from firebase_admin import credentials
-import map_processing
-from map_processing import PrescalingOptEnum
-from map_processing.graph_manager import GraphManager
-from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.graph import Graph
+import os
+
 import numpy as np
-from copy import deepcopy
-import matplotlib.pyplot as plt
-import datetime
-import json
-import multiprocessing as mp
+from firebase_admin import credentials
 
-from map_processing.data_models import OComputeInfParams, OConfig, GTDataSet, OSweepResults
-
-NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
-
-NUM_SWEEP_PROCESSES: int = 12
-IS_SBA = True
-ORDERED_SWEEP_CONFIG_KEYS: List[str] = [
-    "odom_tag_ratio_arr",
-    "lin_vel_var_arr",
-    "ang_vel_var_arr",
-    "grav_mag_arr",
-]
-
-# TODO: revisit the use of np.exp(.) around the lin_ and ang_vel_var arrays
-SWEEP_CONFIG: Dict[str, Tuple[Callable, Iterable[Any]]] = {
-    "odom_tag_ratio_arr": (np.linspace,  [0.01, 1000, 2]),
-    "lin_vel_var_arr":    (np.linspace,  [0.01, 1000, 2]),
-    "ang_vel_var_arr":    (np.linspace,  [0.01, 1000, 2]),
-    "grav_mag_arr":       (np.linspace,  [0.01, 1000, 2]),
-}
+from map_processing import PrescalingOptEnum, VertexType
+from map_processing.cache_manager import CacheManagerSingleton
+from map_processing.data_models import OComputeInfParams, GTDataSet
+from map_processing.graph_manager import GraphManager
+from map_processing.sweep import sweep_params
+import map_processing
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -179,8 +150,8 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-s",
         action="store_true",
-        help="Sweep the odom-to-tag ratio, linear velocity variance, and angular velocity variance params. Mutually "
-             "exclusive with the -c flag."
+        help=f"Sweep the parameters as specified by the SWEEP_CONFIG dictionary in {map_processing.sweep.__name__}. "
+             f"Mutually exclusive with the -c flag."
     )
     p.add_argument(
         "--sbea",
@@ -189,104 +160,6 @@ def make_parser() -> argparse.ArgumentParser:
              "computing the ratio of the number of tag edges to odometry edges."
     )
     return p
-
-
-def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: bool) -> None:
-    """TODO: Documentation and add SBA weighting to the sweeping
-    """
-    graph_to_opt = Graph.as_graph(mi.map_dct)
-    base_oconfig = OConfig(is_sba=IS_SBA, scale_by_edge_amount=scale_by_edge_amount)
-
-    sweep_arrs: Dict[str, np.ndarray] = {}
-    for key, value in SWEEP_CONFIG.items():
-        sweep_arrs[key] = value[0](*value[1])
-
-    product_args = []
-    for key in ORDERED_SWEEP_CONFIG_KEYS:
-        product_args.append(sweep_arrs[key])
-
-    # Set default value of [1, ] for any un-specified sweep parameter
-    for key in set(ORDERED_SWEEP_CONFIG_KEYS).difference(sweep_arrs.keys()):
-        sweep_arrs[key] = np.array([1, ])
-
-    products = []
-    oconfigs = []
-    for product, oconfig in OConfig.oconfig_sweep_generator(base_oconfig=base_oconfig, product_args=product_args):
-        products.append(product)
-        oconfigs.append(oconfig)
-    if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
-        raise Exception("Non-unique set of optimization configurations generated")
-
-    # Create these mappings so that the ordering of the arguments to the cartesian product in
-    # `OConfig.oconfig_sweep_generator` is arbitrary with respect to the ordering of ORDERED_SWEEP_CONFIG_KEYS
-    sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]] = {}
-    for key in ORDERED_SWEEP_CONFIG_KEYS:
-        sweep_param_to_result_idx_mappings[key] = {sweep_arg: sweep_idx for sweep_idx, sweep_arg in
-                                                   enumerate(sweep_arrs[key])}
-
-    sweep_args = []
-    for i, oconfig in enumerate(oconfigs):
-        sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs))))
-
-    # Run the parameter sweep
-    if NUM_SWEEP_PROCESSES == 1:  # Skip multiprocessing if only one process is specified
-        results_tuples = [_sweep_target(sweep_arg) for sweep_arg in sweep_args]
-    else:
-        with mp.Pool(processes=NUM_SWEEP_PROCESSES) as pool:
-            results_tuples = pool.map(_sweep_target, sweep_args)
-    results: List[float] = []
-    results_indices: List[int] = []
-    for result_tuple in results_tuples:
-        results.append(result_tuple[0])
-        results_indices.append(result_tuple[1])
-
-    results_arr_dims = [len(sweep_arrs[key]) for key in ORDERED_SWEEP_CONFIG_KEYS]
-    results_arr = np.ones(results_arr_dims) * -1
-    for result, result_idx in results_tuples:
-        result_arr_idx = []
-        for key_idx, key in enumerate(ORDERED_SWEEP_CONFIG_KEYS):
-            result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
-        results_arr[tuple(result_arr_idx)] = result
-    if np.any(results_arr < 0):
-        raise Exception("Array of results was not completely populated")
-
-    sweep_results = OSweepResults(
-        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
-        sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
-        sweep_config_keys_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig, map_name=map_info.map_name)
-    print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with parameters:\n" +
-          json.dumps(sweep_results.args_producing_min, indent=2))
-    fig = sweep_results.visualize_results_heatmap()
-    plt.show()
-
-    results_target_folder = os.path.join(repository_root, "saved_sweeps", map_info.map_name)
-    if not os.path.exists(results_target_folder):
-        os.mkdir(results_target_folder)
-    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(NOW_FORMAT)}_{map_info.map_name}_sweep"
-    results_cache_file_path_no_ext = os.path.join(results_target_folder, results_cache_file_name_no_ext)
-
-    fig.savefig(results_cache_file_path_no_ext + ".png", dpi=500)
-    with open(results_cache_file_path_no_ext + ".json", "w") as f:
-        s = sweep_results.json(indent=2)
-        f.write(s)
-
-
-def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
-    """
-    Args:
-        sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
-         as the argument), (2) the optimization configuration, and (3) the ground truth tags dictionary.
-
-    Returns:
-        Return value from GraphManager.optimize_graph
-    """
-    oresult = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), optimization_config=sweep_args_tuple[1],
-                                          visualize=False)
-    gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
-        ground_truth_tags=sweep_args_tuple[2])
-    print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
-    return gt_result, sweep_args_tuple[3][0]
 
 
 if __name__ == "__main__":
@@ -312,11 +185,11 @@ if __name__ == "__main__":
     fixed_tags = set()
     for tag_type in args.fix:
         if tag_type == 0:
-            fixed_tags.add(map_processing.VertexType.ODOMETRY)
+            fixed_tags.add(VertexType.ODOMETRY)
         elif tag_type == 1:
-            fixed_tags.add(map_processing.VertexType.TAG)
+            fixed_tags.add(VertexType.TAG)
         elif tag_type == 2:
-            fixed_tags.add(map_processing.VertexType.WAYPOINT)
+            fixed_tags.add(VertexType.WAYPOINT)
 
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
     if len(matching_maps) == 0:
