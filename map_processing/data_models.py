@@ -12,7 +12,7 @@ Notes:
 """
 
 import itertools
-from typing import List, Dict, Union, Optional, Tuple
+from typing import Union, Optional, Dict, List, Tuple, Callable, Iterable, Any
 from enum import Enum
 
 import numpy as np
@@ -565,7 +565,7 @@ class GTDataSet(BaseModel):
     @property
     def as_dict_of_se3_arrays(self) -> Dict[int, np.ndarray]:
         return {tag_pose.tag_id: tag_pose.pose_as_se3_array for tag_pose in self.poses}
-    
+
     @classmethod
     def gt_data_set_from_dict_of_arrays(cls, dct: Dict[int, np.ndarray]) -> "GTDataSet":
         """Generate a GTDataSet from a dict of tag data.
@@ -682,35 +682,76 @@ class OConfig(BaseModel):
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
+    class SweepParamsEnum(str, Enum):
+        ODOM_TAG_RATIO_ARR = "odom_tag_ratio_arr"
+        LIN_VEL_VAR_ARR = "lin_vel_var_arr"
+        ANG_VEL_VAR_ARR = "ang_vel_var_arr"
+        GRAV_MAG_ARR = "grav_mag_arr"
+
     @classmethod
-    def oconfig_sweep_generator(cls, base_oconfig: "OConfig", product_args: List[np.ndarray]) -> \
-            Tuple[List[float], "OConfig"]:
-        """Generator that yields OConfig objects according to the cartesian product of the arguments in product_args.
+    def oconfig_sweep_generator(cls, sweep_arrs: Dict[SweepParamsEnum, np.ndarray],
+                                sweep_config_key_order: List[SweepParamsEnum], base_oconfig: "OConfig") -> \
+            Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
+        """Generator that yields OConfig objects according to the cartesian product of sweep parameters as prescribed by
+        the sweep_config argument.
 
         Args:
-            base_oconfig: Supplies parameters not swept by those covered in product_args.
-            product_args: List of length-4 arrays to be used as the arguments to the cartesian product function. By
-             index: 0th idx -> sets the values of the lin_vel_var vector in the compute_inf_params member. 1st idx ->
-             sets the value of ang_vel_var in the compute_inf_params member. 2nd idx -> sets the magnitude of
-             orig_gravity in the weights member. 3rd idx -> sets the value of odom_tag_ratio in the weights member.
+            sweep_arrs: Dictionary mapping sweep parameters to arrays of values whose cartesian product is taken.
+            sweep_config_key_order: Ordering of the keys in sweep_config.
+            base_oconfig: Supplies every parameter not prescribed by sweep_config.
+
+        Returns:
+            A list of each tuple of parameters computed from the cartesian product (the length of which is equivalent to
+            the length of sweep_config_key_order) and a list of the generated OConfig objects.
+
+        Raises:
+            ValueError: If the sets of sweep_arrs keys and sweep_config_key_order items are not equal.
         """
+        swept_params = set(sweep_config_key_order)
+        if set(sweep_arrs.keys()) != swept_params:
+            raise ValueError("The sets of sweep_arrs keys and sweep_config_key_order items must be equal")
+
+        product_args = []
+        sweep_param_to_product_idx: Dict[OConfig.SweepParamsEnum, int] = {}
+        for i, key in enumerate(sweep_config_key_order):
+            product_args.append(sweep_arrs[key])
+            sweep_param_to_product_idx[key] = i
+
+        # Set default value of [1, ] for any un-specified sweep parameter
+        for key in set(sweep_config_key_order).difference(sweep_arrs.keys()):
+            sweep_arrs[key] = np.array([1, ])
+
+        products: List[Tuple[Any, ...]] = []
+        oconfigs: List[OConfig] = []
         len_3_unit_vec = np.ones(3) * np.sqrt(1 / 3)
         for this_product in itertools.product(*product_args, repeat=1):
-            yield this_product, OConfig(
-                is_sba=base_oconfig.is_sba,
-                obs_chi2_filter=base_oconfig.obs_chi2_filter,
-                compute_inf_params=OComputeInfParams(
-                    lin_vel_var=this_product[0] * np.ones(3),
-                    ang_vel_var=this_product[1],
-                ),
-                scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
-                weights=Weights(
-                    orig_gravity=len_3_unit_vec * this_product[2],
-                    odom_tag_ratio=this_product[3],
-                ),
-                graph_plot_title=base_oconfig.graph_plot_title,
-                chi2_plot_title=base_oconfig.chi2_plot_title,
+            products.append(this_product)
+            oconfigs.append(
+                OConfig(
+                    is_sba=base_oconfig.is_sba,
+                    obs_chi2_filter=base_oconfig.obs_chi2_filter,
+                    compute_inf_params=OComputeInfParams(
+                        lin_vel_var=(this_product[sweep_param_to_product_idx[
+                            OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR]] if OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR in
+                                swept_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3),
+                        ang_vel_var=this_product[sweep_param_to_product_idx[
+                            OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR]] if OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR in
+                                swept_params else base_oconfig.compute_inf_params.ang_vel_var,
+                    ),
+                    scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
+                    weights=Weights(
+                        orig_gravity=(this_product[sweep_param_to_product_idx[
+                            OConfig.SweepParamsEnum.GRAV_MAG_ARR]] if OConfig.SweepParamsEnum.GRAV_MAG_ARR in
+                                swept_params else base_oconfig.weights.orig_gravity) * len_3_unit_vec,
+                        odom_tag_ratio=this_product[sweep_param_to_product_idx[
+                            OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR]] if OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR
+                                in swept_params else base_oconfig.weights.odom_tag_ratio,
+                    ),
+                    graph_plot_title=base_oconfig.graph_plot_title,
+                    chi2_plot_title=base_oconfig.chi2_plot_title,
+                )
             )
+        return products, oconfigs
 
     def __hash__(self):
         return self.json().__hash__()

@@ -23,20 +23,20 @@ NOW_FORMAT = "%y-%m-%d-%H-%M-%S"
 NUM_SWEEP_PROCESSES: int = 12
 IS_SBA = True
 
-ORDERED_SWEEP_CONFIG_KEYS: List[str] = [
-    "odom_tag_ratio_arr",
-    "lin_vel_var_arr",
-    "ang_vel_var_arr",
-    "grav_mag_arr",
-]
-
 # TODO: revisit the use of np.exp(.) around the lin_ and ang_vel_var arrays
-SWEEP_CONFIG: Dict[str, Tuple[Callable, Iterable[Any]]] = {
-    "odom_tag_ratio_arr": (np.linspace,  [0.01, 3, 5]),
-    "lin_vel_var_arr":    (np.linspace,  [0.01, 3, 20]),
-    "ang_vel_var_arr":    (np.linspace,  [0.01, 3, 20]),
-    "grav_mag_arr":       (np.linspace,  [0.01, 3, 5]),
+SWEEP_CONFIG: Dict[OConfig.SweepParamsEnum, Tuple[Callable, Iterable[Any]]] = {
+    OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR: (np.linspace, [0.01, 3, 5]),
+    OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR: (np.linspace, [0.01, 3, 20]),
+    OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR: (np.linspace, [0.01, 3, 20]),
+    OConfig.SweepParamsEnum.GRAV_MAG_ARR: (np.linspace, [0.01, 3, 5]),
 }
+
+ORDERED_SWEEP_CONFIG_KEYS: List[OConfig.SweepParamsEnum] = [
+    OConfig.SweepParamsEnum.ODOM_TAG_RATIO_ARR,
+    OConfig.SweepParamsEnum.LIN_VEL_VAR_ARR,
+    OConfig.SweepParamsEnum.ANG_VEL_VAR_ARR,
+    OConfig.SweepParamsEnum.GRAV_MAG_ARR,
+]
 
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: bool) -> None:
@@ -45,23 +45,14 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     graph_to_opt = Graph.as_graph(mi.map_dct)
     base_oconfig = OConfig(is_sba=IS_SBA, scale_by_edge_amount=scale_by_edge_amount)
 
-    sweep_arrs: Dict[str, np.ndarray] = {}
+    sweep_arrs: Dict[OConfig.SweepParamsEnum, np.ndarray] = {}
     for key, value in SWEEP_CONFIG.items():
         sweep_arrs[key] = value[0](*value[1])
 
-    product_args = []
-    for key in ORDERED_SWEEP_CONFIG_KEYS:
-        product_args.append(sweep_arrs[key])
+    print("Generating list of optimization sweeping parameters...")
+    products, oconfigs = OConfig.oconfig_sweep_generator(
+        sweep_arrs=sweep_arrs, sweep_config_key_order=ORDERED_SWEEP_CONFIG_KEYS, base_oconfig=base_oconfig)
 
-    # Set default value of [1, ] for any un-specified sweep parameter
-    for key in set(ORDERED_SWEEP_CONFIG_KEYS).difference(sweep_arrs.keys()):
-        sweep_arrs[key] = np.array([1, ])
-
-    products = []
-    oconfigs = []
-    for product, oconfig in OConfig.oconfig_sweep_generator(base_oconfig=base_oconfig, product_args=product_args):
-        products.append(product)
-        oconfigs.append(oconfig)
     if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
         raise Exception("Non-unique set of optimization configurations generated")
 
@@ -71,17 +62,20 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, scale_by_edge_amount: boo
     for key in ORDERED_SWEEP_CONFIG_KEYS:
         sweep_param_to_result_idx_mappings[key] = {sweep_arg: sweep_idx for sweep_idx, sweep_arg in
                                                    enumerate(sweep_arrs[key])}
-
     sweep_args = []
     for i, oconfig in enumerate(oconfigs):
         sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs))))
+    print(f"{len(sweep_args)} parameters generated for sweeping")
 
     # Run the parameter sweep
     if NUM_SWEEP_PROCESSES == 1:  # Skip multiprocessing if only one process is specified
+        print("Starting optimization parameter sweep with ...")
         results_tuples = [_sweep_target(sweep_arg) for sweep_arg in sweep_args]
     else:
+        print("Starting multi-processed optimization parameter sweep...")
         with mp.Pool(processes=NUM_SWEEP_PROCESSES) as pool:
             results_tuples = pool.map(_sweep_target, sweep_args)
+
     results: List[float] = []
     results_indices: List[int] = []
     for result_tuple in results_tuples:
