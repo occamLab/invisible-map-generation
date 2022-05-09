@@ -685,15 +685,14 @@ class OConfig(BaseModel):
     @classmethod
     def oconfig_sweep_generator(cls, base_oconfig: "OConfig", product_args: List[np.ndarray]) -> \
             Tuple[List[float], "OConfig"]:
-        """Generator that yields OConfig objects according to the cartesian product of the `*_sweep` arguments.
-
-        Notes:
-             What is meant by "`*_sweep` arguments" is all the arguments whose parameter names end with "_sweep".
+        """Generator that yields OConfig objects according to the cartesian product of the arguments in product_args.
 
         Args:
-            base_oconfig: Any optimization configuration parameters not covered by the `*_sweep` are inherited from this
-             model.
-            product_args: List of arrays to be used as the argument to the cartesian product function.
+            base_oconfig: Supplies parameters not swept by those covered in product_args.
+            product_args: List of length-4 arrays to be used as the arguments to the cartesian product function. By
+             index: 0th idx -> sets the values of the lin_vel_var vector in the compute_inf_params member. 1st idx ->
+             sets the value of ang_vel_var in the compute_inf_params member. 2nd idx -> sets the magnitude of
+             orig_gravity in the weights member. 3rd idx -> sets the value of odom_tag_ratio in the weights member.
         """
         len_3_unit_vec = np.ones(3) * np.sqrt(1 / 3)
         for this_product in itertools.product(*product_args, repeat=1):

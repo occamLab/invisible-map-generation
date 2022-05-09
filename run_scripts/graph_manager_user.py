@@ -41,12 +41,9 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-p",
         type=str,
-        help="Pattern to match to graph names; matching graph names in cache are optimized and plotted (e.g., "
-             "'-g *Living_Room*' will plot any cached map with 'Living_Room' in its name); if no pattern is specified, "
-             "then all cached maps are plotted and optimized (default pattern is '*'). The cache directory is searched "
-             "recursively, and '**/' is automatically prepended to the pattern. If the -u flag is not given, then "
-             "the root of the search is the unprocessed_maps/ sub-directory of the cache; if it is given, then the "
-             "root of the search is the cache folder itself."
+        help="Pattern to match to graph names; matching graph names in cache are optimized (e.g., '-g *Living_Room*' "
+             "will plot any cached map with 'Living_Room' in its name). The cache directory is searched recursively, "
+             "and '**/' is automatically prepended to the pattern."
     )
     p.add_argument(
         "-u",
