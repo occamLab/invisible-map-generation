@@ -405,8 +405,6 @@ class GraphManager:
             ground_truth_tags=ground_truth_tags)
         return opt_result
 
-    # -- Static Methods --
-
     @staticmethod
     def tag_pose_array_with_metadata_to_map(tag_array_with_metadata: np.ndarray) -> Dict[int, np.ndarray]:
         """

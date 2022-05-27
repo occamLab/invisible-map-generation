@@ -85,7 +85,6 @@ class Graph:
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[SparseOptimizer, None] = None
         self.optimized_graph: Union[SparseOptimizer, None] = None
-        self.update_edge_information()
 
     def generate_unoptimized_graph(self) -> None:
         """Generate the unoptimized g2o graph from the current vertex and edge assignments.
@@ -367,7 +366,7 @@ class Graph:
                       f'{self.vertices[self.edges[edge_id].enduid].meta_data["tag_id"]}')
                 self.remove_edge(edge_id)
 
-    def update_edge_information(self, compute_inf_params: Optional[OComputeInfParams] = None) -> None:
+    def update_edge_information(self, compute_inf_params: OComputeInfParams) -> None:
         """Invokes the compute_information method on each edge in the graph with the corresponding weights vector as
         the weights_vec argument.
 

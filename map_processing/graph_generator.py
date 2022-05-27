@@ -203,29 +203,28 @@ class GraphGenerator:
             generated_from=self._gen_params
         ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
-    def export_to_map_processing_cache(self, verbose=False) -> None:
+    def export_to_map_processing_cache(self, verbose=False) -> MapInfo:
         """Serializes the graph into a json file and saves it to the target destination as set by the TODO
         """
         map_obj, gt_obj = self.export()
-        map_dict = map_obj.dict()
-        map_str = json.dumps(map_dict, indent=2)
+        map_dct = map_obj.dict()
+        map_str = json.dumps(map_dct, indent=2)
 
-        map_id = map_dict["map_id"]
+        map_id = map_dct["map_id"]
         if verbose:
             print(f"Generated new data set '{map_id}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
                   f"tags observed a total of {map_obj.num_observations} "
                   f"{'times' if map_obj.num_observations > 1 else 'time'}.")
 
+        mi = MapInfo(map_name=map_id, map_json_name=map_id, map_dct=map_dct)
         CacheManagerSingleton.cache_map(
             parent_folder="generated",
-            map_info=MapInfo(
-                map_name=map_id,
-                map_json_name=map_id,
-            ),
+            map_info=mi,
             json_string=map_str
         )
         CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._gen_params.dataset_name,
                                                       corresponding_map_names=[map_id])
+        return mi
 
     def visualize(self, plus_minus_lim=5) -> None:
         """Visualizes the generated graph by plotting the path, the poses on the path, the tags, and the observations of

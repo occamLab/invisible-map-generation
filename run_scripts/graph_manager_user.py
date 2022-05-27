@@ -21,13 +21,29 @@ import os
 
 import numpy as np
 from firebase_admin import credentials
+from typing import Dict, Callable, Iterable, Any, Tuple, List
 
 from map_processing import PrescalingOptEnum, VertexType
 from map_processing.cache_manager import CacheManagerSingleton
-from map_processing.data_models import OComputeInfParams, GTDataSet
+from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_manager import GraphManager
 from map_processing.sweep import sweep_params
 import map_processing
+
+
+SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [0.01, 3, 5]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.linspace, [0.01, 3, 20]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.linspace, [0.01, 3, 20]),
+    OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [0.01, 3, 5]),
+}
+
+ORDERED_SWEEP_CONFIG_KEYS: List[OConfig.OConfigEnum] = [
+    OConfig.OConfigEnum.ODOM_TAG_RATIO,
+    OConfig.OConfigEnum.LIN_VEL_VAR,
+    OConfig.OConfigEnum.ANG_VEL_VAR,
+    OConfig.OConfigEnum.GRAV_MAG,
+]
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -155,6 +171,13 @@ def make_parser() -> argparse.ArgumentParser:
         help="(scale_by_edge_amount) Apply a multiplicative coefficient to the odom-to-tag ratio that is found by "
              "computing the ratio of the number of tag edges to odometry edges."
     )
+    p.add_argument(
+        "--np",
+        type=int,
+        required=False,
+        help="Number of processes to use when parameter sweeping.",
+        default=1
+    )
     return p
 
 
@@ -201,7 +224,9 @@ if __name__ == "__main__":
     for map_info in matching_maps:
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-            sweep_params(mi=map_info, ground_truth_data=gt_data, scale_by_edge_amount=args.sbea)
+            sweep_params(mi=map_info, ground_truth_data=gt_data, base_oconfig=OConfig(is_sba=args.pso == 0),
+                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=ORDERED_SWEEP_CONFIG_KEYS, verbose=True,
+                         generate_plot=args.v, show_plot=args.v, num_processes=args.np)
         else:
             graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso,
                                          scale_by_edge_amount=args.sbea)

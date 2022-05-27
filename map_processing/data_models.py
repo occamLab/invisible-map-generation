@@ -428,33 +428,33 @@ class GenerateParams(BaseModel):
             # For each of the x, y, z, and rvert elements of the odometry noise, apply the value stored in the
             # included_params dictionary if it is a key; if not, then default to the value stored in
             # base_generate_params.
-            odometry_noise = {}
+            odometry_noise_var = {}
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.X] = this_product[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.X] = this_product[
                     sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.X] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.X] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
                     this_product[sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.Z] = this_product[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = this_product[
                     sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.Z] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
                         GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
 
             generate_params.append(
@@ -463,7 +463,7 @@ class GenerateParams(BaseModel):
                     dist_threshold=base_generate_params.dist_threshold,
                     aoa_threshold=base_generate_params.aoa_threshold,
                     tag_size=base_generate_params.tag_size,
-                    odometry_noise=odometry_noise,
+                    odometry_noise_var=odometry_noise_var,
                     obs_noise_var=this_product[sweep_param_to_product_idx[
                         GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR]] if
                     GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR in included_params else
@@ -765,8 +765,8 @@ class OConfig(BaseModel):
 
     is_sba: bool
     obs_chi2_filter: float = -1
-    compute_inf_params: Optional[OComputeInfParams]
-    scale_by_edge_amount: bool = True
+    compute_inf_params: OComputeInfParams = OComputeInfParams()
+    scale_by_edge_amount: bool = False
     weights: Weights = Weights()
     graph_plot_title: str = ""
     chi2_plot_title: str = ""
@@ -776,7 +776,7 @@ class OConfig(BaseModel):
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
 
-    class OconfigEnum(str, Enum):
+    class OConfigEnum(str, Enum):
         ODOM_TAG_RATIO = "odom_tag_ratio"
         LIN_VEL_VAR = "lin_vel_var"
         ANG_VEL_VAR = "ang_vel_var"
@@ -784,7 +784,7 @@ class OConfig(BaseModel):
 
     # noinspection DuplicatedCode
     @classmethod
-    def oconfig_generator(cls, param_multiplicands: Dict[OconfigEnum, np.ndarray], param_order: List[OconfigEnum],
+    def oconfig_generator(cls, param_multiplicands: Dict[OConfigEnum, np.ndarray], param_order: List[OConfigEnum],
                           base_oconfig: "OConfig") -> Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
         """Generator yielding instances of this class according to the cartesian product of the provided parameters.
 
@@ -806,7 +806,7 @@ class OConfig(BaseModel):
             raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
 
         product_args = []
-        sweep_param_to_product_idx: Dict[OConfig.OconfigEnum, int] = {}
+        sweep_param_to_product_idx: Dict[OConfig.OConfigEnum, int] = {}
         for i, key in enumerate(param_order):
             product_args.append(param_multiplicands[key])
             sweep_param_to_product_idx[key] = i
@@ -821,19 +821,19 @@ class OConfig(BaseModel):
                     obs_chi2_filter=base_oconfig.obs_chi2_filter,
                     compute_inf_params=OComputeInfParams(
                         lin_vel_var=(this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.LIN_VEL_VAR]] if OConfig.OconfigEnum.LIN_VEL_VAR in
+                            OConfig.OConfigEnum.LIN_VEL_VAR]] if OConfig.OConfigEnum.LIN_VEL_VAR in
                             included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3) * np.sqrt(3),
                         ang_vel_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.ANG_VEL_VAR]] if OConfig.OconfigEnum.ANG_VEL_VAR in
+                            OConfig.OConfigEnum.ANG_VEL_VAR]] if OConfig.OConfigEnum.ANG_VEL_VAR in
                         included_params else base_oconfig.compute_inf_params.ang_vel_var,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
                         orig_gravity=(this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.GRAV_MAG]] if OConfig.OconfigEnum.GRAV_MAG in
+                            OConfig.OConfigEnum.GRAV_MAG]] if OConfig.OConfigEnum.GRAV_MAG in
                             included_params else base_oconfig.weights.orig_gravity) * LEN_3_UNIT_VEC,
                         odom_tag_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.ODOM_TAG_RATIO]] if OConfig.OconfigEnum.ODOM_TAG_RATIO
+                            OConfig.OConfigEnum.ODOM_TAG_RATIO]] if OConfig.OConfigEnum.ODOM_TAG_RATIO
                         in included_params else base_oconfig.weights.odom_tag_ratio,
                     ),
                     graph_plot_title=base_oconfig.graph_plot_title,
@@ -1047,23 +1047,20 @@ class OSweepResults(BaseModel):
         for idx_1 in range(num_vars):
             for idx_2 in range(idx_1 + 1, num_vars):
                 idcs_plot_against_list.append((idx_1, idx_2))
+        num_possible_slice_comb = len(idcs_plot_against_list)
 
         # Figure out dimensions of subplot grid
-        subplot_height = int(np.floor(np.sqrt(num_vars)))
-        subplot_width = subplot_height
-        if num_vars % subplot_width != 0:
-            subplot_width += 1
+        subplot_height = int(np.floor(np.sqrt(num_possible_slice_comb)))
+        subplot_width = int(np.ceil(num_possible_slice_comb / subplot_height))
 
         # In each subplot, make a heatmap from the 2D cross-section of the search space that intersects the minimum
         # value
         where_min = self.where_min
-        fig, axs = plt.subplots(subplot_height, subplot_width, figsize=(8, 8), constrained_layout=True)
-        for i, ax in enumerate(axs.flat):
+        fig, axs = plt.subplots(subplot_height, subplot_width, constrained_layout=True)
+        for i, ax in enumerate(axs.flat) if num_possible_slice_comb != 1 else [(0, axs), ]:
             idcs_plot_against = idcs_plot_against_list[i]
-
             x_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[0]]]
             y_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[1]]]
-
             xx, yy = np.meshgrid(x_vec, y_vec)
             remove_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
                 set(idcs_plot_against))))

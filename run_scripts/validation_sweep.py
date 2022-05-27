@@ -15,17 +15,22 @@ import numpy as np
 import datetime
 from typing import List, Tuple, Callable, Iterable, Any, Dict
 from enum import Enum
+import matplotlib.pyplot as plt
 
 from map_processing import TIME_FORMAT
 from map_processing.data_models import GenerateParams, UGDataSet, OConfig
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.graph_generator import GraphGenerator
+from map_processing.sweep import sweep_params
 
-HOLD_RVERT_AT = 0.0001
+NUM_PROCESSES = 10
+HOLD_RVERT_AT = 1e-4
 RATIO_XZ_TO_Y_LIN_VEL_VAR = 10
-
+NUM_DUPLICATE_GENERATE = 3
 PATH_FROM = "duncan-occam-room-10-1-21-2-38 267139330396791.json"
+
 BASE_GENERATE_PRAMS = GenerateParams(dataset_name=f"generated_from_{PATH_FROM.strip('.json')}")
+BASE_OCONFIG = OConfig(is_sba=True)
 
 
 class AltGenerateParamsEnum(str, Enum):
@@ -40,15 +45,28 @@ class AltGenerateParamsEnum(str, Enum):
     """
 
 
-GENERATE_CONFIG: Dict[AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]] = {
+class AltOConfigEnum(str, Enum):
+    LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
+    """
+    Defines the ratio between the magnitude of the linear velocity variance vector and the angular velocity variance.
+    """
+
+
+ALT_GENERATE_CONFIG: Dict[AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]] = {
     AltGenerateParamsEnum.OBS_NOISE_VAR: (np.linspace, [2, 2, 1]),
-    AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR: (np.linspace, [0.1, 10, 10])
+    AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [0.1, 10, 5])
 }
 
 
+ALT_OPT_CONFIG: Dict[AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [0.1, 100, 10])
+}
+
+
+# noinspection DuplicatedCode
 def alt_generate_params_generator(alt_param_multiplicands: Dict[AltGenerateParamsEnum, np.ndarray],
                                   base_generate_params: GenerateParams, hold_rvert_at: float,
-                                  ratio_xz_to_y_lin_vel_var: float) \
+                                  ratio_xz_to_y_lin_vel_var: float = 1) \
         -> Tuple[List[Tuple[Any, ...]], List[GenerateParams]]:
     """Acts as a wrapper around GenerateParams.multi_generate_params_generator that utilizes a parameter sweeping space
     defined by the parameters in the AltGenerateParamsEnum enumeration. Generates GenerateParams objects
@@ -65,6 +83,9 @@ def alt_generate_params_generator(alt_param_multiplicands: Dict[AltGenerateParam
 
     Returns:
         A list of the outputs from the cartesian product and the corresponding GenerateParams objects.
+
+    Raises:
+        NotImplementedError: If there is an unhandled value in the AltGenerateParamsEnum enumeration.
     """
     # Expand the alt_param_multiplicands argument into a form that can be used in the
     # GenerateParams.generate_params_generator method.
@@ -128,17 +149,28 @@ def alt_generate_params_generator(alt_param_multiplicands: Dict[AltGenerateParam
     return products_orig_space, generate_params_objects
 
 
-if __name__ == "__main__":
-    # Evaluate the functions and their arguments stored as the values in GENERATE_CONFIG and use that to generate
-    # the unique set of GenerateParams objects.
-    sweep_arrs_alt_space: Dict[AltGenerateParamsEnum, np.ndarray] = {}
-    for generate_key, generate_value in GENERATE_CONFIG.items():
-        sweep_arrs_alt_space[generate_key] = generate_value[0](*generate_value[1])
-    products, generate_params = alt_generate_params_generator(
-        alt_param_multiplicands=sweep_arrs_alt_space, base_generate_params=BASE_GENERATE_PRAMS,
+def main():
+    # Evaluate the functions and their arguments stored as keys and values, respectively
+    alt_param_multiplicands_for_generation: Dict[AltGenerateParamsEnum, np.ndarray] = {}
+    for generate_key, generate_value in ALT_GENERATE_CONFIG.items():
+        alt_param_multiplicands_for_generation[generate_key] = generate_value[0](*generate_value[1])
+    alt_param_multiplicands_for_opt: Dict[AltOConfigEnum, np.ndarray] = {}
+    for opt_key, opt_value in ALT_OPT_CONFIG.items():
+        alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
+
+    # Get the data necessary to batch generate data sets and configure the parameter sweep over each of them
+    _, to_generate_from = alt_generate_params_generator(
+        alt_param_multiplicands=alt_param_multiplicands_for_generation, base_generate_params=BASE_GENERATE_PRAMS,
         hold_rvert_at=HOLD_RVERT_AT, ratio_xz_to_y_lin_vel_var=RATIO_XZ_TO_Y_LIN_VEL_VAR)
-    num_to_generate = len(generate_params)
-    if len(set(generate_params)) == num_to_generate:
+    param_multiplicands_for_opt: Dict[OConfig.OConfigEnum, np.ndarray] = {}
+    for key, values in alt_param_multiplicands_for_opt.items():
+        if key == AltOConfigEnum.LIN_TO_ANG_VEL_VAR:
+            param_multiplicands_for_opt[OConfig.OConfigEnum.LIN_VEL_VAR] = HOLD_RVERT_AT * values
+            param_multiplicands_for_opt[OConfig.OConfigEnum.ANG_VEL_VAR] = np.array([HOLD_RVERT_AT])
+        else:
+            raise NotImplementedError("Encountered unhandled parameter: " + str(key))
+
+    if len(set(to_generate_from)) != len(to_generate_from):
         raise Exception(f"Non-unique set of {GenerateParams.__name__} objects created")
 
     # Acquire the data set from which the generated maps are parsed
@@ -150,16 +182,60 @@ if __name__ == "__main__":
         print(f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
               f"Will not batch-generate unless only one path is found.")
         exit(0)
-    map_info = matching_maps.pop()
-    data_set_parsed = UGDataSet(**map_info.map_dct)
 
-    # Batch-generate data sets
+    map_info = matching_maps.pop()
+    data_set_generate_from = UGDataSet(**map_info.map_dct)
+
+    num_to_generate = len(to_generate_from) * NUM_DUPLICATE_GENERATE
     max_num_prefix_digits = int(np.log10(num_to_generate))
     now_str = datetime.datetime.now().strftime(TIME_FORMAT)
-    for gen_param_idx, generate_param in enumerate(generate_params):
-        num_zeros_to_prefix = max_num_prefix_digits - int(np.log10(gen_param_idx + 1))
-        generate_param.map_id = f"batch_generated_{now_str}_{'0' * num_zeros_to_prefix}{gen_param_idx + 1}"
-        gg = GraphGenerator(path_from=data_set_parsed, gen_params=generate_param)
-        gg.export_to_map_processing_cache()
-        print(f"Generated {'0' * num_zeros_to_prefix}{gen_param_idx + 1}/{num_to_generate}: "
-              f"{generate_param.dataset_name}")
+    optimal_ratio_for_optimizing: List[float] = []
+    generate_ratio: List[float] = []
+    gen_param_idx = -1
+    for generate_param in to_generate_from:
+        for _ in range(NUM_DUPLICATE_GENERATE):
+            gen_param_idx += 1
+            generate_ratio.append(
+                np.linalg.norm(
+                    np.array([
+                        generate_param.odometry_noise_var[GenerateParams.OdomNoiseDims.X],
+                        generate_param.odometry_noise_var[GenerateParams.OdomNoiseDims.Y],
+                        generate_param.odometry_noise_var[GenerateParams.OdomNoiseDims.Z],
+                    ])
+                ) / generate_param.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
+            )
+
+            num_zeros_to_prefix = max_num_prefix_digits - int(np.log10(gen_param_idx + 1))  # For printing messages
+            generate_param.map_id = f"batch_generated_{now_str}_{'0' * num_zeros_to_prefix}{gen_param_idx + 1}"
+            gg = GraphGenerator(path_from=data_set_generate_from, gen_params=generate_param)
+            mi = gg.export_to_map_processing_cache()
+            gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
+
+            args_producing_min = sweep_params(
+                mi=mi,
+                ground_truth_data=gt_data_set,
+                base_oconfig=OConfig(is_sba=True),
+                sweep_config=param_multiplicands_for_opt,
+                ordered_sweep_config_keys=sorted(list(param_multiplicands_for_opt.keys())),
+                num_processes=NUM_PROCESSES,
+                verbose=True,
+            ).args_producing_min
+
+            optimal_ratio_for_optimizing.append(
+                args_producing_min[OConfig.OConfigEnum.LIN_VEL_VAR.value] /
+                args_producing_min[OConfig.OConfigEnum.ANG_VEL_VAR.value]
+            )
+            print(
+                f"Generated and swept optimizations for {'0' * num_zeros_to_prefix}{gen_param_idx + 1}/{num_to_generate}: "
+                f"{generate_param.dataset_name}")
+
+    fig, ax = plt.subplots(figsize=(5, 3), layout="constrained")
+    ax.scatter(generate_ratio, optimal_ratio_for_optimizing)
+    ax.set_xlabel("lin:ang Variance Ratio for Generation")
+    ax.set_ylabel("lin:ang Variance Ratio for Optimization")
+    plt.show()
+    # TODO: next step -> set color and size of points according to the range of gt values observed
+
+
+if __name__ == "__main__":
+    main()

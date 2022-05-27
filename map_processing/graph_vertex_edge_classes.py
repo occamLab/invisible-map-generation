@@ -68,8 +68,7 @@ class Edge:
         self.start_end: Tuple[Vertex, Vertex] = start_end
         self.information: np.ndarray = np.eye(2 if corner_ids is not None else (3 if start_end[1] is None else 6))
 
-    def compute_information(self, weights_vec: np.ndarray, compute_inf_params: Optional[OComputeInfParams] = None) -> \
-            None:
+    def compute_information(self, weights_vec: np.ndarray, compute_inf_params: OComputeInfParams) -> None:
         """Computes the information matrix for the edge.
 
         Notes:
@@ -94,9 +93,6 @@ class Edge:
         """
         if np.any(weights_vec < 0):
             raise ValueError("The input weight vector should not contain negative values.")
-
-        if compute_inf_params is None:
-            compute_inf_params = OComputeInfParams()
 
         if self.corner_ids is not None:  # sba corner edge
             self._compute_information_sba(weights_vec)
@@ -129,7 +125,7 @@ class Edge:
         self.information = np.diag(weights_vec)
         delta_t_sq = (self.start_end[1].meta_data["timestamp"] - self.start_end[0].meta_data["timestamp"]) ** 2
 
-        # TODO: Should the pose-to-pose transforms be used here in some way?
+        # TODO: Update documentation to explain why these computations are the way they are
         self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var ** 2 * delta_t_sq))
         self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
 
