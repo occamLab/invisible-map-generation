@@ -5,13 +5,17 @@ import os
 from pathlib import Path
 import numpy as np
 
-from map_processing.data_models import UGDataSet, Weights, OG2oOptimizer, OConfig, OComputeInfParams
+from map_processing.data_models import UGDataSet, Weights, OG2oOptimizer, OConfig, OComputeInfParams, OResult
 
 CURR_FILE_DIR = Path(os.path.abspath(__file__)).absolute().parent
 TEST_FILES_DIR = os.path.join(CURR_FILE_DIR, "test_files")
 
 test_ug_data_model_targets: List[str] = [
-    os.path.join(TEST_FILES_DIR, "target_1.json"),
+    os.path.join(TEST_FILES_DIR, "ugdataset_target.json"),
+]
+
+test_og2ooptimizer_model_targets: List[str] = [
+    os.path.join(TEST_FILES_DIR, "og2o_optimizer_target.json")
 ]
 
 
@@ -31,7 +35,8 @@ def test_weights_model():
     Weights.parse_raw(json_str)
 
 
-def test_og2o_optimizer():
+@pytest.mark.parametrize("targets", test_og2ooptimizer_model_targets)
+def test_og2o_optimizer(targets):
     o = OG2oOptimizer(
         locations=np.random.randn(3, 9),
         tags=np.random.randn(6, 8),
@@ -41,6 +46,13 @@ def test_og2o_optimizer():
     )
     json_str = o.json(indent=2)
     OG2oOptimizer.parse_raw(json_str)
+
+    if isinstance(targets, str):
+        targets = [targets, ]
+    for target in targets:
+        with open(target, "r") as f:
+            json_str = f.read()
+            assert OG2oOptimizer.parse_raw(json_str)
 
 
 def test_oconfig():

@@ -14,6 +14,7 @@ from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, V
 from . import graph_util_get_neighbors, VertexType
 from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet, \
     OG2oOptimizer
+from .graph import Graph
 from .transform_utils import transform_gt_to_have_common_reference
 
 

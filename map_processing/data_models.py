@@ -9,6 +9,9 @@ Notes:
     - "UG" --> un-processed graph data
     - "PG" --> processed graph data
     - "O"  --> optimization-related data (either results or configuration)
+
+    Explanation of '# noinspection PyMethodParameters': For some reason, decorating validators with a classmethod
+    decorator prevents successful use of the validator.
 """
 
 import itertools
@@ -20,8 +23,11 @@ from g2o import SE3Quat
 from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
-from map_processing import ASSUMED_FOCAL_LENGTH, VertexType
+from map_processing import VertexType, ASSUMED_TAG_SIZE
 from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector, LEN_3_UNIT_VEC
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
+ARRAY_SUMMARIZATION_THRESHOLD = int(1e9)  # Arbitrarily high integer
 
 
 def _is_arr_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False):
@@ -68,8 +74,7 @@ def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
     return v_sqz
 
 
-def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> \
-        np.ndarray:
+def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> np.ndarray:
     if isinstance(v, np.ndarray):
         return v
     elif isinstance(v, str):
@@ -88,7 +93,7 @@ class Weights(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
     # Vector validators
     _check_gravity_is_correct_length_vector = validator("orig_gravity", allow_reuse=True)(
@@ -142,7 +147,7 @@ class Weights(BaseModel):
             tag_sba_mag = np.linalg.norm(self.orig_tag_sba)
             if tag_sba_mag == 0:
                 tag_sba_mag = 1
-        return self.orig_tag_sba / (tag_sba_mag * ASSUMED_FOCAL_LENGTH)
+        return self.orig_tag_sba / tag_sba_mag
 
     @property
     def tag_odom_ratio(self):
@@ -305,31 +310,32 @@ class UGLocationDatum(BaseModel):
 
 class GenerateParams(BaseModel):
     # noinspection PyUnresolvedReferences
-    """
-        Attributes:
-            dataset_name: String provided as the data set name to the cache manager when the generated data set is
-             cached.
-            map_id: String provided as the map_id field in the UGDataSet object when exported.
-            parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
-             it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
-            t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
-            n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
-             argument is ignored.
-            dist_threshold: Maximum distance from which a tag can be considered observable.
-            aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
-             of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
-             phone.
-            tag_size: Height/width dimension of the (square) tags in meters.
-            obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
-             from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
-             simulated tag observation poses are re-derived from these noise pixel observations.
-            odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
-             noise in that direction.
+    """Configures data set generation.
 
-        Properties:
-            delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
-             a recorded path, then this value is set to 0 arbitrarily.
-        """
+    Attributes:
+        dataset_name: String provided as the data set name to the cache manager when the generated data set is
+         cached.
+        map_id: String provided as the map_id field in the UGDataSet object when exported.
+        parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
+         it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
+        t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
+        n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
+         argument is ignored.
+        dist_threshold: Maximum distance from which a tag can be considered observable.
+        aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
+         of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
+         phone.
+        tag_size: Height/width dimension of the (square) tags in meters.
+        obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
+         from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
+         simulated tag observation poses are re-derived from these noise pixel observations.
+        odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
+         noise in that direction.
+
+    Properties:
+        delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
+         a recorded path, then this value is set to 0 arbitrarily.
+    """
 
     class OdomNoiseDims(str, Enum):
         X = "x"
@@ -342,11 +348,30 @@ class GenerateParams(BaseModel):
             return [GenerateParams.OdomNoiseDims.X, GenerateParams.OdomNoiseDims.Y, GenerateParams.OdomNoiseDims.Z,
                     GenerateParams.OdomNoiseDims.RVERT]
 
+    class GenerateParamsEnum(str, Enum):
+        ODOMETRY_NOISE_VAR_X = "odometry_noise_var_x"
+        ODOMETRY_NOISE_VAR_Y = "odometry_noise_var_y"
+        ODOMETRY_NOISE_VAR_Z = "odometry_noise_var_z"
+        ODOMETRY_NOISE_VAR_RVERT = "odometry_noise_var_rvert"
+        OBS_NOISE_VAR = "obs_noise_var"
+
+    class AltGenerateParamsEnum(str, Enum):
+        OBS_NOISE_VAR = "obs_noise_var"
+        """
+        Sets the observation noise variance of the generated data set
+        """
+
+        LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
+        """
+        Defines the ratio between the magnitude of the linear velocity variance vector and the angular velocity 
+        variance.
+        """
+
     dataset_name: str
     map_id: Optional[str] = None
     dist_threshold: confloat(ge=0) = 3.7
     aoa_threshold: confloat(ge=0, le=np.pi) = np.pi / 4
-    tag_size: confloat(gt=0) = 0.7
+    tag_size: confloat(gt=0) = ASSUMED_TAG_SIZE
     odometry_noise_var: Dict[OdomNoiseDims, float] = Field(default_factory=lambda: {
             GenerateParams.OdomNoiseDims.X: 0,
             GenerateParams.OdomNoiseDims.Y: 0,
@@ -358,8 +383,6 @@ class GenerateParams(BaseModel):
     n_poses: Optional[conint(ge=2)] = None
     parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None
 
-    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
-    # some reason...)
     # noinspection PyMethodParameters
     @validator("parameterized_path_args")
     def validate_interdependent_null_values(cls, v, values):
@@ -376,19 +399,21 @@ class GenerateParams(BaseModel):
     @property
     def delta_t(self):
         """If t_max is not None, then a delta-time value is computed from t_max and the number of specified poses
-
         """
         if self.t_max is not None:
             return self.t_max / (self.n_poses - 1)
         else:
             return 0
 
-    class GenerateParamsEnum(str, Enum):
-        ODOMETRY_NOISE_VAR_X = "odometry_noise_var_x"
-        ODOMETRY_NOISE_VAR_Y = "odometry_noise_var_y"
-        ODOMETRY_NOISE_VAR_Z = "odometry_noise_var_z"
-        ODOMETRY_NOISE_VAR_RVERT = "odometry_noise_var_rvert"
-        OBS_NOISE_VAR = "obs_noise_var"
+    @property
+    def lin_to_ang_var(self) -> float:
+        return np.linalg.norm(
+            np.array([
+                self.odometry_noise_var[GenerateParams.OdomNoiseDims.X],
+                self.odometry_noise_var[GenerateParams.OdomNoiseDims.Y],
+                self.odometry_noise_var[GenerateParams.OdomNoiseDims.Z],
+            ])
+        ) / self.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
 
     # noinspection DuplicatedCode
     @classmethod
@@ -428,33 +453,33 @@ class GenerateParams(BaseModel):
             # For each of the x, y, z, and rvert elements of the odometry noise, apply the value stored in the
             # included_params dictionary if it is a key; if not, then default to the value stored in
             # base_generate_params.
-            odometry_noise = {}
+            odometry_noise_var = {}
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.X] = this_product[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.X] = this_product[
                     sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.X] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.X] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
                     this_product[sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.Y] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.Z] = this_product[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = this_product[
                     sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.Z] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
 
             if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT in included_params:
-                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
+                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
                         GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT]]
             else:
-                odometry_noise[GenerateParams.OdomNoiseDims.RVERT] = \
+                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = \
                     base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
 
             generate_params.append(
@@ -463,7 +488,7 @@ class GenerateParams(BaseModel):
                     dist_threshold=base_generate_params.dist_threshold,
                     aoa_threshold=base_generate_params.aoa_threshold,
                     tag_size=base_generate_params.tag_size,
-                    odometry_noise=odometry_noise,
+                    odometry_noise_var=odometry_noise_var,
                     obs_noise_var=this_product[sweep_param_to_product_idx[
                         GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR]] if
                     GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR in included_params else
@@ -474,6 +499,88 @@ class GenerateParams(BaseModel):
                 )
             )
         return products, generate_params
+
+    # noinspection DuplicatedCode
+    @classmethod
+    def alt_generate_params_generator(cls, alt_param_multiplicands: Dict[AltGenerateParamsEnum, np.ndarray],
+                                      base_generate_params: "GenerateParams", hold_rvert_at: float,
+                                      ratio_xz_to_y_lin_vel_var: float = 1) \
+            -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
+        """Acts as a wrapper around the generate_params_generator class method that utilizes a parameter sweeping space
+        defined by the parameters in the AltGenerateParamsEnum enumeration. Generates GenerateParams objects
+        according to the cartesian product of the contents of alt_param_multiplicands.
+
+        Args:
+            alt_param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian product is
+             taken.
+            base_generate_params: Supplies every parameter not prescribed by param_multiplicands.
+            hold_rvert_at: Because AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR is a ratio, the rotational part of the
+             odometry noise is held constant with this value.
+            ratio_xz_to_y_lin_vel_var: Before the X, Y, and Z elements of the unit-magnitude linear velocity variance
+             vector are scaled, this sets the X:Y and Z:Y ratios of the vector's elements.
+
+        Returns:
+            A list of the outputs from the cartesian product and the corresponding GenerateParams objects.
+
+        Raises:
+            NotImplementedError: If there is an unhandled value in the AltGenerateParamsEnum enumeration.
+        """
+        # Expand the alt_param_multiplicands argument into a form that can be used in the
+        # GenerateParams.generate_params_generator method.
+        param_multiplicands: Dict[GenerateParams.GenerateParamsEnum, np.ndarray] = {}
+        for key, values in alt_param_multiplicands.items():
+            if key == cls.AltGenerateParamsEnum.OBS_NOISE_VAR:
+                param_multiplicands[GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR] = values
+            elif key == cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR:
+                # Ignore the values provided in alt_param_multiplicands because we are not interested in the cartesian
+                # product between each of the X, Y, Z, and rvert elements of the linear and angular velocity variance.
+                # Instead, the values provided in alt_param_multiplicands are applied to the result of the cartesian
+                # product.
+                lin_vel_var_unit = np.ones(3) * np.array([ratio_xz_to_y_lin_vel_var, 1, ratio_xz_to_y_lin_vel_var])
+                lin_vel_var_unit /= np.linalg.norm(lin_vel_var_unit)
+                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X] = np.array(
+                    [hold_rvert_at * lin_vel_var_unit[0], ])
+                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y] = np.array(
+                    [hold_rvert_at * lin_vel_var_unit[1], ])
+                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z] = np.array(
+                    [hold_rvert_at * lin_vel_var_unit[2], ])
+                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT] = np.array(
+                    [hold_rvert_at, ])
+            else:
+                raise NotImplementedError("Encountered unhandled parameter: " + str(key))
+
+        param_order = sorted(list(param_multiplicands.keys()))
+        param_to_param_order_idx: Dict[GenerateParams.GenerateParamsEnum, int] = {}
+        for i, param in enumerate(param_order):
+            param_to_param_order_idx[param] = i
+        products_intermediate, generate_params_intermediate = GenerateParams.generate_params_generator(
+            param_multiplicands=param_multiplicands, param_order=param_order, base_generate_params=base_generate_params)
+
+        # Apply the linear and angular velocity variance values provided in alt_param_multiplicands.
+        products_orig_space: List[Tuple[Any, ...]] = []
+        generate_params_objects: List[GenerateParams] = []
+        for product_pre, generate_param_pre in zip(products_intermediate, generate_params_intermediate):
+            for value in alt_param_multiplicands[cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR]:
+                new_generate_param: GenerateParams = cls.copy(generate_param_pre)
+                new_generate_param.odometry_noise_var = {
+                    cls.OdomNoiseDims.X: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.X] * value,
+                    cls.OdomNoiseDims.Y: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.Y] * value,
+                    cls.OdomNoiseDims.Z: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.Z] * value,
+                    cls.OdomNoiseDims.RVERT: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.RVERT],
+                }
+                generate_params_objects.append(new_generate_param)
+
+                new_product = list(product_pre)
+                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
+                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
+                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
+                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
+                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                products_orig_space.append(tuple(new_product))
+        return products_orig_space, generate_params_objects
 
     def __hash__(self):
         # TODO: there are more efficient ways to do this, but this works for now
@@ -736,16 +843,28 @@ class PGDataSet(BaseModel):
 
 class OComputeInfParams(BaseModel):
     lin_vel_var: np.ndarray = Field(default_factory=lambda: np.ones(3))
-    ang_vel_var: confloat(ge=0.00001) = 1.0
+    ang_vel_var: confloat(gt=0) = 1.0
+    tag_sba_var: confloat(gt=0) = 1.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+
+    # noinspection PyMethodParameters
+    @validator("lin_vel_var")
+    def check_lin_vel_var_all_positive(cls, v):
+        if np.any(v <= 0):
+            raise ValueError("lin_vel_var must contain all positive values")
+        return v
 
     _check_lin_vel_var_is_correct_length_vector = validator("lin_vel_var", allow_reuse=True)(
         lambda v: _is_vector_of_right_length(v, 3))
     _deserialize_lin_vel_var_vector_if_needed = validator("lin_vel_var", allow_reuse=True, pre=True)(
         _validator_for_numpy_array_deserialization)
+
+    def __hash__(self):
+        # TODO: there are more efficient ways to do this, but this works for now
+        return self.json().__hash__()
 
 
 class OConfig(BaseModel):
@@ -765,8 +884,8 @@ class OConfig(BaseModel):
 
     is_sba: bool
     obs_chi2_filter: float = -1
-    compute_inf_params: Optional[OComputeInfParams]
-    scale_by_edge_amount: bool = True
+    compute_inf_params: OComputeInfParams = OComputeInfParams()
+    scale_by_edge_amount: bool = False
     weights: Weights = Weights()
     graph_plot_title: str = ""
     chi2_plot_title: str = ""
@@ -774,17 +893,28 @@ class OConfig(BaseModel):
     # Need this class with the `json_encoders` field to be present so that the sub-models' (`Weights` and
     # OComputeInfParams) numpy arrays can be serializable, even though in isolation they are already serializable.
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
-    class OconfigEnum(str, Enum):
+    class OConfigEnum(str, Enum):
         ODOM_TAG_RATIO = "odom_tag_ratio"
         LIN_VEL_VAR = "lin_vel_var"
         ANG_VEL_VAR = "ang_vel_var"
+        TAG_SBA_VAR = "tag_sba_var"
         GRAV_MAG = "grav_mag"
+
+    class AltOConfigEnum(str, Enum):
+        LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
+        """
+        Defines the ratio between the magnitude of the linear velocity variance vector and the angular velocity 
+        variance.
+        """
+
+        ODOM_TAG_RATIO = "odom_tag_ratio"
+        TAG_SBA_VAR = "tag_sba_var"
 
     # noinspection DuplicatedCode
     @classmethod
-    def oconfig_generator(cls, param_multiplicands: Dict[OconfigEnum, np.ndarray], param_order: List[OconfigEnum],
+    def oconfig_generator(cls, param_multiplicands: Dict[OConfigEnum, np.ndarray], param_order: List[OConfigEnum],
                           base_oconfig: "OConfig") -> Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
         """Generator yielding instances of this class according to the cartesian product of the provided parameters.
 
@@ -806,7 +936,7 @@ class OConfig(BaseModel):
             raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
 
         product_args = []
-        sweep_param_to_product_idx: Dict[OConfig.OconfigEnum, int] = {}
+        sweep_param_to_product_idx: Dict[OConfig.OConfigEnum, int] = {}
         for i, key in enumerate(param_order):
             product_args.append(param_multiplicands[key])
             sweep_param_to_product_idx[key] = i
@@ -821,19 +951,22 @@ class OConfig(BaseModel):
                     obs_chi2_filter=base_oconfig.obs_chi2_filter,
                     compute_inf_params=OComputeInfParams(
                         lin_vel_var=(this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.LIN_VEL_VAR]] if OConfig.OconfigEnum.LIN_VEL_VAR in
+                            OConfig.OConfigEnum.LIN_VEL_VAR]] if OConfig.OConfigEnum.LIN_VEL_VAR in
                             included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3) * np.sqrt(3),
                         ang_vel_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.ANG_VEL_VAR]] if OConfig.OconfigEnum.ANG_VEL_VAR in
+                            OConfig.OConfigEnum.ANG_VEL_VAR]] if OConfig.OConfigEnum.ANG_VEL_VAR in
                         included_params else base_oconfig.compute_inf_params.ang_vel_var,
+                        tag_sba_var=this_product[sweep_param_to_product_idx[
+                            OConfig.OConfigEnum.TAG_SBA_VAR]] if OConfig.OConfigEnum.TAG_SBA_VAR in
+                        included_params else base_oconfig.compute_inf_params.tag_sba_var,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
                         orig_gravity=(this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.GRAV_MAG]] if OConfig.OconfigEnum.GRAV_MAG in
+                            OConfig.OConfigEnum.GRAV_MAG]] if OConfig.OConfigEnum.GRAV_MAG in
                             included_params else base_oconfig.weights.orig_gravity) * LEN_3_UNIT_VEC,
                         odom_tag_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.OconfigEnum.ODOM_TAG_RATIO]] if OConfig.OconfigEnum.ODOM_TAG_RATIO
+                            OConfig.OConfigEnum.ODOM_TAG_RATIO]] if OConfig.OConfigEnum.ODOM_TAG_RATIO
                         in included_params else base_oconfig.weights.odom_tag_ratio,
                     ),
                     graph_plot_title=base_oconfig.graph_plot_title,
@@ -841,6 +974,22 @@ class OConfig(BaseModel):
                 )
             )
         return products, oconfigs
+
+    @classmethod
+    def alt_oconfig_generator_param_multiplicands(
+            cls, alt_param_multiplicands: Dict[AltOConfigEnum, np.ndarray]) -> Dict[OConfigEnum, np.ndarray]:
+        param_multiplicands_for_opt: Dict[OConfig.OConfigEnum, np.ndarray] = {}
+        for key, values in alt_param_multiplicands.items():
+            if key == cls.AltOConfigEnum.LIN_TO_ANG_VEL_VAR:
+                param_multiplicands_for_opt[cls.OConfigEnum.LIN_VEL_VAR] = values
+                param_multiplicands_for_opt[cls.OConfigEnum.ANG_VEL_VAR] = np.array([1, ])
+            elif key == cls.AltOConfigEnum.ODOM_TAG_RATIO:
+                param_multiplicands_for_opt[cls.OConfigEnum.ODOM_TAG_RATIO] = values
+            elif key == cls.AltOConfigEnum.TAG_SBA_VAR:
+                param_multiplicands_for_opt[cls.OConfigEnum.TAG_SBA_VAR] = values
+            else:
+                raise NotImplementedError("Encountered unhandled parameter: " + str(key))
+        return param_multiplicands_for_opt
 
     def __hash__(self):
         # TODO: there are more efficient ways to do this, but this works for now
@@ -877,7 +1026,8 @@ class OG2oOptimizer(BaseModel):
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr.flatten(order="C"))}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr.flatten(order="C"),
+                                                                 threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
     _check_locations_is_correct_shape_matrix = validator("locations", allow_reuse=True)(
         lambda v: _is_arr_of_right_shape(v, (-1, 9)))
@@ -900,6 +1050,8 @@ class OG2oOptimizer(BaseModel):
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 3]))
     _deserialize_waypoints_arr_matrix_if_needed = validator("waypoints_arr", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
+    _deserialize_locations_adj_chi2_matrix_if_needed = validator("locationsAdjChi2", allow_reuse=True, pre=True)(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
     _deserialize_visibleTagsCount_matrix_if_needed = validator("visibleTagsCount", allow_reuse=True, pre=True)(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
 
@@ -907,11 +1059,28 @@ class OG2oOptimizer(BaseModel):
 class OResultChi2Values(BaseModel):
     """Container to store the chi2 values
     """
+    all_before: confloat(ge=0)
+    se3_not_gravity_before: confloat(ge=0)
+    psi2uv_before: confloat(ge=0)
+    gravity_before: confloat(ge=0)
+    all_after: confloat(ge=0)
+    se3_not_gravity_after: confloat(ge=0)
+    psi2uv_after: confloat(ge=0)
+    gravity_after: confloat(ge=0)
 
-    chi2_all_before: confloat(ge=0)
-    chi2_gravity_before: confloat(ge=0)
-    chi2_all_after: confloat(ge=0)
-    chi2_gravity_after: confloat(ge=0)
+    def display_list(self) -> str:
+        lines_before: List[str] = []
+        lines_after: List[str] = []
+        longest_name_len = max([len(key) for key in self.dict().keys()])
+        for item in self.dict().items():
+            extra_space = longest_name_len - len(item[0])
+            line_txt = f"> {' ' * extra_space}{item[0]}: {item[1]:0.2g}"
+            if item[0].endswith("before"):
+                lines_before.append(line_txt)
+            else:
+                lines_after.append(line_txt)
+        longest_line = max([len(line) for line in lines_before + lines_after])
+        return "\n".join(lines_before) + "\n" + "-" * longest_line + "\n" + "\n".join(lines_after)
 
 
 class OResult(BaseModel):
@@ -935,7 +1104,7 @@ class OResult(BaseModel):
     # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
     # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
 
 class OSGPairResult(BaseModel):
@@ -945,11 +1114,15 @@ class OSGPairResult(BaseModel):
     # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
     # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
     @property
     def chi2_diff(self) -> float:
-        return self.sg2_oresult.chi2s.chi2_all_after - self.sg1_oresult.chi2s.chi2_all_after
+        return self.sg2_oresult.chi2s.all_after - self.sg1_oresult.chi2s.all_after
+
+    @property
+    def chi2_ratio_change(self) -> float:
+        return self.chi2_diff / self.sg1_oresult.chi2s.all_after
 
 
 class OSweepResults(BaseModel):
@@ -964,6 +1137,9 @@ class OSweepResults(BaseModel):
 
     gt_results_arr_shape: List[int]
     sweep_config: Dict[str, List[float]]
+    """
+    The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
+    """
     gt_results_list: List[float]
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
@@ -973,10 +1149,19 @@ class OSweepResults(BaseModel):
     # Need this class with the `json_encoders` field to be present so that the base_oconfig's numpy arrays can be
     # serializable, even though in isolation base_oconfig is already serializable.
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
-    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
-    # some reason...)
+    # noinspection PyMethodParameters
+    @validator("sweep_config")
+    def validate_valid_sweep_config_keys(cls, v):
+        for key in v.keys():
+            try:
+                OConfig.OConfigEnum(key)
+            except ValueError:
+                raise ValueError(f"Invalid key in sweep_config dictionary (it is not a member of the "
+                                 f"{OConfig.OConfigEnum.__name__} enumeration): {key}")
+        return v
+
     # noinspection PyMethodParameters
     @validator("sweep_config_keys_order")
     def sweep_config_keys_must_be_same_as_sweep_config_keys_order(cls, v, values):
@@ -989,8 +1174,6 @@ class OSweepResults(BaseModel):
                              "items in the sweep_config_keys_order list")
         return v
 
-    # Ignore warning about first argument not being self (decorating as a @classmethod appears to prevent validation for
-    # some reason...)
     # noinspection PyMethodParameters
     @validator("gt_results_list")
     def validate_length_of_gt_results_list(cls, v, values):
@@ -1018,6 +1201,10 @@ class OSweepResults(BaseModel):
         return np.min(self.gt_results_list)
 
     @property
+    def max_gt_result(self) -> float:
+        return np.max(self.gt_results_list)
+
+    @property
     def where_min(self) -> Tuple[int, ...]:
         # noinspection PyTypeChecker
         where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(self.gt_results_arr == self.min_gt_result)
@@ -1040,30 +1227,28 @@ class OSweepResults(BaseModel):
         if len(self.sweep_config_keys_order) < 2:
             raise Exception("Cannot create heatmap of results as implemented when <2 variables are swept.")
 
-        num_vars = len(self.sweep_config_keys_order)
-
         # Generate all possible combinations of slices
+        num_vars = len(self.sweep_config_keys_order)
         idcs_plot_against_list: List[Tuple[int, int]] = []
         for idx_1 in range(num_vars):
             for idx_2 in range(idx_1 + 1, num_vars):
                 idcs_plot_against_list.append((idx_1, idx_2))
+        num_possible_slice_comb = len(idcs_plot_against_list)
 
         # Figure out dimensions of subplot grid
-        subplot_height = int(np.floor(np.sqrt(num_vars)))
-        subplot_width = subplot_height
-        if num_vars % subplot_width != 0:
-            subplot_width += 1
+        subplot_height = int(np.floor(np.sqrt(num_possible_slice_comb)))
+        subplot_width = int(np.ceil(num_possible_slice_comb / subplot_height))
 
         # In each subplot, make a heatmap from the 2D cross-section of the search space that intersects the minimum
         # value
         where_min = self.where_min
-        fig, axs = plt.subplots(subplot_height, subplot_width, figsize=(8, 8), constrained_layout=True)
-        for i, ax in enumerate(axs.flat):
+        fig, axs = plt.subplots(subplot_height, subplot_width, constrained_layout=True)
+        for i, ax in enumerate(axs.flat) if num_possible_slice_comb != 1 else [(0, axs), ]:
+            if i == num_possible_slice_comb:
+                break
             idcs_plot_against = idcs_plot_against_list[i]
-
             x_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[0]]]
             y_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[1]]]
-
             xx, yy = np.meshgrid(x_vec, y_vec)
             remove_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
                 set(idcs_plot_against))))
@@ -1072,10 +1257,12 @@ class OSweepResults(BaseModel):
                 zz = zz.take(indices=where_min[remove_dim], axis=remove_dim - ith_dim)
 
             ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
+            ax.set_xscale("log")
             ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
+            ax.set_yscale("log")
             c = ax.pcolormesh(xx, yy, zz.T, shading="auto")
 
-            # Annotate the heatmap with a red dot showing the coordinates that produce the minimum value
+            # Annotate the heatmap with a red dot indicating the coordinates that produce the minimum value
             ax.plot(x_vec[where_min[idcs_plot_against[0]]], y_vec[where_min[idcs_plot_against[1]]], "ro")
 
         # Ignore unbound variable warning for color bar
@@ -1088,10 +1275,137 @@ class OSweepResults(BaseModel):
 
 
 class OMultiSweepResult(BaseModel):
-    uid_to_generate_params: Dict[int, GenerateParams]
-    sweep_results_by_generate_params_uid: Dict[int, List[OSweepResults]]
+    """Used to store the results of multiple parameter sweeps performed (where sets of OSweepResults can be mapped to a
+    corresponding GenerateParams).
+    """
+
+    generate_params_list: List[GenerateParams]
+    sweep_results_list: List[List[OSweepResults]]
+
+    # noinspection PyMethodParameters
+    @validator("sweep_results_list")
+    def validate_sweep_results_list(cls, v, values):
+        generate_params_list = values["generate_params_list"]
+        if len(v) != len(generate_params_list):
+            raise ValueError(
+                f"sweep_results_list (of length {len(v)}) and generate_params_list (of length "
+                f"{len(generate_params_list)}) must be of the same length")
+        return v
 
     # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
     # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr)}
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+
+    def plot_scatter_of_lin_to_ang_var_ratios(self) -> plt.Figure:
+        """Generate (but do not show) a scatter plot where the x-axis is the ratio of linear to angular velocity
+        variance used for data set generation and the y-axis is the ratio of linear to angular velocity variance from
+        the set of parameters in the parameter sweep that minimized the ground truth metric.
+        """
+        scatter_x: List[float] = []
+        scatter_y: List[float] = []
+        gt_range: List[float] = []
+        for gen_params, sweep_results_per_gen_params in zip(self.generate_params_list, self.sweep_results_list):
+            opt_lin_to_ang_var_ratio_per_gen_params: List[float] = []
+            gt_range_per_gen_params: List[float] = []
+            for sweep_results in sweep_results_per_gen_params:
+                opt_lin_to_ang_var_ratio_per_gen_params.append(
+                    sweep_results.args_producing_min[OConfig.OConfigEnum.LIN_VEL_VAR.value] /
+                    sweep_results.args_producing_min[OConfig.OConfigEnum.ANG_VEL_VAR.value])
+                scatter_x.append(gen_params.lin_to_ang_var)
+                gt_range_per_gen_params.append(sweep_results.max_gt_result - sweep_results.min_gt_result)
+            scatter_y.extend(sorted(opt_lin_to_ang_var_ratio_per_gen_params))
+            gt_range.extend([x for _, x in sorted(zip(opt_lin_to_ang_var_ratio_per_gen_params,
+                                                      gt_range_per_gen_params))])
+
+        fig, ax = plt.subplots(figsize=(6, 5), layout="constrained")
+        sc = ax.scatter(scatter_x, scatter_y, c=gt_range)
+        ax.set_xlabel("lin:ang Variance Ratio for Generation")
+        ax.set_xscale('log')
+        ax.set_ylabel("Best lin:ang Variance Ratio for Optimization")
+        ax.set_yscale('log')
+        fig.colorbar(sc, label="Range of GT Values from Sweep")
+        return fig
+
+    def plot_scatter_of_obs_noise_params(self) -> plt.Figure:
+        """TODO: Documentation
+        """
+        scatter_y: List[float] = []
+        scatter_x: List[float] = []
+        gt_range: List[float] = []
+        for gen_params, sweep_results_per_gen_params in zip(self.generate_params_list, self.sweep_results_list):
+            opt_tag_to_lvv_ratio_per_gen_params: List[float] = []
+            gt_range_per_gen_params: List[float] = []
+            for sweep_results in sweep_results_per_gen_params:
+                opt_tag_var_ratio = sweep_results.args_producing_min[OConfig.OConfigEnum.TAG_SBA_VAR.value]
+                opt_tag_to_lvv_ratio_per_gen_params.append(opt_tag_var_ratio)
+                scatter_x.append(gen_params.obs_noise_var)
+                gt_range_per_gen_params.append(sweep_results.max_gt_result - sweep_results.min_gt_result)
+            scatter_y.extend(sorted(opt_tag_to_lvv_ratio_per_gen_params))
+            gt_range.extend([x for _, x in sorted(zip(opt_tag_to_lvv_ratio_per_gen_params, gt_range_per_gen_params))])
+
+        fig, ax = plt.subplots(figsize=(6, 5), layout="constrained")
+        sc = ax.scatter(scatter_x, scatter_y, c=gt_range)
+        ax.set_xlabel("Tag Variance for Generation")
+        ax.set_ylabel("Best Tag Variance for Optimization")
+        fig.colorbar(sc, label="Range of GT Values from Sweep")
+        return fig
+
+
+class OResultPseudoGTMetricValidation(BaseModel):
+    """Used to store the results of optimizations run to validate the pseudo ground truth metric
+    """
+
+    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
+    # serializable, even though the models this model is composed of are already serializable on their own.
+    class Config:
+        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+
+    results_list: List[List[Tuple[OConfig, OResult, OSGPairResult]]]
+    """
+    Each element of the outermost list should correspond to data generated from the same data set.
+    """
+
+    generate_params_list: Optional[List[GenerateParams]]
+
+    # noinspection PyMethodParameters
+    @validator("results_list")
+    def validate_results_contain_gt_values(cls, v: List[List[Tuple[OConfig, OResult, OSGPairResult]]]):
+        for data_set_idx in range(len(v)):
+            for result_tuple in v[data_set_idx]:
+                if result_tuple[1].gt_metric_opt is None:
+                    raise ValueError("None of the included OResult objects can have a null ground truth metric value")
+        return v
+
+    def plot_scatter(self):
+        fig: plt.Figure
+        fig, axs = plt.subplots(2, 2, figsize=(10, 6))
+        fig.subplots_adjust(wspace=0.5, hspace=0.5)
+        y_axis_order = ["SG2 Chi2 - SG1 Chi2", "Original Graph Chi2", "SG1 Chi2", "SG2 Chi2"]
+        for data_set_idx in range(len(self.results_list)):
+            gt_values = []
+            y_ax_values = np.zeros((4, len(self.results_list[data_set_idx])))
+            c = []
+            for result_idx, result_tuple in enumerate(self.results_list[data_set_idx]):
+                gt_values.append(result_tuple[1].gt_metric_opt)
+                y_ax_values[0, result_idx] = result_tuple[2].chi2_diff
+                y_ax_values[1, result_idx] = result_tuple[1].chi2s.all_after
+                y_ax_values[2, result_idx] = result_tuple[2].sg1_oresult.chi2s.all_after
+                y_ax_values[3, result_idx] = result_tuple[2].sg2_oresult.chi2s.all_after
+                c.append(result_tuple[0].compute_inf_params.tag_sba_var)
+
+            label = f"Data Set {data_set_idx + 1}"
+            for i, ax in enumerate(axs.flat):
+                ax: plt.Axes
+                sc = ax.scatter(gt_values, y_ax_values[i, :], label=label, c=np.log(c))
+                ax.set_ylabel(y_axis_order[i])
+                ax.set_xlabel("GT Metric")
+
+                divider = make_axes_locatable(ax)
+                cax = divider.append_axes('right', size='5%', pad=0.05)
+                fig.colorbar(sc, cax=cax, orientation='vertical', label="log(tag SBA variance)")
+
+        if len(self.results_list) > 1:
+            fig.legend()
+
+        return fig

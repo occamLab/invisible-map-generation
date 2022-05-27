@@ -15,7 +15,7 @@ from firebase_admin import storage
 from varname import nameof
 
 from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
-from map_processing.data_models import GTDataSet
+from map_processing.data_models import GTDataSet, OSweepResults, OMultiSweepResult, OResultPseudoGTMetricValidation
 
 
 class MapInfo:
@@ -63,7 +63,7 @@ class CacheManagerSingleton:
          of this class (only initialized once).
         __bucket: Handle to the Google Cloud Storage __bucket
         __db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager.weights_dict
+         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager.WEIGHTS_DICT
         __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every time an event is raised
          by the listener.
         __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one thread to access the
@@ -78,14 +78,18 @@ class CacheManagerSingleton:
         "storageBucket": "invisible-map.appspot.com"
     }
 
-    CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
-
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
     PROCESSED_UPLOAD_TO: str = "TestProcessed"
     GROUND_TRUTH_PARENT: str = "ground_truth"
-    GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
+    SWEEP_RESULTS_PARENT: str = "sweep_results"
+    PGT_VALIDATION_RESULTS_PARENT: str = "pgt_validation_results"
     GROUND_TRUTH_MAPPING_FILE_NAME = "ground_truth_mapping.json"
+
+    CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
+    GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
     GROUND_TRUTH_MAPPING_PATH = os.path.join(GROUND_TRUTH_PATH, GROUND_TRUTH_MAPPING_FILE_NAME)
+    SWEEP_RESULTS_PATH: str = os.path.join(CACHE_PATH, SWEEP_RESULTS_PARENT)
+    PGT_VALIDATION_RESULTS_PATH: str = os.path.join(CACHE_PATH, PGT_VALIDATION_RESULTS_PARENT)
 
     def __init__(self, firebase_creds: Optional[firebase_admin.credentials.Certificate] = None,
                  max_listen_wait: int = -1):
@@ -101,8 +105,9 @@ class CacheManagerSingleton:
         self.__app: Optional[firebase_admin.App] = None
         self.__bucket: Optional[firebase_admin.storage.storage.Bucket] = None
         self.__db_ref: Optional[db.Reference] = None
+        self.__were_credentials_set: bool = False
         if firebase_creds is not None:
-            self._set_credentials(firebase_creds)
+            self.set_credentials(firebase_creds)
 
         # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
         self.__listen_kill_timer: Timer = Timer(0, lambda x: x)
@@ -118,6 +123,10 @@ class CacheManagerSingleton:
             # Generate all ground truth data files from hard-coded data
             CacheManagerSingleton.export_all_ground_truth_data()
         return cls.__instance
+
+    @property
+    def were_credentials_set(self) -> bool:
+        return self.__were_credentials_set
 
     def firebase_listen(self, callback: Union[None, Callable], max_wait_override: Union[int, None] = None):
         """Wait for and act upon events using the Firebase database reference listener.
@@ -148,7 +157,7 @@ class CacheManagerSingleton:
             self.__firebase_listen_sem.acquire()
             thread_obj.join()
 
-    def upload(self, map_info: MapInfo, json_string: str) -> None:
+    def upload(self, map_info: MapInfo, json_string: str, verbose: bool = False) -> None:
         """Uploads the map json string into the Firebase __bucket under the path
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
@@ -159,21 +168,27 @@ class CacheManagerSingleton:
         Args:
             map_info (MapInfo): Contains the map name and map json path
             json_string (str): Json string of the map to upload
+            verbose: TODO
         """
         with self.__synch_mutex:
             processed_map_filename = os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.json"
-            processed_map_full_path = f'{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}'
-            print("Attempting to upload {} to the __bucket blob {}".format(map_info.map_name, processed_map_full_path))
+            processed_map_full_path = f"{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}"
+            if verbose:
+                print(f"Attempting to upload {map_info.map_name} to the __bucket blob {processed_map_full_path}")
+
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(json_string)
-            print("Successfully uploaded map data for {}".format(map_info.map_name))
+
             ref = db.reference("maps")
             if map_info.uid is not None:
                 ref = ref.child(map_info.uid)
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
-            print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
-                map_info.map_name))
-            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, json_string)
+
+            if verbose:
+                print(f"Successfully uploaded database reference maps/{map_info.map_name}/"
+                      f"map_file to contain the blob path")
+            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, json_string,
+                                            verbose=verbose)
 
     def download_all_maps(self):
         """Downloads all maps from Firebase.
@@ -212,7 +227,6 @@ class CacheManagerSingleton:
                         map_info = self._firebase_get_and_cache_unprocessed_map(nested_name, nested_json, uid=map_name)
                         if map_info_callback is not None and map_info is not None:
                             map_info_callback(map_info)
-
 
     @staticmethod
     def map_info_from_path(map_json_path: str) -> Union[MapInfo, None]:
@@ -285,8 +299,8 @@ class CacheManagerSingleton:
         return matches
 
     @staticmethod
-    def cache_map(parent_folder: str, map_info: MapInfo, json_string: str,
-                  file_suffix: Union[str, None] = None) -> bool:
+    def cache_map(parent_folder: str, map_info: MapInfo, json_string: str, file_suffix: Union[str, None] = None,
+                  verbose: bool = False) -> bool:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
@@ -301,6 +315,7 @@ class CacheManagerSingleton:
             json_string (str): The json string that defines the map (this is what is written as the contents of the
              cached map file).
             file_suffix (str): String to append to the file name given by map_info.map_json_blob_name.
+            verbose: TODO
 
         Returns:
             True if map was successfully cached, and False otherwise
@@ -347,10 +362,13 @@ class CacheManagerSingleton:
                 map_json_file.close()
 
             CacheManagerSingleton._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
-            print("Successfully cached {}".format(cached_file_path))
+
+            if verbose:
+                print("Successfully cached {}".format(cached_file_path))
             return True
         except Exception as ex:
-            print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
+            if verbose:
+                print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
             return False
 
     @staticmethod
@@ -443,6 +461,34 @@ class CacheManagerSingleton:
         with open(CacheManagerSingleton.GROUND_TRUTH_MAPPING_PATH, "w") as f:
             json.dump(ground_truth_mapping_dict, f, indent=2)
 
+    @staticmethod
+    def cache_sweep_results(sr: Union[OSweepResults, OMultiSweepResult], file_name: str):
+        """Serialize the provided pydantic model and write as a json file to the file specified by the file name under
+        the cache subdirectory CacheManagerSingleton.SWEEP_RESULTS_PARENT.
+        """
+        if not file_name.endswith(".json"):
+            file_name += ".json"
+
+        if not os.path.exists(CacheManagerSingleton.SWEEP_RESULTS_PATH):
+            os.mkdir(CacheManagerSingleton.SWEEP_RESULTS_PATH)
+
+        with open(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, file_name), "w") as f:
+            f.write(sr.json(indent=2))
+
+    @staticmethod
+    def cache_pgt_validation_results(results: OResultPseudoGTMetricValidation, file_name: str):
+        """Serialize the provided pydantic model and write as a json file to the file specified by the file name under
+        the cache subdirectory CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH.
+        """
+        if not file_name.endswith(".json"):
+            file_name += ".json"
+
+        if not os.path.exists(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH):
+            os.mkdir(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH)
+
+        with open(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, file_name), "w") as f:
+            f.write(results.json(indent=2))
+
     # -- Private static methods
 
     @staticmethod
@@ -522,7 +568,7 @@ class CacheManagerSingleton:
 
     # -- Private instance methods --
 
-    def _set_credentials(self, credentials: firebase_admin.credentials.Certificate) -> None:
+    def set_credentials(self, credentials: firebase_admin.credentials.Certificate) -> None:
         """Instantiates a firebase app with the credentials. If the app has already been initialized, then no action is
         taken.
 
@@ -533,10 +579,10 @@ class CacheManagerSingleton:
             credentials: Firebase credentials
         """
         with self.__synch_mutex:
-            if self.__app is None:
-                self.__app = firebase_admin.initialize_app(credentials, self.__app_initialize_dict)
-                self.__bucket = storage.bucket(app=self.__app)
-                self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
+            self.__app = firebase_admin.initialize_app(credentials, self.__app_initialize_dict)
+            self.__bucket = storage.bucket(app=self.__app)
+            self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
+            self.__were_credentials_set = True
 
     def _download_all_maps_recur(self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None):
         """Recursive function for downloading all maps from Firebase.

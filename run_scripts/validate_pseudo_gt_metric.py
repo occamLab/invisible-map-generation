@@ -1,0 +1,125 @@
+import os
+import sys
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
+import numpy as np
+import datetime
+from typing import List, Tuple, Callable, Iterable, Any, Dict
+import matplotlib.pyplot as plt
+
+from map_processing import TIME_FORMAT, PrescalingOptEnum
+from map_processing.data_models import GenerateParams, UGDataSet, OConfig, OResult, OSGPairResult, \
+    OResultPseudoGTMetricValidation
+from map_processing.cache_manager import CacheManagerSingleton, MapInfo
+from map_processing.graph_generator import GraphGenerator
+from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
+    tag_pose_array_with_metadata_to_map, holistic_optimize
+from map_processing.graph import Graph
+
+PATH_FROM = "duncan-occam-room-10-1-21-2-48 26773176629225.json"
+NUM_REPEAT_GENERATE = 1
+
+GENERATE_FROM = GenerateParams(
+    obs_noise_var=0.5,
+    odometry_noise_var={
+        GenerateParams.OdomNoiseDims.X: 1e-4,
+        GenerateParams.OdomNoiseDims.Y: 1e-5,
+        GenerateParams.OdomNoiseDims.Z: 1e-4,
+        GenerateParams.OdomNoiseDims.RVERT: 1e-5,
+    },
+    dataset_name=f"generated_from_{PATH_FROM.strip('.json')}"
+)
+
+# GENERATE_FROM = GenerateParams(
+#     obs_noise_var=0.5,
+#     odometry_noise_var={
+#         GenerateParams.OdomNoiseDims.X: 1e-4,
+#         GenerateParams.OdomNoiseDims.Y: 1e-5,
+#         GenerateParams.OdomNoiseDims.Z: 1e-4,
+#         GenerateParams.OdomNoiseDims.RVERT: 1e-5,
+#     },
+#     dataset_name=f"3line",
+#     t_max=6 * np.pi,
+#     n_poses=300,
+#     parameterized_path_args={'e_cp': (0.0, 0.0), 'e_xw': 8.0, 'e_zw': 4.0, 'xzp': 0.0}
+# )
+
+ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 1e-3, 1]),
+    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [0.01, 10, 20])
+}
+
+BASE_OCONFIG = OConfig(is_sba=True)
+
+
+# noinspection DuplicatedCode
+def validate_pseudo_gt_metric():
+    # Acquire the data set from which the generated maps are parsed
+    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
+    if len(matching_maps) == 0:
+        print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
+        exit(0)
+    elif len(matching_maps) > 1:
+        print(f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
+              f"Will not batch-generate unless only one path is found.")
+        exit(0)
+
+    # Acquire the data set from which the generated data sets are derived from
+    map_info = matching_maps.pop()
+    data_set_generate_from = UGDataSet(**map_info.map_dct)
+
+    alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {}
+    for opt_key, opt_value in ALT_OPT_CONFIG.items():
+        if isinstance(opt_value, np.ndarray):
+            alt_param_multiplicands_for_opt[opt_key] = opt_value
+        else:
+            alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
+    param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
+        alt_param_multiplicands=alt_param_multiplicands_for_opt)
+    _, oconfig_list = OConfig.oconfig_generator(param_multiplicands=param_multiplicands_for_opt,
+                                                param_order=[key for key in param_multiplicands_for_opt.keys()],
+                                                base_oconfig=BASE_OCONFIG)
+
+    results: List[Tuple[OConfig, OResult, OSGPairResult]] = []
+    generate_idx = -1
+    mi_and_gt_data_set_list: List[Tuple[MapInfo, Dict]] = []
+    for i in range(NUM_REPEAT_GENERATE):
+        gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
+        # gg = GraphGenerator(path_from=GraphGenerator.xz_path_ellipsis_four_by_two, gen_params=GENERATE_FROM,
+        #                     tag_poses_for_parameterized=GT_TAG_DATASETS["3line"])
+        # gg.visualize()
+        mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
+        gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
+        mi_and_gt_data_set_list.append((mi, gt_data_set))
+
+    total_num_optimizations = NUM_REPEAT_GENERATE * len(oconfig_list)
+    for oconfig in oconfig_list:
+        for mi, gt_data_set in mi_and_gt_data_set_list:
+            generate_idx += 1
+            oresult = optimize_graph(graph=Graph.as_graph(data_set=UGDataSet.parse_obj(mi.map_dct)), oconfig=oconfig)
+            oresult.gt_metric_opt = ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
+                ground_truth_tags=gt_data_set)
+
+            osg_pair_result: OSGPairResult = holistic_optimize(
+                map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
+            print(osg_pair_result.chi2_diff)
+            results.append((oconfig, oresult, osg_pair_result))
+            print(f"Completed optimization for generated data set {generate_idx + 1}/{total_num_optimizations}")
+
+    all_results_obj = OResultPseudoGTMetricValidation(results_list=[results, ], generate_params_list=[GENERATE_FROM, ])
+    results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
+    CacheManagerSingleton.cache_pgt_validation_results(results=all_results_obj, file_name=results_file_name)
+    fig = all_results_obj.plot_scatter()
+    fig.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + ".png"), dpi=500)
+
+
+if __name__ == "__main__":
+    # validate_pseudo_gt_metric()
+    with open("../.cache/pgt_validation_results/pgt_validation_22-06-08-20-47-43.json", "r") as f:
+        s = f.read()
+    pgt = OResultPseudoGTMetricValidation.parse_raw(s)
+    fig = pgt.plot_scatter()
+    plt.show()
