@@ -131,8 +131,7 @@ def make_parser() -> argparse.ArgumentParser:
         "--lvv",
         type=float,
         required=False,
-        help="Linear velocity variance used for edge information matrix computation (same value is used for the x, y, "
-             "and z directions)",
+        help="Magnitude of the linear velocity variance vector used for edge information matrix computation",
         default=None
     )
 
@@ -195,7 +194,7 @@ if __name__ == "__main__":
 
     compute_inf_params = OComputeInfParams()
     if args.lvv is not None:
-        compute_inf_params.lin_vel_var = np.ones(3) * args.lvv,
+        compute_inf_params.lin_vel_var = np.ones(3) * np.sqrt(3) * args.lvv,
     if args.avv is not None:
         compute_inf_params.ang_vel_var = args.avv
 

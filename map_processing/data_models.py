@@ -822,7 +822,7 @@ class OConfig(BaseModel):
                     compute_inf_params=OComputeInfParams(
                         lin_vel_var=(this_product[sweep_param_to_product_idx[
                             OConfig.OconfigEnum.LIN_VEL_VAR]] if OConfig.OconfigEnum.LIN_VEL_VAR in
-                            included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3),
+                            included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3) * np.sqrt(3),
                         ang_vel_var=this_product[sweep_param_to_product_idx[
                             OConfig.OconfigEnum.ANG_VEL_VAR]] if OConfig.OconfigEnum.ANG_VEL_VAR in
                         included_params else base_oconfig.compute_inf_params.ang_vel_var,
