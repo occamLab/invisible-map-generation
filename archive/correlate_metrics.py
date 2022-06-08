@@ -104,9 +104,7 @@ def do_sweeping(sweep: np.ndarray):
         for second_subgraph_weights_key in subgraph_pair_chi2_diff.keys():
             print(second_subgraph_weights_key)
             subgraph_pair_chi2_diff[second_subgraph_weights_key].append(
-                gm.subgraph_pair_optimize(
-                    subgraph_0_weights=weights, subgraphs=(sg0, sg1),
-                    subgraph_1_weights=GraphManager.weights_dict[second_subgraph_weights_key]).chi2_diff)
+                gm.subgraph_pair_optimize(subgraphs=(sg0, sg1), oconfig_1=, oconfig_2=).chi2_diff)
 
         print(f"An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:")
         for second_subgraph_weights_key in subgraph_pair_chi2_diff:
