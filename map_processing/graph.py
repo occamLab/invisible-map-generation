@@ -21,7 +21,7 @@ from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE, VertexType
-from .data_models import UGDataSet, OComputeInfParams, Weights, OResultChi2Values
+from .data_models import UGDataSet, OComputeInfParams, Weights, OResultFitnessMetrics
 from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, se3_quat_average, \
     transform_matrix_to_vector, make_sba_tag_arrays, pose_to_isometry
@@ -174,11 +174,11 @@ class Graph:
         adj_chi2 = 0.0
         for our_edge in odom_edge_uids:
             g2o_edge = self.our_odom_edges_to_g2o_edges[our_edge]
-            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])
+            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])[0]
         return adj_chi2, num_tags_visible
 
     # noinspection DuplicatedCode
-    def optimize_graph(self) -> OResultChi2Values:
+    def optimize_graph(self) -> OResultFitnessMetrics:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
         optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
 
@@ -190,30 +190,33 @@ class Graph:
         run_status = self.optimized_graph.optimize(1024)
         self.g2o_status = run_status
 
-        unoptimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False)
-        unoptimized_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False,
-                                                                        edge_type_filter={EdgeSE3, EdgeSE3Expmap})
-        unoptimized_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False,
-                                                                           edge_type_filter={EdgeProjectPSI2UV})
-        unoptimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
-            self.unoptimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
-        optimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)
-        optimized_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False,
-                                                                      edge_type_filter={EdgeSE3, EdgeSE3Expmap})
-        optimized_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False,
-                                                                         edge_type_filter={EdgeProjectPSI2UV})
-        optimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
-            self.optimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
+        pre_opt_chi2, pre_opt_alpha = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph)
+        pre_opt_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                    edge_type_filter={EdgeSE3, EdgeSE3Expmap})[0]
+        pre_opt_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                       edge_type_filter={EdgeProjectPSI2UV})[0]
+        pre_opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                        edge_type_filter={EdgeSE3Gravity})[0]
 
-        chi2_result = OResultChi2Values(
-            all_before=unoptimized_chi2,
-            se3_not_gravity_before=unoptimized_se3_chi2,
-            psi2uv_before=unoptimized_psi2uv_chi2,
-            gravity_before=unoptimized_gravity_chi2,
-            all_after=optimized_chi2,
-            se3_not_gravity_after=optimized_se3_chi2,
-            psi2uv_after=optimized_psi2uv_chi2,
-            gravity_after=optimized_gravity_chi2)
+        opt_chi2, opt_alpha = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph)
+        opt_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                edge_type_filter={EdgeSE3, EdgeSE3Expmap})[0]
+        opt_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                   edge_type_filter={EdgeProjectPSI2UV})[0]
+        opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                    edge_type_filter={EdgeSE3Gravity})[0]
+
+        chi2_result = OResultFitnessMetrics(
+            chi2_all_before=pre_opt_chi2,
+            alpha_all_before=pre_opt_alpha,
+            se3_not_gravity_before=pre_opt_se3_chi2,
+            psi2uv_before=pre_opt_psi2uv_chi2,
+            gravity_before=pre_opt_gravity_chi2,
+            chi2_all_after=opt_chi2,
+            alpha_all_after=opt_alpha,
+            se3_not_gravity_after=opt_se3_chi2,
+            psi2uv_after=opt_psi2uv_chi2,
+            gravity_after=opt_gravity_chi2)
         return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:
@@ -362,7 +365,7 @@ class Graph:
             start_mode = self.vertices[self.edges[edge.id()].startuid].mode
             if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (VertexType.TAG,
                                                                                    VertexType.TAGPOINT):
-                chi2 = graph_opt_utils.get_chi2_of_edge(edge)
+                chi2 = graph_opt_utils.get_chi2_of_edge(edge)[0]
                 chi2_by_edge[edge.id()] = chi2
                 chi2s.append(chi2)
         chi2s = np.array(chi2s)

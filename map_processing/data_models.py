@@ -1056,23 +1056,27 @@ class OG2oOptimizer(BaseModel):
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
 
 
-class OResultChi2Values(BaseModel):
+class OResultFitnessMetrics(BaseModel):
     """Container to store the chi2 values
     """
-    all_before: confloat(ge=0)
+    chi2_all_before: confloat(ge=0)
+    alpha_all_before: Optional[float]
     se3_not_gravity_before: confloat(ge=0)
     psi2uv_before: confloat(ge=0)
     gravity_before: confloat(ge=0)
-    all_after: confloat(ge=0)
+    chi2_all_after: confloat(ge=0)
+    alpha_all_after: Optional[float]
     se3_not_gravity_after: confloat(ge=0)
     psi2uv_after: confloat(ge=0)
     gravity_after: confloat(ge=0)
 
-    def display_list(self) -> str:
+    def repr_as_list(self) -> str:
         lines_before: List[str] = []
         lines_after: List[str] = []
         longest_name_len = max([len(key) for key in self.dict().keys()])
         for item in self.dict().items():
+            if item[1] is None:
+                continue
             extra_space = longest_name_len - len(item[0])
             line_txt = f"> {' ' * extra_space}{item[0]}: {item[1]:0.2g}"
             if item[0].endswith("before"):
@@ -1090,14 +1094,14 @@ class OResult(BaseModel):
         oconfig: The optimization configuration
         map_pre: The state of the map pre-optimization
         map_opt: The state of the optimized map
-        chi2s: The chi2 metrics before and after optimization
+        fitness_metrics: The chi2 metrics before and after optimization
         gt_metric_pre: Ground truth metric of the pre-optimized map
         gt_metric_opt: Ground truth metric of the optimized map
     """
     oconfig: OConfig
     map_pre: OG2oOptimizer
     map_opt: OG2oOptimizer
-    chi2s: OResultChi2Values
+    fitness_metrics: OResultFitnessMetrics
     gt_metric_pre: Optional[float] = None
     gt_metric_opt: Optional[float] = None
 
@@ -1117,12 +1121,20 @@ class OSGPairResult(BaseModel):
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
     @property
+    def alpha_diff(self) -> float:
+        return self.sg2_oresult.fitness_metrics.alpha_all_after - self.sg1_oresult.fitness_metrics.alpha_all_after
+
+    @property
+    def alpha_ratio_change(self) -> float:
+        return self.alpha_diff / self.sg1_oresult.fitness_metrics.alpha_all_after
+
+    @property
     def chi2_diff(self) -> float:
-        return self.sg2_oresult.chi2s.all_after - self.sg1_oresult.chi2s.all_after
+        return self.sg2_oresult.fitness_metrics.chi2_all_after - self.sg1_oresult.fitness_metrics.chi2_all_after
 
     @property
     def chi2_ratio_change(self) -> float:
-        return self.chi2_diff / self.sg1_oresult.chi2s.all_after
+        return self.chi2_diff / self.sg1_oresult.fitness_metrics.chi2_all_after
 
 
 class OSweepResults(BaseModel):
@@ -1356,6 +1368,10 @@ class OResultPseudoGTMetricValidation(BaseModel):
     """Used to store the results of optimizations run to validate the pseudo ground truth metric
     """
 
+    class ScatterYAxisOptions(str, Enum):
+        CHI2 = "chi2"
+        ALPHA = "alpha"
+
     # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
     # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
@@ -1377,21 +1393,41 @@ class OResultPseudoGTMetricValidation(BaseModel):
                     raise ValueError("None of the included OResult objects can have a null ground truth metric value")
         return v
 
-    def plot_scatter(self):
+    def plot_scatter(self, scatter_y_axis: ScatterYAxisOptions):
+        metric_str = scatter_y_axis.value
+        greek_letter_str: str
+        if scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
+            greek_letter_str = "chi^2"
+        else:
+            greek_letter_str = metric_str
+
         fig: plt.Figure
         fig, axs = plt.subplots(2, 2, figsize=(10, 6))
         fig.subplots_adjust(wspace=0.5, hspace=0.5)
-        y_axis_order = ["SG2 Chi2 - SG1 Chi2", "Original Graph Chi2", "SG1 Chi2", "SG2 Chi2"]
+        y_axis_order: List[str] = [r"$|\%_\mathrm{sg2} - \$_\mathrm{sg1}|$", r"$|\%_\mathrm{orig. graph}|^{-1}$",
+                                   r"$|\%_\mathrm{sg1}|^{-1}$", r"$|\%_\mathrm{sg2}|^{-1}$"]
+        for i in range(len(y_axis_order)):
+            y_axis_order[i] = y_axis_order[i].replace("%", greek_letter_str)
+
         for data_set_idx in range(len(self.results_list)):
             gt_values = []
             y_ax_values = np.zeros((4, len(self.results_list[data_set_idx])))
             c = []
             for result_idx, result_tuple in enumerate(self.results_list[data_set_idx]):
                 gt_values.append(result_tuple[1].gt_metric_opt)
-                y_ax_values[0, result_idx] = result_tuple[2].chi2_diff
-                y_ax_values[1, result_idx] = result_tuple[1].chi2s.all_after
-                y_ax_values[2, result_idx] = result_tuple[2].sg1_oresult.chi2s.all_after
-                y_ax_values[3, result_idx] = result_tuple[2].sg2_oresult.chi2s.all_after
+                if scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
+                    y_ax_values[0, result_idx] = np.abs(result_tuple[2].chi2_diff)
+                elif scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA:
+                    y_ax_values[0, result_idx] = np.abs(result_tuple[2].alpha_diff)
+                else:
+                    raise ValueError(f"Unhandled option for scatter_y_axis argument: {scatter_y_axis.value}")
+
+                y_ax_values[1, result_idx] = 1 / np.abs(result_tuple[1].fitness_metrics.dict()[
+                                                            f"{metric_str}_all_after"])
+                y_ax_values[2, result_idx] = 1 / np.abs(result_tuple[2].sg1_oresult.fitness_metrics.dict()[
+                                                            f"{metric_str}_all_after"])
+                y_ax_values[3, result_idx] = 1 / np.abs(result_tuple[2].sg2_oresult.fitness_metrics.dict()[
+                                                            f"{metric_str}_all_after"])
                 c.append(result_tuple[0].compute_inf_params.tag_sba_var)
 
             label = f"Data Set {data_set_idx + 1}"

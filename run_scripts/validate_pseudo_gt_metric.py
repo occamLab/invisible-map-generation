@@ -112,14 +112,20 @@ def validate_pseudo_gt_metric():
     all_results_obj = OResultPseudoGTMetricValidation(results_list=[results, ], generate_params_list=[GENERATE_FROM, ])
     results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
     CacheManagerSingleton.cache_pgt_validation_results(results=all_results_obj, file_name=results_file_name)
-    fig = all_results_obj.plot_scatter()
-    fig.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + ".png"), dpi=500)
+    fig_1 = all_results_obj.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
+    fig_1.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_chi2.png"),
+                  dpi=500)
+    fig_2 = all_results_obj.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
+    fig_2.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_alpha.png"),
+                  dpi=500)
 
 
 if __name__ == "__main__":
-    # validate_pseudo_gt_metric()
-    with open("../.cache/pgt_validation_results/pgt_validation_22-06-08-20-47-43.json", "r") as f:
-        s = f.read()
-    pgt = OResultPseudoGTMetricValidation.parse_raw(s)
-    fig = pgt.plot_scatter()
-    plt.show()
+    validate_pseudo_gt_metric()
+    # with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-15-12-23.json", "r") as f:
+    #     s = f.read()
+    # pgt = OResultPseudoGTMetricValidation.parse_raw(s)
+    # pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
+    # plt.show()
+    # pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
+    # plt.show()

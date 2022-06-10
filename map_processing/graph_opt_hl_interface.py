@@ -3,7 +3,8 @@ Provides a high-level interface for graph optimization capabilities provided by 
 other modules in this package.
 
 Notes:
-    For the command line utility that makes use of these features, see `run_scripts/optimize_graphs_and_manage_cache.py`.
+    For the command line utility that makes use of these features, see
+    `run_scripts/optimize_graphs_and_manage_cache.py`.
 """
 
 from enum import Enum
@@ -132,7 +133,7 @@ def holistic_optimize(
 
     if verbose:
         print(f"Optimized {map_info.map_name}.\nResulting chi2 metrics:")
-        print(opt_result.chi2s.display_list())
+        print(opt_result.fitness_metrics.repr_as_list())
 
     if gt_data_as_dict_of_se3_arrays is not None:
         opt_result.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
@@ -255,7 +256,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
 
     graph.generate_unoptimized_graph()
     before_opt_map = graph_opt_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph, is_sba=is_sba)
-    chi2_values = graph.optimize_graph()
+    fitness_metrics = graph.optimize_graph()
     if oconfig.obs_chi2_filter > 0:
         graph.filter_out_high_chi2_observation_edges(oconfig.obs_chi2_filter)
         graph.optimize_graph()
@@ -280,7 +281,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         oconfig=oconfig,
         map_pre=before_opt_map,
         map_opt=opt_result_map,
-        chi2s=chi2_values
+        fitness_metrics=fitness_metrics
     )
 
 
