@@ -1404,7 +1404,7 @@ class OResultPseudoGTMetricValidation(BaseModel):
         fig: plt.Figure
         fig, axs = plt.subplots(2, 2, figsize=(10, 6))
         fig.subplots_adjust(wspace=0.5, hspace=0.5)
-        y_axis_order: List[str] = [r"$|\%_\mathrm{sg2} - \$_\mathrm{sg1}|$", r"$|\%_\mathrm{orig. graph}|^{-1}$",
+        y_axis_order: List[str] = [r"$|\%_\mathrm{sg2} - \%_\mathrm{sg1}|$", r"$|\%_\mathrm{orig. graph}|^{-1}$",
                                    r"$|\%_\mathrm{sg1}|^{-1}$", r"$|\%_\mathrm{sg2}|^{-1}$"]
         for i in range(len(y_axis_order)):
             y_axis_order[i] = y_axis_order[i].replace("%", greek_letter_str)
