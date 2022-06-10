@@ -57,8 +57,8 @@ else:
     )
 
 ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 1e-3, 1]),
-    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [0.01, 10, 20])
+    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 10, 20]),
+    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [0.264, 0.264, 1])
 }
 
 BASE_OCONFIG = OConfig(is_sba=True)
@@ -109,7 +109,7 @@ def validate_pseudo_gt_metric():
     results: List[Tuple[OConfig, OResult, OSGPairResult]] = []
     generate_idx = -1
     mi_and_gt_data_set_list: List[Tuple[MapInfo, Dict]] = []
-    print(f"Generating {NUM_REPEAT_GENERATE} data sets...")
+    print(f"Generating {NUM_REPEAT_GENERATE} data set{'s' if NUM_REPEAT_GENERATE > 1 else ''}...")
     for i in range(NUM_REPEAT_GENERATE):
         if GENERATE_FROM_PATH:
             gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
@@ -131,17 +131,20 @@ def validate_pseudo_gt_metric():
 
             osg_pair_result: OSGPairResult = holistic_optimize(
                 map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
-            print(osg_pair_result.chi2_diff)
             results.append((oconfig, oresult, osg_pair_result))
             print(f"Completed optimization {generate_idx + 1}/{total_num_optimizations}")
 
-    all_results_obj = OResultPseudoGTMetricValidation(results_list=[results, ], generate_params_list=[GENERATE_FROM, ])
+    all_results_obj = OResultPseudoGTMetricValidation(results_list=results, generate_params=GENERATE_FROM)
     results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
     CacheManagerSingleton.cache_pgt_validation_results(results=all_results_obj, file_name=results_file_name)
-    fig_1 = all_results_obj.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
+    fig_1 = all_results_obj.plot_scatter(
+        fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
+        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
     fig_1.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_chi2.png"),
                   dpi=500)
-    fig_2 = all_results_obj.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
+    fig_2 = all_results_obj.plot_scatter(
+        fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA,
+        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
     fig_2.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_alpha.png"),
                   dpi=500)
 
@@ -151,12 +154,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.lfc:
-        with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-15-12-23.json", "r") as f:
+        with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-18-08-10.json", "r") as f:
             s = f.read()
         pgt = OResultPseudoGTMetricValidation.parse_raw(s)
-        pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
+        pgt.plot_scatter(fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
+                         colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
         plt.show()
-        pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
+        pgt.plot_scatter(fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA,
+                         colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
         plt.show()
     else:
         validate_pseudo_gt_metric()

@@ -1,9 +1,9 @@
 """
-Models various serialized data sets with help from pydantic.
-
-For more info on pydantic, visit: https://pydantic-docs.helpmanual.io/
+Module containing pydantic data models used throughout the map_processing package.
 
 Notes:
+    For more info on pydantic, visit: https://pydantic-docs.helpmanual.io/
+
     Interpreting class name prefixes which describe how the models are used:
     - "GT" --> ground truth data
     - "UG" --> un-processed graph data
@@ -12,6 +12,11 @@ Notes:
 
     Explanation of '# noinspection PyMethodParameters': For some reason, decorating validators with a classmethod
     decorator prevents successful use of the validator.
+
+    Note that there are some pydantic models that contain a configuration that allows them to have numpy arrays even
+    though they do not have any numpy arrays as attributes. This is because these classes are composed of other pydantic
+    models that do contain numpy arrays, and the configuration that allows this must be replicated in any pydantic model
+    in which these numpy array-containing models are used.
 """
 
 import itertools
@@ -890,8 +895,6 @@ class OConfig(BaseModel):
     graph_plot_title: str = ""
     chi2_plot_title: str = ""
 
-    # Need this class with the `json_encoders` field to be present so that the sub-models' (`Weights` and
-    # OComputeInfParams) numpy arrays can be serializable, even though in isolation they are already serializable.
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
@@ -1105,8 +1108,6 @@ class OResult(BaseModel):
     gt_metric_pre: Optional[float] = None
     gt_metric_opt: Optional[float] = None
 
-    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
-    # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
@@ -1115,8 +1116,6 @@ class OSGPairResult(BaseModel):
     sg1_oresult: OResult
     sg2_oresult: OResult
 
-    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
-    # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
@@ -1158,8 +1157,6 @@ class OSweepResults(BaseModel):
     map_name: str
     generated_params: Optional[GenerateParams] = None
 
-    # Need this class with the `json_encoders` field to be present so that the base_oconfig's numpy arrays can be
-    # serializable, even though in isolation base_oconfig is already serializable.
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
@@ -1304,8 +1301,6 @@ class OMultiSweepResult(BaseModel):
                 f"{len(generate_params_list)}) must be of the same length")
         return v
 
-    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
-    # serializable, even though the models this model is composed of are already serializable on their own.
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
@@ -1372,31 +1367,35 @@ class OResultPseudoGTMetricValidation(BaseModel):
         CHI2 = "chi2"
         ALPHA = "alpha"
 
-    # Need this class with the `json_encoders` field to be present so that the contained numpy arrays can be
-    # serializable, even though the models this model is composed of are already serializable on their own.
+    class ScatterColorbarOptions(str, Enum):
+        TAG_SBA_VAR = "tag_sba_var"
+        LIN_VEL_VAR = "lin_vel_var"
+        ANG_VEL_VAR = "ang_vel_var"
+
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
-    results_list: List[List[Tuple[OConfig, OResult, OSGPairResult]]]
+    results_list: List[Tuple[OConfig, OResult, OSGPairResult]]
     """
     Each element of the outermost list should correspond to data generated from the same data set.
     """
 
-    generate_params_list: Optional[List[GenerateParams]]
+    generate_params: GenerateParams
 
-    # noinspection PyMethodParameters
-    @validator("results_list")
-    def validate_results_contain_gt_values(cls, v: List[List[Tuple[OConfig, OResult, OSGPairResult]]]):
-        for data_set_idx in range(len(v)):
-            for result_tuple in v[data_set_idx]:
-                if result_tuple[1].gt_metric_opt is None:
-                    raise ValueError("None of the included OResult objects can have a null ground truth metric value")
-        return v
+    def plot_scatter(self, fitness_metric: ScatterYAxisOptions, colorbar_variable: ScatterColorbarOptions) \
+            -> plt.Figure:
+        """Make an array of scatter plots with the specified fitness metrics plotted against the ground truth metric.
 
-    def plot_scatter(self, scatter_y_axis: ScatterYAxisOptions):
-        metric_str = scatter_y_axis.value
+        Args:
+            fitness_metric: Selects which set of the fitness metrics to plot the data of.
+            colorbar_variable: Selects which optimization variable is used to color the points in the scatter plot.
+        
+        Raises:
+            ValueError - If either of the positional arguments are an enumeration value that is not handled.
+        """
+        metric_str = fitness_metric.value
         greek_letter_str: str
-        if scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
+        if fitness_metric == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
             greek_letter_str = "chi^2"
         else:
             greek_letter_str = metric_str
@@ -1409,39 +1408,41 @@ class OResultPseudoGTMetricValidation(BaseModel):
         for i in range(len(y_axis_order)):
             y_axis_order[i] = y_axis_order[i].replace("%", greek_letter_str)
 
-        for data_set_idx in range(len(self.results_list)):
-            gt_values = []
-            y_ax_values = np.zeros((4, len(self.results_list[data_set_idx])))
-            c = []
-            for result_idx, result_tuple in enumerate(self.results_list[data_set_idx]):
-                gt_values.append(result_tuple[1].gt_metric_opt)
-                if scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
-                    y_ax_values[0, result_idx] = np.abs(result_tuple[2].chi2_diff)
-                elif scatter_y_axis == OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA:
-                    y_ax_values[0, result_idx] = np.abs(result_tuple[2].alpha_diff)
-                else:
-                    raise ValueError(f"Unhandled option for scatter_y_axis argument: {scatter_y_axis.value}")
+        gt_values = []
+        y_ax_values = np.zeros((4, len(self.results_list)))
+        c = []
+        for result_idx, result_tuple in enumerate(self.results_list):
+            gt_values.append(result_tuple[1].gt_metric_opt)
+            if fitness_metric == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
+                y_ax_values[0, result_idx] = np.abs(result_tuple[2].chi2_diff)
+            elif fitness_metric == OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA:
+                y_ax_values[0, result_idx] = np.abs(result_tuple[2].alpha_diff)
+            else:
+                raise ValueError(f"Unhandled option for fitness_metric argument: {fitness_metric.value}")
 
-                y_ax_values[1, result_idx] = 1 / np.abs(result_tuple[1].fitness_metrics.dict()[
-                                                            f"{metric_str}_all_after"])
-                y_ax_values[2, result_idx] = 1 / np.abs(result_tuple[2].sg1_oresult.fitness_metrics.dict()[
-                                                            f"{metric_str}_all_after"])
-                y_ax_values[3, result_idx] = 1 / np.abs(result_tuple[2].sg2_oresult.fitness_metrics.dict()[
-                                                            f"{metric_str}_all_after"])
-                c.append(result_tuple[0].compute_inf_params.tag_sba_var)
+            y_ax_values[1, result_idx] = 1 / np.abs(result_tuple[1].fitness_metrics.dict()[
+                                                        f"{metric_str}_all_after"])
+            y_ax_values[2, result_idx] = 1 / np.abs(result_tuple[2].sg1_oresult.fitness_metrics.dict()[
+                                                        f"{metric_str}_all_after"])
+            y_ax_values[3, result_idx] = 1 / np.abs(result_tuple[2].sg2_oresult.fitness_metrics.dict()[
+                                                        f"{metric_str}_all_after"])
 
-            label = f"Data Set {data_set_idx + 1}"
-            for i, ax in enumerate(axs.flat):
-                ax: plt.Axes
-                sc = ax.scatter(gt_values, y_ax_values[i, :], label=label, c=np.log(c))
-                ax.set_ylabel(y_axis_order[i])
-                ax.set_xlabel("GT Metric")
+            if colorbar_variable == OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR:
+                c.append(result_tuple[0].compute_inf_params.dict()[colorbar_variable.value])
+            elif colorbar_variable == OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR:
+                c.append(np.linalg.norm(result_tuple[0].compute_inf_params.dict()[colorbar_variable.value]))
+            else:
+                raise ValueError(f"Unhandled option for colorbar variable: {colorbar_variable.value}")
 
-                divider = make_axes_locatable(ax)
-                cax = divider.append_axes('right', size='5%', pad=0.05)
-                fig.colorbar(sc, cax=cax, orientation='vertical', label="log(tag SBA variance)")
+        for i, ax in enumerate(axs.flat):
+            ax: plt.Axes
+            sc = ax.scatter(gt_values, y_ax_values[i, :], c=np.log(c))
+            ax.set_ylabel(y_axis_order[i])
+            ax.set_xlabel("GT Metric")
 
-        if len(self.results_list) > 1:
-            fig.legend()
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            fig.colorbar(sc, cax=cax, orientation='vertical', label=r"$\ln\left(\mathrm{%}\right)$".replace(
+                "%", r"\/".join(colorbar_variable.split("_"))))
 
         return fig
