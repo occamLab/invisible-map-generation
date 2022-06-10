@@ -8,8 +8,8 @@ Author: Allison Li, Duncan Mazza
 import os
 import sys
 
-# Ensure that the map_processing module is imported
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.graph_opt_hl_interface import PrescalingOptEnum, WeightSpecifier, WEIGHTS_DICT, optimize_graph

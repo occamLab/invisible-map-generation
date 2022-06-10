@@ -23,11 +23,6 @@ from map_processing.cache_manager import CacheManagerSingleton
 
 
 def make_parser() -> argparse.ArgumentParser:
-    """Makes an argument p object for this program
-
-    Returns:
-        Argument p
-    """
     p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot",
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(

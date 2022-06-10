@@ -16,9 +16,13 @@ Notes:
   for further processing.
 """
 
-import argparse
 import os
+import sys
 
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
+import argparse
 import numpy as np
 from firebase_admin import credentials
 from typing import Dict, Callable, Iterable, Any, Tuple
@@ -41,11 +45,6 @@ SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
 
 
 def make_parser() -> argparse.ArgumentParser:
-    """Makes an argument p object for this program
-
-    Returns:
-        Argument parser
-    """
     p = argparse.ArgumentParser(description="Graph optimization utility for optimizing, plotting, and database "
                                             "upload/download", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(

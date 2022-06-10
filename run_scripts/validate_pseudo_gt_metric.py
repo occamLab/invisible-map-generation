@@ -1,15 +1,20 @@
+"""
+Script for generating the data to (in)validate the pseudo ground truth metric.
+"""
+
 import os
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
+import argparse
 import numpy as np
 import datetime
 from typing import List, Tuple, Callable, Iterable, Any, Dict
 import matplotlib.pyplot as plt
 
-from map_processing import TIME_FORMAT, PrescalingOptEnum
+from map_processing import TIME_FORMAT, PrescalingOptEnum, GT_TAG_DATASETS
 from map_processing.data_models import GenerateParams, UGDataSet, OConfig, OResult, OSGPairResult, \
     OResultPseudoGTMetricValidation
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
@@ -18,33 +23,38 @@ from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_m
     tag_pose_array_with_metadata_to_map, holistic_optimize
 from map_processing.graph import Graph
 
+GENERATE_FROM_PATH = True
+"""
+If true, then a graph is generated from an existing data set. Otherwise, an elliptical parameterized path is used.
+"""
 PATH_FROM = "duncan-occam-room-10-1-21-2-48 26773176629225.json"
 NUM_REPEAT_GENERATE = 1
 
-GENERATE_FROM = GenerateParams(
-    obs_noise_var=0.5,
-    odometry_noise_var={
-        GenerateParams.OdomNoiseDims.X: 1e-4,
-        GenerateParams.OdomNoiseDims.Y: 1e-5,
-        GenerateParams.OdomNoiseDims.Z: 1e-4,
-        GenerateParams.OdomNoiseDims.RVERT: 1e-5,
-    },
-    dataset_name=f"generated_from_{PATH_FROM.strip('.json')}"
-)
-
-# GENERATE_FROM = GenerateParams(
-#     obs_noise_var=0.5,
-#     odometry_noise_var={
-#         GenerateParams.OdomNoiseDims.X: 1e-4,
-#         GenerateParams.OdomNoiseDims.Y: 1e-5,
-#         GenerateParams.OdomNoiseDims.Z: 1e-4,
-#         GenerateParams.OdomNoiseDims.RVERT: 1e-5,
-#     },
-#     dataset_name=f"3line",
-#     t_max=6 * np.pi,
-#     n_poses=300,
-#     parameterized_path_args={'e_cp': (0.0, 0.0), 'e_xw': 8.0, 'e_zw': 4.0, 'xzp': 0.0}
-# )
+if GENERATE_FROM_PATH:
+    GENERATE_FROM = GenerateParams(
+        obs_noise_var=0.5,
+        odometry_noise_var={
+            GenerateParams.OdomNoiseDims.X: 1e-4,
+            GenerateParams.OdomNoiseDims.Y: 1e-5,
+            GenerateParams.OdomNoiseDims.Z: 1e-4,
+            GenerateParams.OdomNoiseDims.RVERT: 1e-5,
+        },
+        dataset_name=f"generated_from_{PATH_FROM.strip('.json')}"
+    )
+else:
+    GENERATE_FROM = GenerateParams(
+        obs_noise_var=0.5,
+        odometry_noise_var={
+            GenerateParams.OdomNoiseDims.X: 1e-4,
+            GenerateParams.OdomNoiseDims.Y: 1e-5,
+            GenerateParams.OdomNoiseDims.Z: 1e-4,
+            GenerateParams.OdomNoiseDims.RVERT: 1e-5,
+        },
+        dataset_name=f"3line",
+        t_max=6 * np.pi,
+        n_poses=300,
+        parameterized_path_args={'e_cp': (0.0, 0.0), 'e_xw': 8.0, 'e_zw': 4.0, 'xzp': 0.0}
+    )
 
 ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 1e-3, 1]),
@@ -52,6 +62,20 @@ ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
 }
 
 BASE_OCONFIG = OConfig(is_sba=True)
+
+
+def make_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        description="Script for generating the data to (in)validate the pseudo ground truth metric.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    p.add_argument(
+        "--lfc",
+        action="store_true",
+        help="Load from cache: If specified, then the cached data set specified by the hard-coded file path is loaded "
+             "into memory and the plots are generated. Otherwise, a new data set is generated.",
+        default=False,
+    )
+    return p
 
 
 # noinspection DuplicatedCode
@@ -85,11 +109,13 @@ def validate_pseudo_gt_metric():
     results: List[Tuple[OConfig, OResult, OSGPairResult]] = []
     generate_idx = -1
     mi_and_gt_data_set_list: List[Tuple[MapInfo, Dict]] = []
+    print(f"Generating {NUM_REPEAT_GENERATE} data sets...")
     for i in range(NUM_REPEAT_GENERATE):
-        gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
-        # gg = GraphGenerator(path_from=GraphGenerator.xz_path_ellipsis_four_by_two, gen_params=GENERATE_FROM,
-        #                     tag_poses_for_parameterized=GT_TAG_DATASETS["3line"])
-        # gg.visualize()
+        if GENERATE_FROM_PATH:
+            gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
+        else:
+            gg = GraphGenerator(path_from=GraphGenerator.xz_path_ellipsis_four_by_two, gen_params=GENERATE_FROM,
+                                tag_poses_for_parameterized=GT_TAG_DATASETS["3line"])
         mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
         gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
         mi_and_gt_data_set_list.append((mi, gt_data_set))
@@ -107,7 +133,7 @@ def validate_pseudo_gt_metric():
                 map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
             print(osg_pair_result.chi2_diff)
             results.append((oconfig, oresult, osg_pair_result))
-            print(f"Completed optimization for generated data set {generate_idx + 1}/{total_num_optimizations}")
+            print(f"Completed optimization {generate_idx + 1}/{total_num_optimizations}")
 
     all_results_obj = OResultPseudoGTMetricValidation(results_list=[results, ], generate_params_list=[GENERATE_FROM, ])
     results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
@@ -121,11 +147,16 @@ def validate_pseudo_gt_metric():
 
 
 if __name__ == "__main__":
-    validate_pseudo_gt_metric()
-    # with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-15-12-23.json", "r") as f:
-    #     s = f.read()
-    # pgt = OResultPseudoGTMetricValidation.parse_raw(s)
-    # pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
-    # plt.show()
-    # pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
-    # plt.show()
+    parser = make_parser()
+    args = parser.parse_args()
+
+    if args.lfc:
+        with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-15-12-23.json", "r") as f:
+            s = f.read()
+        pgt = OResultPseudoGTMetricValidation.parse_raw(s)
+        pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2)
+        plt.show()
+        pgt.plot_scatter(scatter_y_axis=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA)
+        plt.show()
+    else:
+        validate_pseudo_gt_metric()
