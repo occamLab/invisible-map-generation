@@ -1,19 +1,24 @@
+"""Utilities for parameter sweeping
+"""
+
 import datetime
 import json
 import multiprocessing as mp
 import os
 import sys
 from copy import deepcopy
-from typing import Dict, List, Tuple, Callable, Iterable, Any, Union
+from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
 import numpy as np
 from matplotlib import pyplot as plt
 
 from map_processing import TIME_FORMAT
-from map_processing.cache_manager import MapInfo
+from map_processing.cache_manager import MapInfo, CacheManagerSingleton
 from map_processing.data_models import OConfig, OSweepResults, UGDataSet
 from map_processing.graph import Graph
-from map_processing.graph_manager import GraphManager
+from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
+    tag_pose_array_with_metadata_to_map
+from map_processing.graph_vertex_edge_classes import VertexType
 
 REPOSITORY_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(REPOSITORY_ROOT)
@@ -22,11 +27,12 @@ sys.path.append(REPOSITORY_ROOT)
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
-                 ordered_sweep_config_keys: List[OConfig.OConfigEnum], verbose: bool = False,
-                 generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1) -> OSweepResults:
+                 ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
+                 verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
+                 cache_results: bool = True) -> OSweepResults:
     """TODO: Documentation and add SBA weighting to the sweeping
     """
-    graph_to_opt = Graph.as_graph(mi.map_dct)
+    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices)
 
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
     # Expand sweep_config if it contains callables and arguments to those callables
@@ -93,26 +99,22 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with parameters:\n" +
               json.dumps(sweep_results.args_producing_min, indent=2))
 
-    results_target_folder = os.path.join(REPOSITORY_ROOT, "saved_sweeps", mi.map_name)
-    if not os.path.exists(results_target_folder):
-        os.mkdir(results_target_folder)
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
-    results_cache_file_path_no_ext = os.path.join(results_target_folder, results_cache_file_name_no_ext)
-
+    if cache_results:
+        CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
     if generate_plot:
         fig = sweep_results.visualize_results_heatmap()
         if show_plot:
             plt.show()
-        fig.savefig(results_cache_file_path_no_ext + ".png", dpi=500)
-
-    with open(results_cache_file_path_no_ext + ".json", "w") as f:
-        s = sweep_results.json(indent=2)
-        f.write(s)
+        if cache_results:
+            fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+                        dpi=500)
     return sweep_results
 
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
-    """
+    """Target callable used in the sweep_params function.
+
     Args:
         sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
          as the argument), (2) the optimization configuration, and (3) the ground truth tags dictionary.
@@ -120,10 +122,9 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     Returns:
         Return value from GraphManager.optimize_graph
     """
-    oresult = GraphManager.optimize_graph(graph=deepcopy(sweep_args_tuple[0]), optimization_config=sweep_args_tuple[1],
-                                          visualize=False)
-    gt_result = GraphManager.ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=GraphManager.tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
+    oresult = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
+    gt_result = ground_truth_metric_with_tag_id_intersection(
+        optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
     print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
     return gt_result, sweep_args_tuple[3][0]

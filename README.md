@@ -23,8 +23,8 @@
 
 The primary Python packages are:
 
-- [map_processing/](map_processing): Contains the core optimization functionality.
-- [run_scripts/](run_scripts): Contains the scripts that make use of the [map_processing/](map_processing) package.
+- [map_processing](map_processing): Contains the core optimization functionality.
+- [run_scripts](run_scripts): Contains the scripts that make use of the [map_processing](map_processing) package.
 
 ### Unprocessed Data Set Parsing
 
@@ -32,25 +32,23 @@ The unprocessed graph data sets are described by the [pydantic](https://pydantic
 
 ### Additional Directories
 
-- [archive/](archive): Code that has been replaced or deprecated
-- [converted-data/](converted-data): Old data files for previous map types
-- [img/](img): Pictures for this README
-- [notebooks/](notebooks): Jupyter notebooks
-- [saved_sweeps/](saved_sweeps): Saved data files from/for parameter sweeps
-- [tests/](tests): Folder containing files for `pytest` unit testing.
+- [archive](archive): Code that has been replaced or is deprecated as a result of non-compatible changes made elsewhere in the code base.
+- [img](img): Pictures for this README.
+- [notebooks](notebooks): Jupyter notebooks.
+- [saved_sweeps](saved_sweeps): Saved data files from/for parameter sweeps.
+- [tests](tests): Folder containing files for `pytest` unit testing.
 
 ## Usage
 
 Note: When using scripts that need to access the Firebase database, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable will need to point to the location of the credentials JSON.
 
-### [graph_manager_user.py](run_scripts/graph_manager_user.py)
+### [optimize_and_manage_cache.py](run_scripts/optimize_graphs_and_manage_cache.py)
 
-The `run_scripts/graph_manager_user.py` script provides a comprehensive set of capabilities via a command line interface. Execute the script with the `-h` flag to see the help message. Some of its capabilities include:
+The `run_scripts/optimize_and_manage_cache.py` script provides a comprehensive set of capabilities via a command line interface. Execute the script with the `-h` flag to see the help message. Some of its capabilities include:
 
 - Acquiring and caching unprocessed maps from the Firebase database.
 - Performing standard graph optimization with plotting capabilities.
-- Performing a graph optimization comparison routine (see the the `-c` flag in the help message or, for more detail, documentation 
-  of the `GraphManager.compare_weights` instance method).
+- Performing a graph optimization comparison routine (see the `-c` flag in the help message or, for more detail, documentation of the `compare_weights` function in [graph_opt_hl_interface](map_processing/graph_opt_hl_interface.py) when its `compare` argument is true.).
 - Performing a parameter sweep (see the `-s` flag in the help message for more information).
 
 #### Examples
@@ -58,19 +56,19 @@ The `run_scripts/graph_manager_user.py` script provides a comprehensive set of c
 1. Cache all unprocessed maps in the Firebase database.
 
 ```shell
-python3 run_scripts/graph_manager_user.py -f
+python3 run_scripts/optimize_graphs_and_manage_cache.py -f
 ```
 
-2. Run optimization on all unprocessed maps in the cache matching the pattern `*duncan-occam-room-10-1*48*`; use SBA (`--pso 0`), apply weights corresponding to the weight vector associated with the `5`-valued enum in `GraphManager.WeightSpecifier`, and compute the ground truth metric.
+2. Run optimization on all unprocessed maps in the cache matching the pattern `*duncan-occam-room-10-1*48*`; use SBA (`--pso 0`), apply weights corresponding to the weight vector associated with the `5`-valued enum in `graph_opt_hl_interface.WeightSpecifier`, and compute the ground truth metric.
 
 ```shell
-python3 run_scripts/graph_manager_user.py -v -p "*duncan-occam-room-10-1*48*" --pso 0 -g -w 5
+python3 run_scripts/optimize_graphs_and_manage_cache.py -v -p "*duncan-occam-room-10-1*48*" --pso 0 -g -w 5
 ```
 
-3. After running data set generation (see below for more information - example 3 was used, with the added noise argument of `--noise "0.01, 0.001, 0.01, 0.001"`), run an optimization on the resulting generated data set. Use SBA (`--pso 0`), and apply weights corresponding to the weight vector associated with the `5`-valued enum in `GraphManager.WeightSpecifier`. Compute the ground truth metric.
+3. After running data set generation (see below for more information - example 3 was used, with the added noise argument of `--noise "0.01, 0.001, 0.01, 0.001"`), run an optimization on the resulting generated data set. Use SBA (`--pso 0`), and apply weights corresponding to the weight vector associated with the `5`-valued enum in `graph_opt_hl_interface.WeightSpecifier`. Compute the ground truth metric.
 
 ```shell
-python3 run_scripts/graph_manager_user.py -v -u -p "generated/generated_249372757.json" --pso 0 -g -w 5 -s
+python3 run_scripts/optimize_graphs_and_manage_cache.py -v -u -p "generated/generated_249372757.json" --pso 0 -g -w 5 -s
 ```
 
 <img src="img/optimization_result_from_synthesized.png" alt="optimization result from synthesized graph" width="50%">
@@ -100,7 +98,7 @@ Ground truth metric for generated_249372757: 0.24080496509868282 (delta of -0.59
 
 ### [generate_datasets.py](run_scripts/generate_datasets.py)
 
-The [generate_datasets.py](run_scripts/graph_manager_user.py) script provides the capability to generate artificial data sets, either from some parametrically-defined path and set of tag poses, or from an unprocessed recorded data set. In the case of the latter, the poses and un-optimized tag observations are treated as ground truth data from which new observations are generated (with noise optionally being introduced during the simulation). The data set generation integrates with the caching system used by the [graph_manager_user.py](run_scripts/graph_manager_user.py) script, so a common use case is generating a synthetic data set and then using it as the input to optimization. Execute the script with the `-h` flag to see the help message.
+The [generate_datasets.py](run_scripts/optimize_graphs_and_manage_cache.py) script provides the capability to generate artificial data sets, either from some parametrically-defined path and set of tag poses, or from an unprocessed recorded data set. In the case of the latter, the poses and un-optimized tag observations are treated as ground truth data from which new observations are generated (with noise optionally being introduced during the simulation). The data set generation integrates with the caching system used by the [optimize_and_manage_cache.py](run_scripts/optimize_graphs_and_manage_cache.py) script, so a common use case is generating a synthetic data set and then using it as the input to optimization. Execute the script with the `-h` flag to see the help message.
 
 Notes:
 
@@ -115,7 +113,7 @@ Notes:
 1. Use default tag poses (three tags facing the same direction in a line).
 
 ```shell
-python3 run_scripts/graph_manager_user -t "3line" -v
+python3 run_scripts/optimize_and_manage_cache -t "3line" -v
 ```
 
 <img src="img/synthesized_data_3line_no_noise.png" alt="synthesized_data_3line_no_noise" width="50%">
@@ -123,15 +121,15 @@ python3 run_scripts/graph_manager_user -t "3line" -v
 2. Using the OCCaM room's ground truth tag poses, follow an elliptical path around the interior of the tags. Noise is introduced to the path such that most of the variation is translational in the horizontal directions.
 
 ```shell
-python3 run_scripts/graph_manager_user --e_cp "3, 5" --e_zw 7 --e_xw 9 --xzp 1.5 -t "occam" --noise "0.01, 0.001, 0.01, 0.001" -v
+python3 run_scripts/optimize_and_manage_cache --e_cp "3, 5" --e_zw 7 --e_xw 9 --xzp 1.5 -t "occam" --noise "0.01, 0.001, 0.01, 0.001" -v
 ```
 
 <img src="img/synthesized_data_occam_noise.png" alt="synthesized_data_occam_noise" width="50%">
 
-3. Derive from a cached data set the odometry and tag data used to synthesize a data set with no noise; this assumes that the data has already been cached via the `graph_manager_user.py` script.
+3. Derive from a cached data set the odometry and tag data used to synthesize a data set with no noise; this assumes that the data has already been cached via the `optimize_and_manage_cache.py` script.
 
 ```shell
-python3 run_scripts/graph_manager_user -p d --d_p "*duncan-occam-room-10-1*48*" -v
+python3 run_scripts/optimize_and_manage_cache -p d --d_p "*duncan-occam-room-10-1*48*" -v
 ```
 
 <img src="img/synthesized_data_from_data_set.png" alt="synthesized_data_occam_noise" width="50%">

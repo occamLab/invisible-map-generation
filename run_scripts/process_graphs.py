@@ -8,11 +8,11 @@ Author: Allison Li, Duncan Mazza
 import os
 import sys
 
-# Ensure that the map_processing module is imported
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.graph_manager import GraphManager, PrescalingOptEnum
+from map_processing.graph_opt_hl_interface import PrescalingOptEnum, WeightSpecifier, WEIGHTS_DICT, optimize_graph
 from map_processing.graph import Graph
 from map_processing.graph_opt_utils import make_processed_map_json
 from firebase_admin import credentials
@@ -33,8 +33,8 @@ def for_each_map_info(map_info: MapInfo) -> None:
         return
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
-        is_sba=False, weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
-    opt_chi2, opt_result, _ = GraphManager.optimize_graph(graph=graph, optimization_config=optimization_config)
+        is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP])
+    opt_chi2, opt_result, _ = optimize_graph(graph=graph, oconfig=optimization_config)
     json_str = make_processed_map_json(opt_result)
     cms.upload(map_info, json_str)
 

@@ -2,13 +2,13 @@
 Script that makes use of the GraphManager class.
 
 Print the usage instructions:
->> python3 graph_manager_user.py -h
+>> python3 optimize_graphs_and_manage_cache.py -h
 
 Example usage that listens to the unprocessed maps' database reference:
->> python3 graph_manager_user.py -f
+>> python3 optimize_graphs_and_manage_cache.py -f
 
 Example usage that optimizes and plots all graphs matching the pattern specified by the -p flag:
->> python3 graph_manager_user.py -p "unprocessed_maps/**/*Living Room*"
+>> python3 optimize_graphs_and_manage_cache.py -p "unprocessed_maps/**/*Living Room*"
 
 Notes:
 - This script was adapted from the script test_firebase_sba as of commit 74891577511869f7cd3c4743c1e69fb5145f81e0
@@ -16,42 +16,35 @@ Notes:
   for further processing.
 """
 
-import argparse
 import os
+import sys
 
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
+import argparse
 import numpy as np
 from firebase_admin import credentials
-from typing import Dict, Callable, Iterable, Any, Tuple, List
+from typing import Dict, Callable, Iterable, Any, Tuple
 
 from map_processing import PrescalingOptEnum, VertexType
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
-from map_processing.graph_manager import GraphManager
+from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.sweep import sweep_params
 import map_processing
 
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [0.01, 3, 5]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.linspace, [0.01, 3, 20]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.linspace, [0.01, 3, 20]),
-    OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [0.01, 3, 5]),
+    # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-3, 5, 10]),
+    # OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [0.1, 10, 5]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-3, 100, 15]),
+    # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
-
-ORDERED_SWEEP_CONFIG_KEYS: List[OConfig.OConfigEnum] = [
-    OConfig.OConfigEnum.ODOM_TAG_RATIO,
-    OConfig.OConfigEnum.LIN_VEL_VAR,
-    OConfig.OConfigEnum.ANG_VEL_VAR,
-    OConfig.OConfigEnum.GRAV_MAG,
-]
 
 
 def make_parser() -> argparse.ArgumentParser:
-    """Makes an argument p object for this program
-
-    Returns:
-        Argument parser
-    """
     p = argparse.ArgumentParser(description="Graph optimization utility for optimizing, plotting, and database "
                                             "upload/download", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(
@@ -65,7 +58,8 @@ def make_parser() -> argparse.ArgumentParser:
         "-u",
         action="store_true",
         help="Specifies the recursive search (with the pattern given by the -p argument) to be rooted in the cache "
-             "folder's root (default is to be rooted in the unprocessed_maps/ sub-directory of the cache)."
+             "folder's root (default is to be rooted in the unprocessed_maps/ sub-directory of the cache).",
+        default=True,
     )
     p.add_argument(
         "--pso",
@@ -81,8 +75,8 @@ def make_parser() -> argparse.ArgumentParser:
         choices={0, 1, 2, 3}
     )
 
-    weights_options = [f"{weight_option.value}-'{str(weight_option)[len(GraphManager.WeightSpecifier.__name__) + 1:]}'"
-                       for weight_option in GraphManager.weights_dict.keys()]
+    weights_options = [f"{weight_option.value}-'{str(weight_option)[len(WeightSpecifier.__name__) + 1:]}'"
+                       for weight_option in WEIGHTS_DICT.keys()]
     p.add_argument(
         "-w",
         type=int,
@@ -90,30 +84,34 @@ def make_parser() -> argparse.ArgumentParser:
         help="Specifies which weight vector to be used (maps to a weight vector which is stored as a class attribute "
              "of the GraphManager class). Viable options are: " + ", ".join(weights_options),
         default=0,
-        choices={weight_option.value for weight_option in GraphManager.weights_dict.keys()}
+        choices={weight_option.value for weight_option in WEIGHTS_DICT.keys()}
     )
     p.add_argument(
         "-f",
         action="store_true",
-        help="Acquire maps from Firebase and overwrite existing cache."
+        help="Acquire maps from Firebase and overwrite existing cache.",
+        default=False,
     )
     p.add_argument(
         "-F",
         action="store_true",
         help="Upload any graphs to Firebase that are optimized while this script is running. This option is mutually "
-             "exclusive with the -c option."
+             "exclusive with the -c option.",
+        default=False,
     )
     p.add_argument(
         "-c",
         action="store_true",
         help="Compare graph optimizations by computing two different optimizations for two sub-graphs of the "
              "specified graph: one where the tag vertices are not fixed, and one where they are. This option is "
-             "mutually exclusive with the -F and -s flags."
+             "mutually exclusive with the -F and -s flags.",
+        default=False,
     )
     p.add_argument(
         "-v",
         action="store_true",
-        help="Visualize plots"
+        help="Visualize plots",
+        default=False,
     )
 
     pso_options = [f"{pso_option.value}-'{str(pso_option)[len(PrescalingOptEnum.__name__) + 1:]}'"
@@ -134,13 +132,14 @@ def make_parser() -> argparse.ArgumentParser:
         help="Removes from the graph observation edges above this many standard deviations from the mean observation "
              "edge chi2 value in the optimized graph. The graph optimization is then re-run with the modified graph. "
              "A negative value performs no filtering.",
-        default=-1.0
+        default=-1.0,
     )
     p.add_argument(
         "-g",
         action="store_true",
         help="Search for a matching ground truth data set and, if one is found, compute and print the ground truth "
-             "metric."
+             "metric.",
+        default=False,
     )
 
     p.add_argument(
@@ -148,7 +147,7 @@ def make_parser() -> argparse.ArgumentParser:
         type=float,
         required=False,
         help="Magnitude of the linear velocity variance vector used for edge information matrix computation",
-        default=None
+        default=1.0,
     )
 
     p.add_argument(
@@ -156,27 +155,37 @@ def make_parser() -> argparse.ArgumentParser:
         type=float,
         required=False,
         help="Angular velocity variance used for edge information matrix computation.",
-        default=None
+        default=1.0,
+    )
+
+    p.add_argument(
+        "--tsv",
+        type=float,
+        required=False,
+        help="Variance value used the tag (SBA) variance (i.e., noise variance in pixel space)",
+        default=1.0,
     )
 
     p.add_argument(
         "-s",
         action="store_true",
         help=f"Sweep the parameters as specified by the SWEEP_CONFIG dictionary in {map_processing.sweep.__name__}. "
-             f"Mutually exclusive with the -c flag."
+             f"Mutually exclusive with the -c flag.",
+        default=False,
     )
     p.add_argument(
         "--sbea",
         action="store_true",
         help="(scale_by_edge_amount) Apply a multiplicative coefficient to the odom-to-tag ratio that is found by "
-             "computing the ratio of the number of tag edges to odometry edges."
+             "computing the ratio of the number of tag edges to odometry edges.",
+        default=False,
     )
     p.add_argument(
         "--np",
         type=int,
         required=False,
         help="Number of processes to use when parameter sweeping.",
-        default=1
+        default=1,
     )
     return p
 
@@ -201,40 +210,29 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    fixed_tags = set()
-    for tag_type in args.fix:
-        if tag_type == 0:
-            fixed_tags.add(VertexType.ODOMETRY)
-        elif tag_type == 1:
-            fixed_tags.add(VertexType.TAG)
-        elif tag_type == 2:
-            fixed_tags.add(VertexType.WAYPOINT)
-
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)
 
-    compute_inf_params = OComputeInfParams()
-    if args.lvv is not None:
-        compute_inf_params.lin_vel_var = np.ones(3) * np.sqrt(3) * args.lvv,
-    if args.avv is not None:
-        compute_inf_params.ang_vel_var = args.avv
-
+    compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
+                                           ang_vel_var=args.avv)
     for map_info in matching_maps:
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-            sweep_params(mi=map_info, ground_truth_data=gt_data, base_oconfig=OConfig(is_sba=args.pso == 0),
-                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=ORDERED_SWEEP_CONFIG_KEYS, verbose=True,
-                         generate_plot=args.v, show_plot=args.v, num_processes=args.np)
+            sweep_params(mi=map_info, ground_truth_data=gt_data,
+                         base_oconfig=OConfig(is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
+                                              compute_inf_params=compute_inf_params),
+                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
+                         verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np)
         else:
-            graph_manager = GraphManager(GraphManager.WeightSpecifier(args.w), cms, pso=args.pso,
-                                         scale_by_edge_amount=args.sbea)
-            compare: bool = False
-            if args.c:
-                compare = True
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-            opt_result = graph_manager.holistic_optimize(
-                map_info=map_info, visualize=args.v, upload=args.F, compare=compare, fixed_vertices=tuple(fixed_tags),
-                obs_chi2_filter=args.filter, compute_inf_params=compute_inf_params, verbose=True,
+            oconfig = OConfig(is_sba=args.pso == 0, weights=WEIGHTS_DICT[WeightSpecifier(args.w)],
+                              scale_by_edge_amount=args.sbea, compute_inf_params=compute_inf_params)
+            fixed_vertices = set()
+            for tag_type in args.fix:
+                fixed_vertices.add(VertexType(tag_type))
+            opt_result = holistic_optimize(
+                map_info=map_info, pso=PrescalingOptEnum(args.pso), oconfig=oconfig,
+                fixed_vertices=fixed_vertices, verbose=True, visualize=args.v, compare=args.c, upload=args.F,
                 gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None)

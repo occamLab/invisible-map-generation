@@ -21,62 +21,61 @@ from scipy.optimize import OptimizeResult
 from scipy.spatial.transform import Rotation as Rot
 
 from . import PrescalingOptEnum, graph_opt_utils, ASSUMED_TAG_SIZE, VertexType
-from .data_models import UGDataSet, OComputeInfParams, Weights, OResultChi2Values
+from .data_models import UGDataSet, OComputeInfParams, Weights, OResultFitnessMetrics
 from .graph_vertex_edge_classes import Vertex, Edge
-from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, \
-    transform_matrix_to_vector, se3_quat_average, make_sba_tag_arrays, pose_to_isometry
+from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, se3_quat_average, \
+    transform_matrix_to_vector, make_sba_tag_arrays, pose_to_isometry
 
 
 class Graph:
     """A class for the graph encoding a map with class methods to optimize it.
 
-    Makes use of g2o and, optionally, expectation maximization.
+    Notes:
+        Because edge objects describe the vertices they connect, a dictionary of edges indexed by their UIDs completely
+        describes a graph. Though any directed graph with no cycles can be successfully instantiated, some of this
+        class's instance methods are implemented in a way that only works with the specific directed graph case where
+        the odometry nodes are organized in a linear path and observations are directly connected to an odometry node.
+        The case where SBA is used provides an exception: A SBA edge object is an Edge instance that connects an
+        odometry node to a tag node and also contains within it the tag corner vertices.
     """
 
-    _chi2_dict_template = {
-        "odometry": {
-            "sum": 0.0,
-            "edges": 0
-        },
-        "tag": {
-            "sum": 0.0,
-            "edges": 0
-        },
-        "gravity": {
-            "sum": 0.0,
-            "edges": 0
-        },
-    }
-
-    def __init__(self, vertices: Dict[int, Vertex], edges: Dict[int, Edge], weights: Optional[Weights] = None,
-                 is_sparse_bundle_adjustment: bool = False, use_huber: bool = False, huber_delta=None,
-                 damping_status: bool = False):
-        """The graph class
-
-        The graph contains a dictionary of vertices and edges, the keys being UIDs such as ints. The start and end UIDs
-        in each edge refer to the vertices in the `vertices` dictionary.
-
-        TODO: add rest of the args here
-        Args:
-            vertices: A dictionary of vertices indexed by UIDs. The UID-vertices associations are referred to by the
-             startuid and enduid fields of the :class: Edge  class.
-            edges: A dictionary of edges indexed by UIDs.
+    def __init__(self, edges: Dict[int, Edge], weights: Optional[Weights] = None, is_sba: bool = False,
+                 use_huber: bool = False, huber_delta=None):
         """
+        Args:
+            edges: A dictionary of directed edges indexed by UIDs. These edge objects completely describe the graph.
+            weights:
+            is_sba: True if sparse bundle adjustment is used.
+            use_huber: True if the huber delta is to be  used.
+            huber_delta: TODO
 
+        Raises:
+            ValueError - If the number of edges and vertices do not agree with what should be the case for a connected,
+             directed graph (with no loops).
+        """
         self.edges: Dict[int, Edge] = copy.deepcopy(edges)
-        self.vertices: Dict[int, Vertex] = copy.deepcopy(vertices)
-        self.original_vertices = copy.deepcopy(vertices)
-        self.huber_delta: bool = copy.deepcopy(huber_delta)
-        self.is_sba: bool = is_sparse_bundle_adjustment
-        self.damping_status: bool = damping_status
-        self.use_huber: bool = use_huber
+        self.vertices: Dict[int, Vertex] = {}
+        for edge in self.edges.values():
+            self.vertices[edge.startuid] = edge.start_end[0]
+            if edge.enduid is not None:
+                self.vertices[edge.enduid] = edge.start_end[1]
+            if edge.corner_verts is not None:
+                for corner_vert in edge.corner_verts.items():
+                    self.vertices[corner_vert[0]] = corner_vert[1]
+        self._verts_to_edges: Dict[int, Set[int]] = self._get_verts_to_edges()
 
+        ve = self.graph_is_valid()
+        if ve is not None:
+            raise ve
+
+        self.original_vertices = copy.deepcopy(self.vertices)
+        self.huber_delta: bool = copy.deepcopy(huber_delta)
         self._weights = copy.deepcopy(weights) if weights is not None else Weights()
 
-        self._verts_to_edges: Dict[int, Set[int]] = {}
-        self.our_odom_edges_to_g2o_edges = {}
-        self._generate_verts_to_edges_mapping()
+        self.is_sba: bool = is_sba
+        self.use_huber: bool = use_huber
 
+        self.our_odom_edges_to_g2o_edges = {}
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
@@ -86,6 +85,33 @@ class Graph:
         self.unoptimized_graph: Union[SparseOptimizer, None] = None
         self.optimized_graph: Union[SparseOptimizer, None] = None
 
+    def graph_is_valid(self) -> Optional[ValueError]:
+        """
+        Notes:
+            In a connected, directed graph (with no loops), the sum of the vertices' degrees must be 2x the number of
+            edges. However, because gravity edges are represented with an edge to a null (i.e., nonexistent) vertex, the
+            number of null vertices must be added to the sum of the non-null vertices' degrees when validating the
+            correctness of the number of edges and vertices.
+
+        Returns:
+           A ValueError if the sum of the vertices' degrees does not agree with the number of edges or if the graph is
+            not connected.
+        """
+        sum_vertex_degrees = 0
+        for _, set_incident_edges in self._verts_to_edges.items():
+            sum_vertex_degrees += len(set_incident_edges)
+
+        num_null_enduids: int = 0
+        for edge in self.edges.values():
+            if edge.enduid is None:
+                num_null_enduids += 1
+
+        if sum_vertex_degrees + num_null_enduids != 2 * len(self.edges):
+            return ValueError(
+                f"The number of edges ({len(self.edges)}) does not agree with the sum of (1) the sum of the degrees of "
+                f"non-null ({sum_vertex_degrees}) vertices and (2) the number of 'null' ({num_null_enduids}) vertices.")
+        return None
+
     def generate_unoptimized_graph(self) -> None:
         """Generate the unoptimized g2o graph from the current vertex and edge assignments.
 
@@ -93,48 +119,20 @@ class Graph:
         """
         self.unoptimized_graph = self.graph_to_optimizer()
 
-    def _generate_verts_to_edges_mapping(self) -> None:
-        """Populates the `_verts_to_edges` attribute such that it maps vertex UIDs to incident edge UIDs (regardless
-        of whether the edge is incoming or outgoing).
+    def _get_verts_to_edges(self) -> Dict[int, Set[int]]:
+        """Maps vertex UIDs to incident edge UIDs (regardless of whether the edge is incoming or outgoing).
         """
+        ret = {}
         for edge_uid in self.edges:
             edge = self.edges[edge_uid]
             for vertex_uid in [edge.startuid, edge.enduid]:
-                if self._verts_to_edges.__contains__(vertex_uid):
-                    self._verts_to_edges[vertex_uid].add(edge_uid)
+                if vertex_uid is None:
+                    continue
+                if vertex_uid in ret:
+                    ret[vertex_uid].add(edge_uid)
                 else:
-                    self._verts_to_edges[vertex_uid] = {edge_uid, }
-
-    def get_chi2_by_edge_type(self, graph: SparseOptimizer, verbose: bool = True) -> Dict[str, Dict[str, float]]:
-        """
-        Iterates through the edges and calculates the chi2 of each, sorting them into categories based on the end vertex
-
-        Args:
-            graph: a SparseOptimizer object
-            verbose (bool): Boolean for whether to print the chi2 values
-
-        Returns:
-            A dict mapping 'odometry', 'tag', and 'gravity' to the chi2s corresponding to that edge type
-        """
-        chi2s = dict(Graph._chi2_dict_template)
-        for edge in graph.edges():
-            this_edge = self.edges[edge.id()]
-            chi2 = graph_opt_utils.get_chi2_of_edge(edge)
-            end_mode = self.vertices[this_edge.enduid].mode if this_edge.enduid is not None else None
-            if end_mode == VertexType.ODOMETRY:
-                chi2s["odometry"]["sum"] += chi2
-                chi2s["odometry"]["edges"] += 1
-            elif end_mode == VertexType.TAG or end_mode == VertexType.TAGPOINT:
-                chi2s["tag"]["sum"] += chi2
-                chi2s["tag"]["edges"] += 1
-            elif end_mode is None:
-                chi2s["gravity"]["sum"] += chi2
-                chi2s["gravity"]["edges"] += 1
-        for edge_type in chi2s:
-            chi2s[edge_type]['average'] = chi2s[edge_type]['sum'] / chi2s[edge_type]['edges']
-        if verbose:
-            print(chi2s)
-        return chi2s
+                    ret[vertex_uid] = {edge_uid, }
+        return ret
 
     def map_odom_to_adj_chi2(self, vertex_uid: int) -> Tuple[float, int]:
         """Computes odometry-adjacent chi2 value
@@ -176,10 +174,11 @@ class Graph:
         adj_chi2 = 0.0
         for our_edge in odom_edge_uids:
             g2o_edge = self.our_odom_edges_to_g2o_edges[our_edge]
-            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])
+            adj_chi2 += graph_opt_utils.get_chi2_of_edge(g2o_edge, g2o_edge.vertices()[0])[0]
         return adj_chi2, num_tags_visible
 
-    def optimize_graph(self) -> OResultChi2Values:
+    # noinspection DuplicatedCode
+    def optimize_graph(self) -> OResultFitnessMetrics:
         """Optimize the graph using g2o (optimization result is a SparseOptimizer object, which is stored in the
         optimized_graph attribute). The g2o_status attribute is set to the g2o success output.
 
@@ -190,17 +189,34 @@ class Graph:
         self.optimized_graph.initialize_optimization()
         run_status = self.optimized_graph.optimize(1024)
         self.g2o_status = run_status
-        unoptimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph, verbose=False)
-        unoptimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
-            self.unoptimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
-        optimized_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph, verbose=False)
-        optimized_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
-            self.optimized_graph, verbose=False, edge_type_filter={EdgeSE3Gravity})
-        chi2_result = OResultChi2Values(
-            chi2_all_before=unoptimized_chi2,
-            chi2_gravity_before=unoptimized_gravity_chi2,
-            chi2_all_after=optimized_chi2,
-            chi2_gravity_after=optimized_gravity_chi2)
+
+        pre_opt_chi2, pre_opt_alpha = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph)
+        pre_opt_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                    edge_type_filter={EdgeSE3, EdgeSE3Expmap})[0]
+        pre_opt_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                       edge_type_filter={EdgeProjectPSI2UV})[0]
+        pre_opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph,
+                                                                        edge_type_filter={EdgeSE3Gravity})[0]
+
+        opt_chi2, opt_alpha = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph)
+        opt_se3_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                edge_type_filter={EdgeSE3, EdgeSE3Expmap})[0]
+        opt_psi2uv_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                   edge_type_filter={EdgeProjectPSI2UV})[0]
+        opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
+                                                                    edge_type_filter={EdgeSE3Gravity})[0]
+
+        chi2_result = OResultFitnessMetrics(
+            chi2_all_before=pre_opt_chi2,
+            alpha_all_before=pre_opt_alpha,
+            se3_not_gravity_before=pre_opt_se3_chi2,
+            psi2uv_before=pre_opt_psi2uv_chi2,
+            gravity_before=pre_opt_gravity_chi2,
+            chi2_all_after=opt_chi2,
+            alpha_all_after=opt_alpha,
+            se3_not_gravity_after=opt_se3_chi2,
+            psi2uv_after=opt_psi2uv_chi2,
+            gravity_after=opt_gravity_chi2)
         return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:
@@ -236,13 +252,13 @@ class Graph:
         # Add all edges
         cam_idx = 0
         for i, edge_i in self.edges.items():
-            if edge_i.corner_ids is not None:
+            if edge_i.corner_verts is not None:
                 # Note: we only use the focal length in the x direction since: (a) that's all that g2o supports and
                 # (b) it is always the same in ARKit (at least currently)
                 cam = CameraParameters(edge_i.camera_intrinsics[0], edge_i.camera_intrinsics[2:], 0)
                 cam.set_id(cam_idx)
                 optimizer.add_parameter(cam)
-                for corner_idx, corner_id in enumerate(edge_i.corner_ids):
+                for corner_idx, corner_id in enumerate(edge_i.corner_verts):
                     edge = EdgeProjectPSI2UV()
                     edge.resize(3)
                     edge.set_vertex(0, optimizer.vertex(corner_id))
@@ -310,17 +326,12 @@ class Graph:
             raise ValueError("Specified vertex for deletion is not a tag vertex")
 
         # Delete connected edge(s)
-        connected_edges = self._verts_to_edges[vertex_uid]
-        for edge_uid in connected_edges:
-            if self.edges[edge_uid].startuid != vertex_uid:
-                self._verts_to_edges[self.edges[edge_uid].startuid].remove(edge_uid)
-            else:
-                self._verts_to_edges[self.edges[edge_uid].enduid].remove(edge_uid)
-            self.edges.__delitem__(edge_uid)
+        for edge_uid in self._verts_to_edges[vertex_uid]:
+            del self.edges[edge_uid]
 
         # Delete vertex
-        self._verts_to_edges.__delitem__(vertex_uid)
-        self.vertices.__delitem__(vertex_uid)
+        del self._verts_to_edges[vertex_uid]
+        del self.vertices[vertex_uid]
 
     def remove_edge(self, edge_id: int):
         """
@@ -328,7 +339,11 @@ class Graph:
         """
         edge = self.edges[edge_id]
         self._verts_to_edges[edge.startuid].remove(edge_id)
+        if len(self._verts_to_edges[edge.startuid]) == 0:
+            del self._verts_to_edges[edge.startuid]
         self._verts_to_edges[edge.enduid].remove(edge_id)
+        if len(self._verts_to_edges[edge.enduid]) == 0:
+            del self._verts_to_edges[edge.enduid]
         del self.edges[edge_id]
 
     def filter_out_high_chi2_observation_edges(self, filter_std_dv_multiple: float) -> None:
@@ -350,7 +365,7 @@ class Graph:
             start_mode = self.vertices[self.edges[edge.id()].startuid].mode
             if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (VertexType.TAG,
                                                                                    VertexType.TAGPOINT):
-                chi2 = graph_opt_utils.get_chi2_of_edge(edge)
+                chi2 = graph_opt_utils.get_chi2_of_edge(edge)[0]
                 chi2_by_edge[edge.id()] = chi2
                 chi2s.append(chi2)
         chi2s = np.array(chi2s)
@@ -383,7 +398,7 @@ class Graph:
             edge: Edge = self.edges[uid]
             end_mode = self.vertices[edge.enduid].mode if edge.enduid is not None else None
             weights_to_use = self._weights.get_weights_from_end_vertex_mode(
-                end_vertex_mode=VertexType.TAGPOINT if edge.corner_ids is not None else end_mode)
+                end_vertex_mode=VertexType.TAGPOINT if edge.corner_verts is not None else end_mode)
             edge.compute_information(weights_vec=weights_to_use, compute_inf_params=compute_inf_params)
 
             if edge.information_prescaling is not None and len(edge.information_prescaling.shape) != 0:
@@ -427,9 +442,8 @@ class Graph:
             for i in membership:
                 del groups[i]
             groups.append(new_group)
-
-        # TODO: copy over other information from the graph
-        return [Graph(vertices={k: self.vertices[k] for k in group[0]}, edges={k: self.edges[k] for k in group[1]})
+        return [Graph(edges={k: self.edges[k] for k in group[1]}, weights=self._weights, is_sba=self.is_sba,
+                      use_huber=self.use_huber, huber_delta=self.huber_delta)
                 for group in groups]
 
     def integrate_path(self, edgeuids, initial=np.array([0, 0, 0, 0, 0, 0, 1])) -> np.ndarray:
@@ -495,43 +509,64 @@ class Graph:
                 tags = np.vstack([tags, tag_pose])
         return tags
 
-    def get_subgraph(self, start_vertex_uid, end_vertex_uid) -> Graph:
+    def get_subgraph(self, start_odom_uid, end_odom_uid) -> Graph:
         """Returns a Graph instance that is a subgraph created from the specified range of odometry vertices.
 
         Args:
-            start_vertex_uid: First vertex in range of vertices from which to create a subgraph
-            end_vertex_uid: Last vertex in range of vertices from which to create a subgraph
+            start_odom_uid: First vertex in range of odometry vertices (ordered by their UID) from which to create a
+             subgraph.
+            end_odom_uid: Last vertex in range of odometry vertices (ordered by their UID) from which to create a
+             subgraph.
 
         Returns:
-            A Graph object constructed from all odometry vertices within the prescribed range and any other vertices
-            incident to the odometry vertices. Gravity edges are included (despite their not having been assigned an end
-            vertex), as are any tag vertices (even if they are not connected to the included odometry vertices).
+            A Graph object constructed from all odometry vertices within the prescribed UID range and any other
+             non-odometry vertices incident to the odometry vertices (along with the respective edges). Gravity edges
+             are included (despite their not having been assigned an end vertex).
+
+        Raises:
+            ValueError - If start_odom_uid or end_odom_uid are not in the graph.
+            ValueError - If start_odom_uid or end_odom_uid do not correspond to odometry vertices.
         """
+        if start_odom_uid not in self.vertices:
+            raise ValueError(f"Provided starting odometry vertex UID of {start_odom_uid} is not included as a vertex "
+                             f"in this graph.")
+        elif self.vertices[start_odom_uid].mode != VertexType.ODOMETRY:
+            raise ValueError(f"Provided starting vertex UID does not correspond to an odometry node.")
+
+        if end_odom_uid not in self.vertices:
+            raise ValueError(f"Provided ending odometry vertex UID of {end_odom_uid} is not included as a vertex "
+                             f"in this graph.")
+        elif self.vertices[end_odom_uid].mode != VertexType.ODOMETRY:
+            raise ValueError(f"Provided end vertex UID does not correspond to an odometry node.")
+
+        # Collect all odometry vertices and the edges between them in the prescribed range
         start_found = False
         edges: Dict[int, Edge] = {}
-        vertices: Dict[int, Vertex] = {}
-        for i, edgeuid in enumerate(self.get_ordered_odometry_edges()[0]):
-            edge = self.edges[edgeuid]
-            if edge.startuid == start_vertex_uid:
+        vertices: Set[int] = set()
+        ordered_odom_edges = self.get_ordered_odometry_edges()[0]
+        for edge_uid in ordered_odom_edges:
+            odom_edge = self.edges[edge_uid]
+            if odom_edge.startuid == start_odom_uid:
                 start_found = True
             if start_found:
-                vertices[edge.startuid] = self.vertices[edge.startuid]
-                if edge.enduid is not None:
-                    vertices[edge.enduid] = self.vertices[edge.enduid]
-                edges[edgeuid] = edge
-            if edge.enduid == end_vertex_uid:
+                vertices.add(odom_edge.startuid)
+                edges[edge_uid] = odom_edge
+            if odom_edge.enduid == end_odom_uid:
+                vertices.add(odom_edge.enduid)
                 break
 
-        # Ensure all tag vertices are included, regardless of connectivity with the odometry vertices
-        for (vert_id, vert) in self.vertices.items():
-            if vert.mode == VertexType.TAGPOINT:
-                if vert_id not in vertices:
-                    vertices[vert_id] = vert
+        # Collect all vertices and edges incident to the odometry vertices already collected
+        for odom_vertex_uid in vertices:
+            for edge_uid in self._verts_to_edges[odom_vertex_uid]:
+                if edge_uid in edges:
+                    continue
+                edge = self.edges[edge_uid]
+                if edge.startuid != odom_vertex_uid:
+                    continue
+                edges[edge_uid] = edge
 
-        ret_graph = Graph(vertices, edges, weights=self._weights,
-                          is_sparse_bundle_adjustment=self.is_sba, use_huber=self.use_huber,
-                          huber_delta=self.huber_delta, damping_status=self.damping_status)
-        return ret_graph
+        return Graph(edges, weights=self._weights, is_sba=self.is_sba, use_huber=self.use_huber,
+                     huber_delta=self.huber_delta)
 
     def get_tag_verts(self) -> List[int]:
         """
@@ -594,7 +629,7 @@ class Graph:
                 segments.append([uid])
         return segments
 
-    def get_optimizer_vertices_dict_by_types(self, types: Optional[Set[VertexType]] = None) -> Dict[int, Vertex]:
+    def filter_vertex_uids_by_type(self, types: Optional[Set[VertexType]] = None) -> Set[int]:
         """
         Args:
             types: Vertex types to filter by. If None is passed, then the default filtering is only TAG vertices.
@@ -603,15 +638,10 @@ class Graph:
             UID to Vertex mapping of vertices from the optimized graph where the vertices are filtered by type.
         """
         if types is None:
-            types = {VertexType.TAG, }
-        return {
-            uid: Vertex(
-                self.vertices[uid].mode,
-                self.optimized_graph.vertex(uid).estimate().vector(),
-                self.vertices[uid].fixed,
-                self.vertices[uid].meta_data
-            ) for uid in self.optimized_graph.vertices() if self.vertices[uid].mode in types
-        }
+            return set()
+        elif len(types) == 0:
+            return set()
+        return {uid for uid, vertex in self.vertices.items() if vertex.mode in types}
 
     def get_map_tag_id_to_optimizer_pose_estimate(self) -> Dict[int, np.ndarray]:
         return {
@@ -620,18 +650,18 @@ class Graph:
         }
 
     @staticmethod
-    def as_graph(data_set: Union[Dict, UGDataSet], fixed_vertices: Union[VertexType, Tuple[VertexType]] = (),
+    def as_graph(data_set: Union[Dict, UGDataSet], fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
                  prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
         Args:
             data_set: Unprocessed map data set. If a dict, it is decoded into a `UGDataSet` instance.
-            fixed_vertices (tuple): Determines which vertex types to set to fixed. Dummy and Tagpoints are always fixed
+            fixed_vertices: Determines which vertex types to set to fixed. Dummy and TagPoints are always fixed
              regardless of their presence in the tuple.
-            prescaling_opt (PrescalingOptEnum): Selects which logical branches to use. If it is equal to
-            `PrescalingOptEnum.USE_SBA`, then sparse bundle adjustment is used; otherwise, the outcome only differs
-             between the remaining enum values by how the tag edge prescaling matrix is selected. Read the
-             PrescalingOptEnum class documentation for more information.
+            prescaling_opt: Selects which logical branches to use. If it is equal to `PrescalingOptEnum.USE_SBA`, then
+             sparse bundle adjustment is used; otherwise, the outcome only differs between the remaining enum values by
+             how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum class documentation for more
+             information.
 
         Returns:
             A graph derived from the input dictionary.
@@ -678,8 +708,10 @@ class Graph:
         initialize_with_averages = None
 
         # Ensure that the fixed_vertices is always a tuple
-        if isinstance(fixed_vertices, VertexType):
-            fixed_vertices = (fixed_vertices,)
+        if fixed_vertices is None:
+            fixed_vertices = set()
+        elif isinstance(fixed_vertices, VertexType):
+            fixed_vertices = {fixed_vertices, }
 
         if use_sba:
             true_3d_tag_points, true_3d_tag_center = make_sba_tag_arrays(ASSUMED_TAG_SIZE)
@@ -794,6 +826,7 @@ class Graph:
             tag_transform_estimates = defaultdict(lambda: [])
         else:
             vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
+
         for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
             vertices[current_odom_vertex_uid] = Vertex(
@@ -844,7 +877,8 @@ class Graph:
                     #                                    cam.cam_map(point_in_camera_frame))))
 
                     edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=tag_vertex_id,
-                                               corner_ids=tag_corner_ids_by_tag_vertex_id[tag_vertex_id],
+                                               corner_verts={t_id: vertices[t_id] for t_id in
+                                                             tag_corner_ids_by_tag_vertex_id[tag_vertex_id]},
                                                information_prescaling=None,
                                                camera_intrinsics=camera_intrinsics_for_tag[tag_index],
                                                measurement=tag_corners[tag_index],
@@ -859,10 +893,11 @@ class Graph:
                             fixed=VertexType.TAG in fixed_vertices,
                             meta_data={'tag_id': tag_id_by_tag_vertex_id[tag_vertex_id]})
                         counted_tag_vertex_ids.add(tag_vertex_id)
-                    edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=tag_vertex_id, corner_ids=None,
-                                               information_prescaling=tag_edge_prescaling[tag_index],
-                                               camera_intrinsics=None, measurement=tag_edge_measurements[tag_index],
-                                               start_end=(vertices[current_odom_vertex_uid], vertices[tag_vertex_id]))
+                    edges[edge_counter] = Edge(
+                        startuid=current_odom_vertex_uid, enduid=tag_vertex_id, corner_verts=None,
+                        information_prescaling=tag_edge_prescaling[tag_index], camera_intrinsics=None,
+                        measurement=tag_edge_measurements[tag_index],
+                        start_end=(vertices[current_odom_vertex_uid], vertices[tag_vertex_id]))
 
                 num_tag_edges += 1
                 edge_counter += 1
@@ -888,10 +923,10 @@ class Graph:
                         vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
                 else:
                     measurement_arg = waypoint_edge_measurements[waypoint_index]
-                edges[edge_counter] = Edge(startuid=current_odom_vertex_uid, enduid=waypoint_vertex_id, corner_ids=None,
-                                           information_prescaling=None, camera_intrinsics=None,
-                                           measurement=measurement_arg, start_end=(vertices[current_odom_vertex_uid],
-                                                                                   vertices[waypoint_vertex_id]))
+                edges[edge_counter] = Edge(
+                    startuid=current_odom_vertex_uid, enduid=waypoint_vertex_id, corner_verts=None,
+                    information_prescaling=None, camera_intrinsics=None, measurement=measurement_arg,
+                    start_end=(vertices[current_odom_vertex_uid], vertices[waypoint_vertex_id]))
                 edge_counter += 1
 
             # Connect odometry nodes
@@ -905,7 +940,7 @@ class Graph:
                         np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i]))
 
                 edges[edge_counter] = Edge(startuid=previous_vertex_uid, enduid=current_odom_vertex_uid,
-                                           corner_ids=None, information_prescaling=None, camera_intrinsics=None,
+                                           corner_verts=None, information_prescaling=None, camera_intrinsics=None,
                                            measurement=measurement_arg, start_end=(vertices[previous_vertex_uid],
                                                                                    vertices[current_odom_vertex_uid]))
                 edge_counter += 1
@@ -917,7 +952,7 @@ class Graph:
             edges[edge_counter] = Edge(
                 startuid=current_odom_vertex_uid, enduid=None, information_prescaling=None,
                 measurement=gravity_edge_measurement_vector, start_end=(vertices[current_odom_vertex_uid], None),
-                camera_intrinsics=None, corner_ids=None)
+                camera_intrinsics=None, corner_verts=None)
             edge_counter += 1
 
             # Store uid so that it can be easily accessed for the next odometry-to-odometry edge addition
@@ -931,14 +966,17 @@ class Graph:
                 vertices[vertex_id].estimate = se3_quat_average(transforms).to_vector()
 
         # TODO: Huber delta should probably scale with pixels rather than error
-        resulting_graph = Graph(vertices, edges, is_sparse_bundle_adjustment=use_sba,
-                                use_huber=False, huber_delta=None, damping_status=False)
+        resulting_graph = Graph(edges, is_sba=use_sba, use_huber=False, huber_delta=None)
         return resulting_graph
 
     @staticmethod
     def transfer_vertex_estimates(graph_from: Graph, graph_to: Graph,
                                   filter_by: Optional[Set[VertexType]] = None) -> None:
         """Transfer vertex estimates from one graph to another.
+
+        Notes:
+            Correspondence between the two graphs' vertices is determined by the equality of their UIDs. Any vertex in
+            `graph_from` whose UID does not correspond to a vertex in `graph_to` is ignored.
 
         Args:
             graph_from: Graph to transfer vertex estimates from
@@ -951,7 +989,7 @@ class Graph:
         """
         if filter_by is None:
             filter_by = {t for t in VertexType}
-        tag_vertices_dict = graph_from.get_optimizer_vertices_dict_by_types(types=filter_by)
-        for uid, vertex in tag_vertices_dict.items():
+        filtered_vert_uids = graph_from.filter_vertex_uids_by_type(types=filter_by)
+        for uid in filtered_vert_uids:
             if uid in graph_to.vertices:
-                graph_to.vertices[uid].estimate = vertex.estimate
+                graph_to.vertices[uid].estimate = graph_from.vertices[uid].estimate

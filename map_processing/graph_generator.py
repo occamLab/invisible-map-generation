@@ -10,7 +10,6 @@ from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
 
 import cv2.cv2 as cv2
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
@@ -19,8 +18,6 @@ from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GenerateParams
 from map_processing.graph_opt_plot_utils import draw_frames
 from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
-
-matplotlib.rcParams['figure.dpi'] = 500
 
 
 class GraphGenerator:
@@ -112,7 +109,9 @@ class GraphGenerator:
 
         Raises:
             ValueError - If `path_from` is a `UGDataSet` instance and `t_max` is negative.
-            ValueError - If `path_from` is a `UGDataSet` instance and `n_poses` is <2
+            ValueError - If `path_from` is a `UGDataSet` instance and `n_poses` is <2.
+            ValueError - If `path_from` is a callable and `gen_params` has a null value for any of its t_max, n_poses,
+             or parameterized_path_args attributes.
         """
         self._path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet] = path_from
         self._path_type = GraphGenerator.PathType.PARAMETERIZED if isinstance(self._path_from, Callable) else \
@@ -132,6 +131,11 @@ class GraphGenerator:
         self._tag_poses: Dict[int, np.ndarray]
 
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
+            if self._gen_params.t_max is None or \
+                    self._gen_params.n_poses is None or \
+                    self._gen_params.parameterized_path_args is None:
+                raise ValueError("Provided GenerateParams instance cannot have a null value for any of its t_max, "
+                                 "n_poses, or parameterized_path_args attributes.")
             self._tag_poses = {} if tag_poses_for_parameterized is None else tag_poses_for_parameterized
         else:
             self._tag_poses = self._path_from.approx_tag_in_global_by_id
@@ -143,7 +147,7 @@ class GraphGenerator:
 
         self._odometry_poses: Optional[np.ndarray] = None
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
-            self._odometry_t_vec = np.arange(0, self._gen_params.t_max, self._gen_params.t_max / 
+            self._odometry_t_vec = np.arange(0, self._gen_params.t_max, self._gen_params.t_max /
                                              self._gen_params.n_poses)
         else:
             self._odometry_t_vec = self._path_from.timestamps
@@ -196,14 +200,14 @@ class GraphGenerator:
         return UGDataSet(
             # Intentionally skipping location data
             map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S") if self._gen_params.map_id \
-                is None else self._gen_params.map_id,
+            is None else self._gen_params.map_id,
             # Intentionally skipping plane data
             pose_data=pose_data,
             tag_data=tag_data,
             generated_from=self._gen_params
         ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
-    def export_to_map_processing_cache(self, verbose=False) -> MapInfo:
+    def export_to_map_processing_cache(self, verbose=False, file_name_suffix: str = "") -> MapInfo:
         """Serializes the graph into a json file and saves it to the target destination as set by the TODO
         """
         map_obj, gt_obj = self.export()
@@ -216,14 +220,14 @@ class GraphGenerator:
                   f"tags observed a total of {map_obj.num_observations} "
                   f"{'times' if map_obj.num_observations > 1 else 'time'}.")
 
-        mi = MapInfo(map_name=map_id, map_json_name=map_id, map_dct=map_dct)
+        mi = MapInfo(map_name=map_id + file_name_suffix, map_json_name=map_id + file_name_suffix, map_dct=map_dct)
         CacheManagerSingleton.cache_map(
             parent_folder="generated",
             map_info=mi,
             json_string=map_str
         )
-        CacheManagerSingleton.cache_ground_truth_data(gt_obj, dataset_name=self._gen_params.dataset_name,
-                                                      corresponding_map_names=[map_id])
+        CacheManagerSingleton.cache_ground_truth_data(
+            gt_obj, dataset_name=self._gen_params.dataset_name, corresponding_map_names=[map_id + file_name_suffix])
         return mi
 
     def visualize(self, plus_minus_lim=5) -> None:
@@ -246,6 +250,7 @@ class GraphGenerator:
         ax.axes.set_ylim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
+        plt.plot(self._odometry_poses[:, 0, 3], self._odometry_poses[:, 1, 3], self._odometry_poses[:, 2, 3])
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
 
         # Get observation vectors in the global frame and plot them

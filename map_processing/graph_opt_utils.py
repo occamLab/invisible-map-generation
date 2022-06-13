@@ -3,7 +3,7 @@ Utility functions for graph optimization.
 """
 
 import math
-from typing import Union, List, Optional, Set, Type
+from typing import Union, List, Optional, Set, Type, Tuple
 
 import g2o
 import numpy as np
@@ -14,6 +14,7 @@ from g2o import SE3Quat, EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, VertexSE3, V
 from . import graph_util_get_neighbors, VertexType
 from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet, \
     OG2oOptimizer
+from .graph import Graph
 from .transform_utils import transform_gt_to_have_common_reference
 
 
@@ -121,20 +122,21 @@ def optimizer_find_connected_tag_vert(optimizer: g2o.SparseOptimizer, location_v
     return None
 
 
-def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity],
-                     start_vert: Optional[Union[VertexSE3, VertexSE3Expmap]] = None,
-                     log_normalization: bool = False) -> float:
-    """Computes the chi2 value associated with the provided edge
+def get_chi2_of_edge(
+        edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, EdgeSE3Gravity],
+        start_vert: Optional[Union[VertexSE3, VertexSE3Expmap]] = None) -> Tuple[float, float]:
+    """Computes the chi2 and log-normalized fitness values associated with the provided edge.
 
     Arguments:
         edge: A g2o edge of type EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, or EdgeSE3Gravity
         start_vert: The start vertex associated with this edge (only used if the edge is of type EdgeSE3Gravity;
          otherwise, it is ignored.)
-        log_normalization: If true, then accounts for the log normalization constant. See the notes for this function's
-         documentation for more information
 
     Returns:
         Chi2 value associated with the provided edge.
+
+    Notes:
+        TODO: documentation on the alternative fitness metric.
 
     Raises:
         ValueError - If an edge is encountered that is not handled (handled edges are EdgeProjectPSI2UV,
@@ -147,6 +149,7 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, Edge
     """
     chi2: float
     information: np.ndarray = edge.information()
+
     if isinstance(edge, EdgeProjectPSI2UV):
         cam = edge.parameter(0)
         camera_coords = edge.vertex(1).estimate() * edge.vertex(2).estimate().inverse() * edge.vertex(0).estimate()
@@ -178,42 +181,38 @@ def get_chi2_of_edge(edge: Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3, Edge
     if math.isnan(chi2):
         raise ValueError(f"chi2 is NaN for: {edge}")
 
-    if log_normalization:
-        c = -np.log((2 * np.pi) ** (-0.5 * information.shape[0]))
-        return c - np.log(np.sqrt(np.linalg.det(information))) + chi2
-    else:
-        return chi2
+    k: int = information.shape[0]
+    c: float = -np.log(np.power(2 * np.pi, -0.5 * k))
+    alpha: float = c - np.log(np.sqrt(np.linalg.det(information))) + 0.5 * chi2
+    return chi2, alpha
 
 
-def sum_optimizer_edges_chi2(optimizer: g2o.SparseOptimizer, verbose: bool = True,
-                             edge_type_filter: Optional[Set[Union[Type[Union[EdgeProjectPSI2UV, EdgeSE3Expmap,
-                                                                       EdgeSE3Gravity]]]]] =
-                             None, log_normalization: bool = False) -> float:
+def sum_optimizer_edges_chi2(
+        optimizer: g2o.SparseOptimizer,
+        edge_type_filter: Optional[Set[Union[Type[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]]]] = None) \
+        -> Tuple[float, float]:
     """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.
 
     Args:
         optimizer: A SparseOptimizer object
-        verbose: Boolean for whether to print the total chi2 value
         edge_type_filter: A set providing an inclusive filter of the edge types to sum. If no set is provided or an
          empty set is provided, then no edges are filtered.
-        log_normalization: If true, then accounts for the log normalization constant. See the `get_chi2_of_edge`
-         function for more information on what this means.
 
     Returns:
-        Sum of the chi2 values associated with each edge
+        Sum of the chi2 and alpha values associated with each edge. See `get_chi2_of_edge` function for more information
+        on these values.
     """
     if edge_type_filter is None:
         edge_type_filter = set()
 
     total_chi2 = 0.0
+    total_alpha = 0.0
     for edge in optimizer.edges():
         if len(edge_type_filter) == 0 or type(edge) in edge_type_filter:
-            total_chi2 += get_chi2_of_edge(edge, edge.vertices()[0], log_normalization=log_normalization)
-
-    if verbose:
-        print(total_chi2)
-
-    return total_chi2
+            fitness_metrics = get_chi2_of_edge(edge, edge.vertices()[0])
+            total_chi2 += fitness_metrics[0]
+            total_alpha += fitness_metrics[1]
+    return total_chi2, total_alpha
 
 
 def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \

@@ -18,16 +18,11 @@ import numpy as np
 from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS, TIME_FORMAT
 from map_processing.graph_generator import GraphGenerator
 from map_processing.data_models import UGDataSet, GenerateParams
-from run_scripts import graph_manager_user
+from run_scripts import optimize_graphs_and_manage_cache
 from map_processing.cache_manager import CacheManagerSingleton
 
 
 def make_parser() -> argparse.ArgumentParser:
-    """Makes an argument p object for this program
-
-    Returns:
-        Argument p
-    """
     p = argparse.ArgumentParser(description="Acquire (from cache or Firebase) graphs, run optimization, and plot",
                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(
@@ -48,9 +43,9 @@ def make_parser() -> argparse.ArgumentParser:
         required=False,
         help=f"If a data set-based path is specified, this defines the pattern that is used to search for the cached "
              f"data set. This argument functions the same way the '-p' argument does for the "
-             f"{graph_manager_user.__name__}.py script when only unprocessed maps are searched, so refer to that help "
-             f"message for more information. Note that if multiple paths are matched, then data sets are generated for "
-             f"each of them."
+             f"{optimize_graphs_and_manage_cache.__name__}.py script when only unprocessed maps are searched, so refer "
+             f"to that help message for more information. Note that if multiple paths are matched, then data sets are "
+             f"generated for each of them."
     )
     p.add_argument(
         "--e_xw",
@@ -216,11 +211,9 @@ if __name__ == "__main__":
 
     if args.p == "e":  # e specifies an elliptical path, so acquire the arguments
         path_arguments = extract_parameterized_path_args(args)
-        # Ignore unbound local variable warning for odometry_noise (it is guaranteed to be defined)
-        # noinspection PyUnboundLocalVariable
         gen_params = GenerateParams(
             dataset_name=args.t, parameterized_path_args=path_arguments, t_max=args.t_max, n_poses=args.np,
-            tag_size=ASSUMED_TAG_SIZE, odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
+            tag_size=ASSUMED_TAG_SIZE, odometry_noise_var=odom_noise, obs_noise_var=args.obs_noise)
         gg = GraphGenerator(path_from=GraphGenerator.PARAMETERIZED_PATH_ALIAS_TO_CALLABLE[args.p],
                             gen_params=gen_params, tag_poses_for_parameterized=GT_TAG_DATASETS[args.t])
         if args.v:
@@ -236,7 +229,7 @@ if __name__ == "__main__":
         for map_info in matching_maps:
             data_set_parsed = UGDataSet(**map_info.map_dct)
             gen_params = GenerateParams(dataset_name=map_info.map_name, tag_size=ASSUMED_TAG_SIZE,
-                                        odometry_noise=odom_noise, obs_noise_var=args.obs_noise)
+                                        odometry_noise_var=odom_noise, obs_noise_var=args.obs_noise)
             gg = GraphGenerator(path_from=data_set_parsed, gen_params=gen_params)
             if args.v:
                 gg.visualize()

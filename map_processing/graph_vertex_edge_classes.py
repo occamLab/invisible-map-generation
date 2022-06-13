@@ -2,7 +2,7 @@
 Vertex, VertexType, and Edge classes which are used in the Graph class.
 """
 
-from typing import List, Union, Dict, Any, Optional, Tuple
+from typing import Union, Dict, Any, Optional, Tuple
 
 import numpy as np
 
@@ -29,6 +29,9 @@ class Vertex:
         self.fixed: bool = fixed
         self.meta_data: Dict = {} if meta_data is None else dict(meta_data)
 
+    def __repr__(self):
+        return f"<{'Fixed' if self.fixed else ''}{str(self.mode)[len(VertexType.__name__) + 1:]} Vertex>"
+
 
 class Edge:
     """A class for graph edges.
@@ -38,7 +41,7 @@ class Edge:
     Args:
         startuid: The UID of the starting vertex. This can be any hashable such as an int.
         enduid: The UID of the ending vertex. This can be any hashable such as an int.
-        corner_ids: an array of UIDs for each of the tag corner vertices. This only applies in the SBA case
+        corner_verts: an array of UIDs for each of the tag corner vertices. This only applies in the SBA case
         information_prescaling: A 6 element numpy array encoding the diagonal of a matrix that pre-multiplies the
          edge information matrix specified by the weights. If None is past, then the 6 element vector is assumed to
          be all ones
@@ -56,24 +59,24 @@ class Edge:
     If true, the information matrices are exclusively computed as diagonal matrices from the weight vectors.
     """
 
-    def __init__(self, startuid: int, enduid: Optional[int], corner_ids: Optional[List[int]],
+    def __init__(self, startuid: int, enduid: Optional[int], corner_verts: Optional[Dict[int, Vertex]],
                  information_prescaling: Optional[np.ndarray], camera_intrinsics: Optional[np.ndarray],
                  measurement: np.ndarray, start_end: Tuple[Vertex, Optional[Vertex]]):
         self.startuid: int = startuid
         self.enduid: Optional[int] = enduid
-        self.corner_ids: Optional[List[int]] = list(corner_ids) if corner_ids is not None else None
+        self.corner_verts: Optional[Dict[int, Vertex]] = corner_verts if corner_verts is not None else None
         self.information_prescaling: Optional[np.ndarray] = np.array(information_prescaling)
         self.camera_intrinsics: Optional[np.ndarray] = np.array(camera_intrinsics)
         self.measurement: Optional[np.ndarray] = np.array(measurement)
-        self.start_end: Tuple[Vertex, Vertex] = start_end
-        self.information: np.ndarray = np.eye(2 if corner_ids is not None else (3 if start_end[1] is None else 6))
+        self.start_end: Tuple[Vertex, Optional[Vertex]] = start_end
+        self.information: np.ndarray = np.eye(2 if corner_verts is not None else (3 if start_end[1] is None else 6))
 
     def compute_information(self, weights_vec: np.ndarray, compute_inf_params: OComputeInfParams) -> None:
         """Computes the information matrix for the edge.
 
         Notes:
-            Depending on the modes indicated in the vertices in the `start_end` and `corner_ids` instance attributes,
-             the corresponding method is called. If the corner_ids instance attribute is not None, then it is inferred
+            Depending on the modes indicated in the vertices in the `start_end` and `corner_verts` instance attributes,
+             the corresponding method is called. If the corner_verts instance attribute is not None, then it is inferred
              that the edge is to a tag whose corner pixel values are known and being used for sba; the
              `_compute_information_sba` method is subsequently called. If the start and end vertices are both of the
              odometry type, then `_compute_information_se3_nonzero_delta_t` is used. Otherwise, it is assumed that the
@@ -94,8 +97,8 @@ class Edge:
         if np.any(weights_vec < 0):
             raise ValueError("The input weight vector should not contain negative values.")
 
-        if self.corner_ids is not None:  # sba corner edge
-            self._compute_information_sba(weights_vec)
+        if self.corner_verts is not None:  # sba corner edge
+            self._compute_information_sba(weights_vec, compute_inf_params.tag_sba_var)
         elif self.start_end[1] is None:  # gravity edge
             self._compute_information_gravity(weights_vec)
         else:
@@ -112,7 +115,7 @@ class Edge:
                              f"dimensions instead of 2 (weights vector argument was an array of shape "
                              f"{weights_vec.shape}")
 
-    def _compute_information_se3_nonzero_delta_t(self, weights_vec: np.ndarray, ang_vel_var: float = 1,
+    def _compute_information_se3_nonzero_delta_t(self, weights_vec: np.ndarray, ang_vel_var: float = 1.0,
                                                  lin_vel_var: np.array = np.ones(3)) -> None:
         """Compute the 6x6 information matrix for the edges that represent a transform over some nonzero time span.
 
@@ -132,8 +135,8 @@ class Edge:
     def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)
 
-    def _compute_information_sba(self, weights_vec: np.ndarray) -> None:
-        self.information = np.diag(weights_vec)
+    def _compute_information_sba(self, weights_vec: np.ndarray, tag_sba_var: float = 1.0) -> None:
+        self.information = np.diag(weights_vec) * np.diag([1 / tag_sba_var] * 2)
 
     def _compute_information_gravity(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)
@@ -146,3 +149,6 @@ class Edge:
             return None
         else:
             return vertices[self.enduid].mode
+
+    def __repr__(self):
+        return f"<Edge: {self.start_end[0].__repr__()} -> {self.start_end[1].__repr__()}>"
