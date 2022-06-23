@@ -72,7 +72,8 @@ class Edge:
         self.information: np.ndarray = np.eye(2 if corner_verts is not None else (3 if start_end[1] is None else 6))
 
     def compute_information(self, weights_vec: np.ndarray, compute_inf_params: OComputeInfParams) -> None:
-        """Computes the information matrix for the edge.
+        """
+        Computes the information matrix for the edge.
 
         Notes:
             Depending on the modes indicated in the vertices in the `start_end` and `corner_verts` instance attributes,

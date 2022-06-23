@@ -36,5 +36,5 @@ make "-j$(nproc --all)" || exit
 cd ..
 
 echo "Using python version: $(python3 --version)"
-python3 setup.py install || exit
+sudo python3 setup.py install || exit
 cd "${REPODIR}" || exit

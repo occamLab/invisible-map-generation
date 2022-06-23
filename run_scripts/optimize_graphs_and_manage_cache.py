@@ -205,6 +205,8 @@ if __name__ == "__main__":
     else:
         cms = CacheManagerSingleton(firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0)
 
+    
+    # Download all maps from Firebase
     if args.f:
         cms.download_all_maps()
         exit(0)
@@ -218,6 +220,8 @@ if __name__ == "__main__":
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
     for map_info in matching_maps:
+        
+        # If you want to sweep through parameters (no optimization)
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             sweep_params(mi=map_info, ground_truth_data=gt_data,
@@ -225,6 +229,8 @@ if __name__ == "__main__":
                                               compute_inf_params=compute_inf_params),
                          sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
                          verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np)
+        
+        # If you simply want to run the optimizer 
         else:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             oconfig = OConfig(is_sba=args.pso == 0, weights=WEIGHTS_DICT[WeightSpecifier(args.w)],

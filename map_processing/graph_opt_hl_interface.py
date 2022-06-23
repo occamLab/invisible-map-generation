@@ -63,10 +63,10 @@ def holistic_optimize(
 
     Args:
         map_info: Graph to process.
-        pso: TODO
-        oconfig: TODO
+        pso: determines if you're using a sparse optimizer or not, if no, takes in a covariance matrix
+        oconfig: the "optimization configuration" that dictates the mechanics and cosmetic qualities of the optimization graph. CONTAINS THE WEIGHTS
         fixed_vertices: Parameter to pass to the Graph.as_graph class method (see more there)
-        cms: TODO
+        cms: Handles downloading and uploading to/from Firebase.
         gt_data: If provided, used in the downstream optimization visualization and in ground truth metric
          computation.
         verbose: Toggles print statements within this function and passed as the verbose argument to called
@@ -74,7 +74,7 @@ def holistic_optimize(
          functions where applicable.
         compare: Invokes the subgraph graph comparison routine (see notes section for more information).
         upload: Value passed as the upload argument to the invocation of the _process_map method.
-        generate_plot_titles: TODO
+        generate_plot_titles: Generates a plot title from a template.
 
     Notes:
         The subgraph comparison routine is as follows:
