@@ -5,7 +5,6 @@ import datetime
 import json
 import multiprocessing as mp
 import os
-import sys
 from copy import deepcopy
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
@@ -19,9 +18,6 @@ from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
 from map_processing.graph_vertex_edge_classes import VertexType
-
-REPOSITORY_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-sys.path.append(REPOSITORY_ROOT)
 
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
