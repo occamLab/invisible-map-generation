@@ -5,9 +5,11 @@ Vertex, VertexType, and Edge classes which are used in the Graph class.
 from typing import Union, Dict, Any, Optional, Tuple
 
 import numpy as np
+from g2o import SE3Quat, Quaternion
 
 from . import VertexType
 from .data_models import OComputeInfParams
+from .transform_utils import quat_to_angle_axis
 
 
 class Vertex:
@@ -54,10 +56,7 @@ class Edge:
         information: This edge's information matrix.
     """
 
-    WEIGHTS_ONLY = False
-    """
-    If true, the information matrices are exclusively computed as diagonal matrices from the weight vectors.
-    """
+    MIN_QUAT_AXIS_VALUES = 0.1 * np.ones(3)
 
     def __init__(self, startuid: int, enduid: Optional[int], corner_verts: Optional[Dict[int, Vertex]],
                  information_prescaling: Optional[np.ndarray], camera_intrinsics: Optional[np.ndarray],
@@ -128,9 +127,19 @@ class Edge:
         self.information = np.diag(weights_vec)
         delta_t_sq = (self.start_end[1].meta_data["timestamp"] - self.start_end[0].meta_data["timestamp"]) ** 2
 
-        # TODO: Update documentation to explain why these computations are the way they are
-        self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var ** 2 * delta_t_sq))
+        ij_transform: SE3Quat = SE3Quat(self.start_end[1].estimate) * SE3Quat(self.start_end[0].estimate)
+        q: Quaternion = ij_transform.Quaternion()
+        q_norm = q.norm()
+        _, q_axis = quat_to_angle_axis(q)
+        #
+        # # Rotation components
+        self.information[3:, 3:] *= \
+            np.diag(4 * q_norm / (np.maximum(np.abs(q_axis), Edge.MIN_QUAT_AXIS_VALUES) * (ang_vel_var * delta_t_sq)))
+        # self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * ang_vel_var))
+
+        # Translation components
         self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
+        # self.information[:3, :3] *= np.diag(1 / (np.ones(3) * ang_vel_var))
 
     def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)

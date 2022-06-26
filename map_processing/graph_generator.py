@@ -332,12 +332,11 @@ class GraphGenerator:
             noise_as_transform = np.zeros((4, 4))
             noise_as_transform[3, 3] = 1
             noise_as_transform[:3, 3] = np.array([
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_x)),
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_y)),
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_z))
-            ])
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_x)),
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_y)),
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_z))])
             theta = np.random.normal(
-                0, np.sqrt(this_delta_t * self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
+                0, this_delta_t * np.sqrt(self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
             # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
             noise_as_transform[:3, :3] = np.array([
                 [1, 0, 0],
