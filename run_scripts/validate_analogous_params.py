@@ -30,8 +30,8 @@ PATH_FROM = "duncan-occam-room-10-1-21-2-48 26773176629225.json"
 
 
 ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 1e-3, 1]),
-    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-3, 10, 10])
+    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-2, 1e2, 10]),
+    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-6, 1e-3, 10])
 }
 
 ALT_GENERATE_CONFIG: Dict[GenerateParams.AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]] = {
@@ -44,26 +44,20 @@ BASE_OCONFIG = OConfig(is_sba=True)
 
 
 # noinspection DuplicatedCode
-def validate_analogous_params():
-    # Acquire the data set from which the generated maps are parsed
-    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
-    if len(matching_maps) == 0:
-        print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
-        exit(0)
-    elif len(matching_maps) > 1:
-        print(f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
-              f"Will not batch-generate unless only one path is found.")
-        exit(0)
-
+def validate_analogous_params(
+        data_set_generate_from: UGDataSet,
+        alt_opt_config: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]],
+        alt_gen_config: Dict[GenerateParams.AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]],
+        verbose: bool = False) -> OMultiSweepResult:
     # Evaluate the functions and their arguments stored as keys and values, respectively
     alt_param_multiplicands_for_generation: Dict[GenerateParams.AltGenerateParamsEnum, np.ndarray] = {}
-    for generate_key, generate_value in ALT_GENERATE_CONFIG.items():
+    for generate_key, generate_value in alt_gen_config.items():
         if isinstance(generate_value, np.ndarray):
             alt_param_multiplicands_for_generation[generate_key] = generate_value
         else:
             alt_param_multiplicands_for_generation[generate_key] = generate_value[0](*generate_value[1])
     alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {}
-    for opt_key, opt_value in ALT_OPT_CONFIG.items():
+    for opt_key, opt_value in alt_opt_config.items():
         if isinstance(opt_value, np.ndarray):
             alt_param_multiplicands_for_opt[opt_key] = opt_value
         else:
@@ -77,10 +71,6 @@ def validate_analogous_params():
         raise Exception(f"Non-unique set of {GenerateParams.__name__} objects created")
     param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
         alt_param_multiplicands=alt_param_multiplicands_for_opt)
-
-    # Acquire the data set from which the generated data sets are derived from
-    map_info = matching_maps.pop()
-    data_set_generate_from = UGDataSet(**map_info.map_dct)
 
     # For each set of data generation parameters, generate NUM_REPEAT_GENERATE data sets and, for each of them, run an
     # optimization parameter sweep.
@@ -108,11 +98,32 @@ def validate_analogous_params():
                 num_processes=NUM_PROCESSES,
                 verbose=True,
                 cache_results=False))
-            print(f"Generated and swept optimizations for "
-                  f"{'0' * num_zeros_to_prefix}{gen_param_idx + 1}/{num_to_generate}: {generate_param.dataset_name}")
+            if verbose:
+                print(f"Generated and swept optimizations for {'0' * num_zeros_to_prefix}{gen_param_idx + 1}/"
+                      f"{num_to_generate}: {generate_param.dataset_name}")
         sweep_results_list.append(sweep_results_list_per_gen_params)
 
-    msr = OMultiSweepResult(generate_params_list=generate_params_list, sweep_results_list=sweep_results_list)
+    return OMultiSweepResult(generate_params_list=generate_params_list, sweep_results_list=sweep_results_list)
+
+
+# noinspection DuplicatedCode
+if __name__ == "__main__":
+    # Acquire the data set from which the generated maps are parsed
+    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
+    if len(matching_maps) == 0:
+        print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
+        exit(0)
+    elif len(matching_maps) > 1:
+        print(f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
+              f"Will not batch-generate unless only one path is found.")
+        exit(0)
+    # Acquire the data set from which the generated data sets are derived from
+    map_info = matching_maps.pop()
+    data_set = UGDataSet(**map_info.map_dct)
+
+    msr = validate_analogous_params(
+        data_set_generate_from=data_set, alt_opt_config=ALT_OPT_CONFIG, alt_gen_config=ALT_GENERATE_CONFIG,
+        verbose=True)
     results_file_name = f"analogous_parameter_sweep_{datetime.datetime.now().strftime(TIME_FORMAT)}"
     CacheManagerSingleton.cache_sweep_results(msr, results_file_name)
 
@@ -121,7 +132,3 @@ def validate_analogous_params():
     fig = msr.plot_scatter_of_obs_noise_params()
 
     fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_file_name + ".png"), dpi=500)
-
-
-if __name__ == "__main__":
-    validate_analogous_params()
