@@ -30,7 +30,7 @@ PATH_FROM = "duncan-occam-room-10-1-21-2-48 26773176629225.json"
 
 
 ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-2, 1e2, 10]),
+    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.linspace, [1e-3, 1e3, 10]),
     OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-6, 1e-3, 10])
 }
 
@@ -48,7 +48,8 @@ def validate_analogous_params(
         data_set_generate_from: UGDataSet,
         alt_opt_config: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]],
         alt_gen_config: Dict[GenerateParams.AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]],
-        verbose: bool = False) -> OMultiSweepResult:
+        hold_rvert_at: float, ratio_xz_to_y_lin_vel_var: float, base_generate_params: GenerateParams,
+        num_repeat_generate: int, verbose: bool = False) -> OMultiSweepResult:
     # Evaluate the functions and their arguments stored as keys and values, respectively
     alt_param_multiplicands_for_generation: Dict[GenerateParams.AltGenerateParamsEnum, np.ndarray] = {}
     for generate_key, generate_value in alt_gen_config.items():
@@ -65,8 +66,8 @@ def validate_analogous_params(
 
     # Get the data necessary to batch generate data sets and configure the parameter sweep over each of them
     _, generate_params_list = GenerateParams.alt_generate_params_generator(
-        alt_param_multiplicands=alt_param_multiplicands_for_generation, base_generate_params=BASE_GENERATE_PRAMS,
-        hold_rvert_at=HOLD_RVERT_AT, ratio_xz_to_y_lin_vel_var=RATIO_XZ_TO_Y_LIN_VEL_VAR)
+        alt_param_multiplicands=alt_param_multiplicands_for_generation, base_generate_params=base_generate_params,
+        hold_rvert_at=hold_rvert_at, ratio_xz_to_y_lin_vel_var=ratio_xz_to_y_lin_vel_var)
     if len(set(generate_params_list)) != len(generate_params_list):
         raise Exception(f"Non-unique set of {GenerateParams.__name__} objects created")
     param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
@@ -74,14 +75,14 @@ def validate_analogous_params(
 
     # For each set of data generation parameters, generate NUM_REPEAT_GENERATE data sets and, for each of them, run an
     # optimization parameter sweep.
-    num_to_generate = len(generate_params_list) * NUM_REPEAT_GENERATE
+    num_to_generate = len(generate_params_list) * num_repeat_generate
     max_num_prefix_digits = int(np.log10(num_to_generate))
     now_str = datetime.datetime.now().strftime(TIME_FORMAT)
     sweep_results_list: List[List[OSweepResults]] = []
     gen_param_idx = -1
     for generate_param in generate_params_list:
         sweep_results_list_per_gen_params: List[OSweepResults] = []
-        for _ in range(NUM_REPEAT_GENERATE):
+        for _ in range(num_repeat_generate):
             gen_param_idx += 1
             num_zeros_to_prefix = max_num_prefix_digits - int(np.log10(gen_param_idx + 1))  # For printing messages
             generate_param.map_id = f"batch_generated_{now_str}_{'0' * num_zeros_to_prefix}{gen_param_idx + 1}"
@@ -123,7 +124,8 @@ if __name__ == "__main__":
 
     msr = validate_analogous_params(
         data_set_generate_from=data_set, alt_opt_config=ALT_OPT_CONFIG, alt_gen_config=ALT_GENERATE_CONFIG,
-        verbose=True)
+        hold_rvert_at=HOLD_RVERT_AT, ratio_xz_to_y_lin_vel_var=RATIO_XZ_TO_Y_LIN_VEL_VAR,
+        base_generate_params=BASE_GENERATE_PRAMS, num_repeat_generate=NUM_REPEAT_GENERATE, verbose=True)
     results_file_name = f"analogous_parameter_sweep_{datetime.datetime.now().strftime(TIME_FORMAT)}"
     CacheManagerSingleton.cache_sweep_results(msr, results_file_name)
 
