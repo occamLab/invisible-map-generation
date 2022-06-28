@@ -399,7 +399,8 @@ class Graph:
             end_mode = self.vertices[edge.enduid].mode if edge.enduid is not None else None
             weights_to_use = self._weights.get_weights_from_end_vertex_mode(
                 end_vertex_mode=VertexType.TAGPOINT if edge.corner_verts is not None else end_mode)
-            edge.compute_information(weights_vec=weights_to_use, compute_inf_params=compute_inf_params)
+            edge.compute_information(weights_vec=weights_to_use, compute_inf_params=compute_inf_params,
+                                     using_sba=self.is_sba)
 
             if edge.information_prescaling is not None and len(edge.information_prescaling.shape) != 0:
                 prescaling_matrix = self.edges[uid].information_prescaling
