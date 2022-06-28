@@ -138,14 +138,13 @@ class Edge:
             gravity_axis_in_phone_frame = SE3Quat(self.start_end[1].estimate).Quaternion().R[1, :3]
 
         # Rotation component
-        # self.information[3:, 3:] *= \
-        #     np.diag(4 / (np.maximum(np.abs(gravity_axis_in_phone_frame), Edge.MIN_QUAT_AXIS_VALUES) *
-        #                  ang_vel_var * delta_t_sq))
-        self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * ang_vel_var))
+        self.information[3:, 3:] *= \
+            np.diag(4 / (np.maximum(np.abs(gravity_axis_in_phone_frame), Edge.MIN_QUAT_AXIS_VALUES) *
+                         ang_vel_var * delta_t_sq))
+        # self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * delta_t_sq * ang_vel_var ** 2))
 
         # Translation component
-        # self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
-        self.information[:3, :3] *= np.diag(1 / (np.ones(3) * ang_vel_var))
+        self.information[:3, :3] *= np.diag(1 / (np.ones(3) * delta_t_sq * lin_vel_var ** 2))
 
     def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)
