@@ -1226,6 +1226,21 @@ class OSweepResults(BaseModel):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
         return args_producing_min
 
+    def query_at(self, parameter_query: Dict[str, float]):
+        query_at_quantized: Dict[str, int] = {}
+        for key, value in parameter_query.items():
+            closest_swept_value_idx = 0
+            closest_swept_value_diff = np.inf
+            swept_values = self.sweep_config[key]
+            for i, swept_value in enumerate(swept_values):
+                value_diff = np.abs(swept_value - value)
+                if value_diff < closest_swept_value_diff:
+                    closest_swept_value_idx = i
+                    closest_swept_value_diff = value_diff
+            query_at_quantized[key] = closest_swept_value_idx
+        query_at_tuple = tuple([query_at_quantized[key] for key in self.sweep_config_keys_order])
+        return self.gt_results_arr[query_at_tuple]
+
     def visualize_results_heatmap(self) -> plt.Figure:
         """Generate (but do not show) a figure of subplots where each subplot shows a heatmap of the ground truth metric
         for a 2D slice of the search space.

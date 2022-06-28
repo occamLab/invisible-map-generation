@@ -54,7 +54,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                                    enumerate(sweep_arrs[key])}
     sweep_args = []
     for i, oconfig in enumerate(oconfigs):
-        sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs))))
+        sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs)), verbose))
     if verbose:
         print(f"{len(sweep_args)} parameters generated for sweeping")
 
@@ -108,7 +108,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     return sweep_results
 
 
-def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int]]) -> Tuple[float, int]:
+def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
+        -> Tuple[float, int]:
     """Target callable used in the sweep_params function.
 
     Args:
@@ -122,5 +123,6 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     gt_result = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
-    print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
+    if sweep_args_tuple[4]:
+        print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
     return gt_result, sweep_args_tuple[3][0]
