@@ -1226,6 +1226,21 @@ class OSweepResults(BaseModel):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
         return args_producing_min
 
+    def query_at(self, parameter_query: Dict[str, float]):
+        query_at_quantized: Dict[str, int] = {}
+        for key, value in parameter_query.items():
+            closest_swept_value_idx = 0
+            closest_swept_value_diff = np.inf
+            swept_values = self.sweep_config[key]
+            for i, swept_value in enumerate(swept_values):
+                value_diff = np.abs(swept_value - value)
+                if value_diff < closest_swept_value_diff:
+                    closest_swept_value_idx = i
+                    closest_swept_value_diff = value_diff
+            query_at_quantized[key] = closest_swept_value_idx
+        query_at_tuple = tuple([query_at_quantized[key] for key in self.sweep_config_keys_order])
+        return self.gt_results_arr[query_at_tuple]
+
     def visualize_results_heatmap(self) -> plt.Figure:
         """Generate (but do not show) a figure of subplots where each subplot shows a heatmap of the ground truth metric
         for a 2D slice of the search space.
@@ -1251,7 +1266,8 @@ class OSweepResults(BaseModel):
         # In each subplot, make a heatmap from the 2D cross-section of the search space that intersects the minimum
         # value
         where_min = self.where_min
-        fig, axs = plt.subplots(subplot_height, subplot_width, constrained_layout=True)
+        fig, axs = plt.subplots(subplot_height, subplot_width)
+        fig.subplots_adjust(wspace=0.6, hspace=0.5)
         for i, ax in enumerate(axs.flat) if num_possible_slice_comb != 1 else [(0, axs), ]:
             if i == num_possible_slice_comb:
                 break
@@ -1264,22 +1280,26 @@ class OSweepResults(BaseModel):
             zz = self.gt_results_arr
             for ith_dim, remove_dim in enumerate(remove_dims):
                 zz = zz.take(indices=where_min[remove_dim], axis=remove_dim - ith_dim)
-
-            ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
-            ax.set_xscale("log")
-            ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
-            ax.set_yscale("log")
             c = ax.pcolormesh(xx, yy, zz.T, shading="auto")
 
             # Annotate the heatmap with a red dot indicating the coordinates that produce the minimum value
             ax.plot(x_vec[where_min[idcs_plot_against[0]]], y_vec[where_min[idcs_plot_against[1]]], "ro")
 
-        # Ignore unbound variable warning for color bar
-        # noinspection PyUnboundLocalVariable
-        cbar = fig.colorbar(c, ax=axs)
-        cbar.set_label("Ground Truth Metric")
+            # Add a colorbar to the axis
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes('right', size='5%', pad=0.05)
+            fig.colorbar(c, cax=cax, orientation='vertical', label="GT Metric")
+
+            ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
+            ax.set_xscale("log")
+            ax.set_xlim(left=np.min(x_vec), right=np.max(x_vec))
+            ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
+            ax.set_yscale("log")
+            ax.set_ylim(bottom=np.min(y_vec), top=np.max(y_vec))
+
         fig.suptitle(f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
-                     f"\n(red dots show min. value coordinates)")
+                     f"\n(red dot{'s' if num_possible_slice_comb > 1 else ''} show"
+                     f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)")
         return fig
 
 

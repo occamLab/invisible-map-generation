@@ -37,9 +37,9 @@ import map_processing
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-3, 5, 10]),
-    # OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [0.1, 10, 5]),
-    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-3, 100, 15]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-6, 1e-2, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-6, 1e-2, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-2, 1e1, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 

@@ -17,7 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GenerateParams
 from map_processing.graph_opt_plot_utils import draw_frames
-from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES
+from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES, angle_axis_to_quat
 
 
 class GraphGenerator:
@@ -321,37 +321,27 @@ class GraphGenerator:
         for i in range(0, true_poses.shape[0] - 1):
             pose_to_pose[i, :, :] = np.matmul(np.linalg.inv(true_poses[i, :, :]), true_poses[i + 1, :, :])
 
-        # Noise model: assume that noise variance is proportional to the elapsed time. noisy_transforms contains the
-        # pose-to-pose transforms except with noise applied.
-        noisy_transforms = np.zeros((true_poses.shape[0] - 1, 4, 4))
         odom_noise_x = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
         odom_noise_y = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
         odom_noise_z = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
+        noisy_poses = np.zeros(true_poses.shape)
+        noisy_poses[0, :, :] = true_poses[0, :, :]
         for i in range(0, true_poses.shape[0] - 1):
             this_delta_t = self._odometry_t_vec[i + 1] - self._odometry_t_vec[i]
             noise_as_transform = np.zeros((4, 4))
             noise_as_transform[3, 3] = 1
             noise_as_transform[:3, 3] = np.array([
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_x)),
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_y)),
-                np.random.normal(0, np.sqrt(this_delta_t * odom_noise_z))
-            ])
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_x)),
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_y)),
+                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_z))])
             theta = np.random.normal(
-                0, np.sqrt(this_delta_t * self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
-            # Interpret rotational noise as noise w.r.t. the rotation about the phone's vertical (x) axis
-            noise_as_transform[:3, :3] = np.array([
-                [1, 0, 0],
-                [0, np.cos(theta), -np.sin(theta)],
-                [0, np.sin(theta), np.cos(theta)]
-            ])
-            noisy_transforms[i, :, :] = np.matmul(pose_to_pose[i, :, :], noise_as_transform)
+                0, this_delta_t * np.sqrt(self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
 
-        # Reconstruct new list of poses from the noisy pose-to-pose transforms (dead-reckon, where the initial pose is
-        # the same as the true initial pose)
-        noisy_poses = np.zeros(true_poses.shape)
-        noisy_poses[0, :, :] = true_poses[0, :, :]
-        for i in range(0, true_poses.shape[0] - 1):
-            noisy_poses[i + 1, :, :] = np.matmul(noisy_poses[i, :, :], noisy_transforms[i, :, :])
+            # Assume rotational noise can be modeled as a normally-distributed rotational error about the gravity axis
+            gravity_axis_in_phone_frame = noisy_poses[i, 1, :3]  # Select y basis vector of inverted pose
+            noise_as_transform[:3, :3] = angle_axis_to_quat(theta, gravity_axis_in_phone_frame).R
+            noisy_transform = np.matmul(pose_to_pose[i, :, :], noise_as_transform)
+            noisy_poses[i + 1, :, :] = np.matmul(noisy_poses[i, :, :], noisy_transform)
         return noisy_poses
 
     def _get_tag_observation(self, obs_from: np.ndarray, tag: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -391,12 +381,12 @@ class GraphGenerator:
             return np.array([]), np.array([])
 
         tag_pixels = np.zeros((2, 4))
-        if not self.observe_tag_by_pixels(tag_in_phone, tag_pixels):
+        if not self._observe_tag_by_pixels(tag_in_phone, tag_pixels):
             return np.array([]), np.array([])
 
         return tag_in_phone, tag_pixels
 
-    def observe_tag_by_pixels(self, tag_in_phone, pixel_vals: np.ndarray) -> bool:
+    def _observe_tag_by_pixels(self, tag_in_phone, pixel_vals: np.ndarray) -> bool:
         """Project points in 3D space into phone space.
 
         Args:

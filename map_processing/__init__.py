@@ -53,7 +53,7 @@ GT_TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
         1: np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0],
-            [0, 0, 1, -5],
+            [0, 0, 1, -4],
             [0, 0, 0, 1]
         ]),
         2: np.array([

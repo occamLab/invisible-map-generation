@@ -5,6 +5,7 @@ Vertex, VertexType, and Edge classes which are used in the Graph class.
 from typing import Union, Dict, Any, Optional, Tuple
 
 import numpy as np
+from g2o import SE3Quat
 
 from . import VertexType
 from .data_models import OComputeInfParams
@@ -54,10 +55,7 @@ class Edge:
         information: This edge's information matrix.
     """
 
-    WEIGHTS_ONLY = False
-    """
-    If true, the information matrices are exclusively computed as diagonal matrices from the weight vectors.
-    """
+    MIN_QUAT_AXIS_VALUES = 0.1 * np.ones(3)
 
     def __init__(self, startuid: int, enduid: Optional[int], corner_verts: Optional[Dict[int, Vertex]],
                  information_prescaling: Optional[np.ndarray], camera_intrinsics: Optional[np.ndarray],
@@ -71,9 +69,9 @@ class Edge:
         self.start_end: Tuple[Vertex, Optional[Vertex]] = start_end
         self.information: np.ndarray = np.eye(2 if corner_verts is not None else (3 if start_end[1] is None else 6))
 
-    def compute_information(self, weights_vec: np.ndarray, compute_inf_params: OComputeInfParams) -> None:
-        """
-        Computes the information matrix for the edge.
+    def compute_information(self, weights_vec: np.ndarray, compute_inf_params: OComputeInfParams, using_sba: bool) \
+            -> None:
+        """Computes the information matrix for the edge.
 
         Notes:
             Depending on the modes indicated in the vertices in the `start_end` and `corner_verts` instance attributes,
@@ -91,6 +89,7 @@ class Edge:
              and end vertices of the edge are odometry vertices, then 'ang_vel_var' and 'lin_vel_var' fields is used
              to specify the angular velocity variance and linear velocity variance, respectively, for the
              `_compute_information_se3_nonzero_delta_t` method. See that method for more information.
+            using_sba: True if SBA is used (relevant for the fact that odometry poses are inverted when using SBA)
 
         Raises:
             ValueError: If the weights_vec argument or resulting information matrix contain any negative values.
@@ -104,8 +103,9 @@ class Edge:
             self._compute_information_gravity(weights_vec)
         else:
             if self.start_end[1].mode == VertexType.ODOMETRY:
-                self._compute_information_se3_nonzero_delta_t(weights_vec, lin_vel_var=compute_inf_params.lin_vel_var,
-                                                              ang_vel_var=compute_inf_params.ang_vel_var)
+                self._compute_information_se3_nonzero_delta_t(
+                    weights_vec, using_sba=using_sba, lin_vel_var=compute_inf_params.lin_vel_var,
+                    ang_vel_var=compute_inf_params.ang_vel_var)
             else:
                 self._compute_information_se3_obs(weights_vec)
 
@@ -116,8 +116,9 @@ class Edge:
                              f"dimensions instead of 2 (weights vector argument was an array of shape "
                              f"{weights_vec.shape}")
 
-    def _compute_information_se3_nonzero_delta_t(self, weights_vec: np.ndarray, ang_vel_var: float = 1.0,
-                                                 lin_vel_var: np.array = np.ones(3)) -> None:
+    def _compute_information_se3_nonzero_delta_t(
+            self, weights_vec: np.ndarray, using_sba: bool, ang_vel_var: float = 1.0,
+            lin_vel_var: np.array = np.ones(3)) -> None:
         """Compute the 6x6 information matrix for the edges that represent a transform over some nonzero time span.
 
         Args:
@@ -129,9 +130,21 @@ class Edge:
         self.information = np.diag(weights_vec)
         delta_t_sq = (self.start_end[1].meta_data["timestamp"] - self.start_end[0].meta_data["timestamp"]) ** 2
 
-        # TODO: Update documentation to explain why these computations are the way they are
-        self.information[3:, 3:] *= np.diag(4 * np.ones(3) / (ang_vel_var ** 2 * delta_t_sq))
-        self.information[:3, :3] *= np.diag(1 / (delta_t_sq * lin_vel_var ** 2))
+        # Assume rotational noise can be modeled as a normally-distributed rotational error about the gravity axis.
+        # Acquire the gravity axis by selecting the y basis vector of the inverted pose
+        if using_sba:  # Poses are inverted when using SBA
+            gravity_axis_in_phone_frame = SE3Quat(self.start_end[1].estimate).Quaternion().R[:3, 1]
+        else:
+            gravity_axis_in_phone_frame = SE3Quat(self.start_end[1].estimate).Quaternion().R[1, :3]
+
+        # Rotation component
+        self.information[3:, 3:] *= \
+            np.diag(4 / (np.maximum(np.abs(gravity_axis_in_phone_frame), Edge.MIN_QUAT_AXIS_VALUES) *
+                         ang_vel_var * delta_t_sq))
+        # self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * delta_t_sq * ang_vel_var ** 2))
+
+        # Translation component
+        self.information[:3, :3] *= np.diag(1 / (np.ones(3) * delta_t_sq * lin_vel_var ** 2))
 
     def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
         self.information = np.diag(weights_vec)

@@ -57,8 +57,8 @@ else:
     )
 
 ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
-    OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [1e-3, 10, 20]),
-    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [0.264, 0.264, 1])
+    # OConfig.AltOConfigEnum.LIN_TO_ANG_VEL_VAR: (np.geomspace, [10, 10, 1]),
+    OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-6, 1e2, 30])
 }
 
 # Spare bundle adjustment // an algorithm for optimization
@@ -149,12 +149,12 @@ def validate_pseudo_gt_metric():
     CacheManagerSingleton.cache_pgt_validation_results(results=all_results_obj, file_name=results_file_name)
     fig_1 = all_results_obj.plot_scatter(
         fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
-        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
+        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR)
     fig_1.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_chi2.png"),
                   dpi=500)
     fig_2 = all_results_obj.plot_scatter(
         fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA,
-        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
+        colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR)
     fig_2.savefig(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, results_file_name + "_alpha.png"),
                   dpi=500)
 
@@ -164,14 +164,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.lfc:
-        with open("../.cache/pgt_validation_results/pgt_validation_22-06-09-18-08-10.json", "r") as f:
+        with open("../.cache/pgt_validation_results/pgt_validation_22-06-27-19-07-50.json", "r") as f:
             s = f.read()
         pgt = OResultPseudoGTMetricValidation.parse_raw(s)
         pgt.plot_scatter(fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
                          colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
         plt.show()
         pgt.plot_scatter(fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA,
-                         colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR)
+                         colorbar_variable=OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR)
         plt.show()
     else:
         validate_pseudo_gt_metric()
