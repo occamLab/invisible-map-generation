@@ -12,7 +12,7 @@ from map_processing.transform_utils import transform_vector_to_matrix
 ASSUMED_FOCAL_LENGTH = 1464
 
 # TODO: send tag size with the tag detection
-ASSUMED_TAG_SIZE = 0.172  # Tag's x and y dimension length in meters
+ASSUMED_TAG_SIZE = 0.162  # Tag's x and y dimension length in meters
 
 
 class PrescalingOptEnum(Enum):
