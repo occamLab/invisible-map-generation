@@ -61,14 +61,16 @@ ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     OConfig.AltOConfigEnum.TAG_SBA_VAR: (np.geomspace, [0.264, 0.264, 1])
 }
 
+# Spare bundle adjustment // an algorithm for optimization
 BASE_OCONFIG = OConfig(is_sba=True)
 
-
+# the type of the function's output is argparse.ArgumentParser
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Script for generating the data to (in)validate the pseudo ground truth metric.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument(
+        # Hard coded in line 161
         "--lfc",
         action="store_true",
         help="Load from cache: If specified, then the cached data set specified by the hard-coded file path is loaded "
@@ -80,8 +82,11 @@ def make_parser() -> argparse.ArgumentParser:
 
 # noinspection DuplicatedCode
 def validate_pseudo_gt_metric():
+    
     # Acquire the data set from which the generated maps are parsed
     matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
+    
+    # Making sure there's exactly one map with that name
     if len(matching_maps) == 0:
         print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)
@@ -89,17 +94,21 @@ def validate_pseudo_gt_metric():
         print(f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
               f"Will not batch-generate unless only one path is found.")
         exit(0)
-
+        
     # Acquire the data set from which the generated data sets are derived from
     map_info = matching_maps.pop()
     data_set_generate_from = UGDataSet(**map_info.map_dct)
 
     alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {}
     for opt_key, opt_value in ALT_OPT_CONFIG.items():
+        
+        # You can either pass in a numpy array or a function to determine noise.
         if isinstance(opt_value, np.ndarray):
             alt_param_multiplicands_for_opt[opt_key] = opt_value
         else:
             alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
+            
+            
     param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
         alt_param_multiplicands=alt_param_multiplicands_for_opt)
     _, oconfig_list = OConfig.oconfig_generator(param_multiplicands=param_multiplicands_for_opt,
@@ -132,6 +141,7 @@ def validate_pseudo_gt_metric():
             osg_pair_result: OSGPairResult = holistic_optimize(
                 map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
             results.append((oconfig, oresult, osg_pair_result))
+            print(f"results are: {results}")
             print(f"Completed optimization {generate_idx + 1}/{total_num_optimizations}")
 
     all_results_obj = OResultPseudoGTMetricValidation(results_list=results, generate_params=GENERATE_FROM)
