@@ -212,7 +212,9 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
+    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
+
+
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)
@@ -220,7 +222,6 @@ if __name__ == "__main__":
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
     for map_info in matching_maps:
-        
         # If you want to sweep through parameters (no optimization)
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
