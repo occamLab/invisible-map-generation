@@ -2,6 +2,7 @@
 Plotting utilities for graph optimization.
 """
 
+import pdb
 from typing import *
 
 import numpy as np
@@ -134,6 +135,8 @@ def plot_optimization_result(
         # noinspection PyTypeChecker
         opt_tag_list: List = opt_tag_verts.tolist()
         opt_tag_list.sort(key=lambda x: x[-1])  # Sort by tag IDs
+        tag_ids = [int(id[-1]) for id in opt_tag_list]
+        # pdb.set_trace()
         ordered_opt_tags_array = np.asarray([tag[0:-1] for tag in opt_tag_list])
 
         anchor_tag_idx = 0  # Select arbitrarily
@@ -141,11 +144,13 @@ def plot_optimization_result(
             anchor_pose=SE3Quat(ordered_opt_tags_array[anchor_tag_idx]),
             anchor_idx=anchor_tag_idx, ground_truth_tags=ground_truth_tags)
 
+        # pdb.set_trace()
+
         plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                  "o", c="k", label=f"Ground Truth Tags (anchor id={int(opt_tag_list[anchor_tag_idx][-1])})")
         draw_frames(world_frame_ground_truth, plt_axes=ax)
         for i, tag in enumerate(world_frame_ground_truth):
-            ax.text(tag[0], tag[1], tag[2], str(i), c='k')
+            ax.text(tag[0], tag[1], tag[2], str(tag_ids[i]), c='k')
 
     # Plot waypoint vertices and their labels
     plt.plot(opt_waypoint_verts[1][:, 0], opt_waypoint_verts[1][:, 1], opt_waypoint_verts[1][:, 2], "o", c="y",
