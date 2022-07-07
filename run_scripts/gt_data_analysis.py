@@ -20,12 +20,19 @@ import pdb
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 
-VISUALIZE = True
-RTABMAP_DATA_PATH = "../rtabmap/poses27.txt"
-OUTPUTTED_JSON_PATH = "../.cache/ground_truth/gt_robolab_test.json"
+TEST = "mac_2_3"
 
-# Only used for visualization of tag positions
-PROCESSED_GRAPH_DATA_PATH = "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/robolab_test 828708745588041.json"
+with open("../rtabmap/gt_analysis_config.json") as jsonf:
+    config = json.load(jsonf)[TEST]
+    print(config)
+    
+VISUALIZE = True
+RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
+OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
+
+# Only used for visualization of tag positions:
+PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
+
 
 def check_data(new_data_entry):
     """
@@ -64,20 +71,25 @@ def generate_correct_pose(pose):
     pose = [float(number) for number in pose]
     
     
-    # compute quaternion to align coordinate systems
-    # combine quaternion components of the se3quat   
-    # x, y, z, w
+    # x, y, z, w, quaternion dictating initial orientation of tag
     rtabmap_quat = np.array([pose[3],pose[4],pose[5],pose[6]])
-    alignment_quat = np.array([-0.5,0.5,0.5,0.5])
     
-    # cross takes (q1, q2)
-    final_quat = pyrr.quaternion.cross(rtabmap_quat, alignment_quat)
+    # -90 degrees around y, -90 old x
+    initial_alignment_quat = np.array([-0.5,0.5,0.5,0.5])
+    
+    # 180 degrees around z
+    # matching_alignment_quat = np.array([0.5,0.5,0.5,0.5])
+    matching_alignment_quat = np.array([0,0,1,0])
+          
+    final_quat = pyrr.quaternion.cross(pyrr.quaternion.cross(rtabmap_quat, matching_alignment_quat),initial_alignment_quat)
+    # final_quat = pyrr.quaternion.cross(rtabmap_quat, initial_alignment_quat)
     # final_quat = [final_quat[1],final_quat[2],final_quat[3],final_quat[0]]
     
     # conver the pose using the alignment quaternion
     rtabmap_pose = np.array([pose[0],pose[1],pose[2]])
-    final_pose = pyrr.quaternion.apply_to_vector(alignment_quat, rtabmap_pose)
+    final_pose = pyrr.quaternion.apply_to_vector(initial_alignment_quat, rtabmap_pose)
     
+    print(final_pose)
     # create the new se3quat corresponding to the corrected pose
     for i in range(7):
         if i < 3:
@@ -105,7 +117,7 @@ def process_IM_GT_data(file_path,tag_poses):
     IM_processed_poses = []
     with open(file_path,"r") as json_file:
         data = json.load(json_file)
-        # print(data)
+        print(data.keys())
         for item in data["tag_vertices"]:
             IM_processed_poses.append([item["translation"]["x"],item["translation"]["y"],item["translation"]["z"]])
             
@@ -135,7 +147,7 @@ def plot_IM_GT_data(im,gt):
     ax.set_zlabel("z")
     ax.view_init(120,-90)
     
-    # TODO: have to reorder points to add labeling
+    # TODO: have to reorder points to add labelling
     
     # length_of_im_data = np.shape(im)
     # length_of_gt_data = np.shape(gt)
@@ -147,10 +159,13 @@ def plot_IM_GT_data(im,gt):
     #     plt.plot(gt[i,0],gt[i,1],gt[i,2], "o", c ="green")
     #     ax.text(gt[i,0],gt[i,1],gt[i,2], i)
     
+    plt.plot(im[:,0],im[:,1],im[:,2], "o", c ="red")
+    plt.plot(gt[:,0],gt[:,1],gt[:,2], "o", c ="green")
+    
     ax.legend(["invisible map","ground truth"])
     plt.show()
 
-def run(rtabmap_data_path,outputted_json_path,processed_graph_path, visualize):
+def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
     """
     Run the app's main pipeline
 
@@ -198,7 +213,7 @@ def run(rtabmap_data_path,outputted_json_path,processed_graph_path, visualize):
         json.dump(data, f, indent=2)
         
     # Visualize anchor positions 
-    if visualize:
+    if visualize and processed_graph_path != "":
         im,gt = process_IM_GT_data(processed_graph_path,tag_poses)
         plot_IM_GT_data(im,gt)
 
