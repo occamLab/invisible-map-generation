@@ -11,14 +11,13 @@ im = invisible map tag locations --> whenever "im" is used in this code, it's re
 received from invisible maps. Comes from the "processed_graph" data file.
 """
 
+import argparse
 import json
 import os
-from turtle import rt
 import numpy as np
 import pyrr
 import pdb
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
 
 TEST = "mac_2_3"
 
@@ -26,14 +25,28 @@ with open("../rtabmap/gt_analysis_config.json") as jsonf:
     config = json.load(jsonf)[TEST]
     print(config)
     
-VISUALIZE = True
+VISUALIZE = False
 RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
 OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
 
 # Only used for visualization of tag positions:
 PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
 
+# def make_parser():
+#     p = argparse.ArgumentParser(description="Process RTABmap ground truth data")
 
+#     p.add_argument(
+#         "-n",  
+#         help = "The name of the test in the config file that you want to run"
+#         )
+    
+#     p.add_argument(
+#         "-v"
+#         help = "Specifies whether or not the data will be visualized. Can only be visualized once the IM data has been processed. Defaults to false"
+#         default = True
+#     )
+    
+#     return p
 def check_data(new_data_entry):
     """
     The file containing all of the checks to ensure the processed data is useable
@@ -195,6 +208,7 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
                 # Only append if the data is good
                 if check_data(new_data_entry):
                     pose = generate_correct_pose(new_data_entry[2:])
+                    
                     tag_poses.append(
                         {"tag_id": int(new_data_entry[1]), "pose": pose})
                 else:
@@ -205,11 +219,11 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
                 
     # dump it to a json file
     with open(outputted_json_path, "w") as f:
+        tag_poses = sorted(tag_poses, key=lambda x: x['tag_id'])
         data = {
             "poses":
                 tag_poses
         }
-
         json.dump(data, f, indent=2)
         
     # Visualize anchor positions 
@@ -218,4 +232,8 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
         plot_IM_GT_data(im,gt)
 
 if __name__ == "__main__":
+    # parser = make_parser()
+    # args = parser.parse_args()
+
+    
     run(RTABMAP_DATA_PATH,OUTPUTTED_JSON_PATH,PROCESSED_GRAPH_DATA_PATH,VISUALIZE)
