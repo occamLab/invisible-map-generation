@@ -16,37 +16,22 @@ import json
 import os
 import numpy as np
 import pyrr
-import pdb
 import matplotlib.pyplot as plt
 
-TEST = "mac_2_3"
 
-with open("../rtabmap/gt_analysis_config.json") as jsonf:
-    config = json.load(jsonf)[TEST]
-    print(config)
+def make_parser():
+    """
+    Creates a ArgumentParser object.
+    """
+    p = argparse.ArgumentParser(description="Process RTABmap ground truth data")
+
+    p.add_argument(
+        "-n", help = "name of the test you'd like to run in the configuration file")
     
-VISUALIZE = False
-RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
-OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
-
-# Only used for visualization of tag positions:
-PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
-
-# def make_parser():
-#     p = argparse.ArgumentParser(description="Process RTABmap ground truth data")
-
-#     p.add_argument(
-#         "-n",  
-#         help = "The name of the test in the config file that you want to run"
-#         )
+    p.add_argument(
+        "-v", help = "triggers the visualizer", action = "store_true")
     
-#     p.add_argument(
-#         "-v"
-#         help = "Specifies whether or not the data will be visualized. Can only be visualized once the IM data has been processed. Defaults to false"
-#         default = True
-#     )
-    
-#     return p
+    return p
 def check_data(new_data_entry):
     """
     The file containing all of the checks to ensure the processed data is useable
@@ -102,7 +87,6 @@ def generate_correct_pose(pose):
     rtabmap_pose = np.array([pose[0],pose[1],pose[2]])
     final_pose = pyrr.quaternion.apply_to_vector(initial_alignment_quat, rtabmap_pose)
     
-    print(final_pose)
     # create the new se3quat corresponding to the corrected pose
     for i in range(7):
         if i < 3:
@@ -130,7 +114,6 @@ def process_IM_GT_data(file_path,tag_poses):
     IM_processed_poses = []
     with open(file_path,"r") as json_file:
         data = json.load(json_file)
-        print(data.keys())
         for item in data["tag_vertices"]:
             IM_processed_poses.append([item["translation"]["x"],item["translation"]["y"],item["translation"]["z"]])
             
@@ -232,8 +215,23 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
         plot_IM_GT_data(im,gt)
 
 if __name__ == "__main__":
-    # parser = make_parser()
-    # args = parser.parse_args()
+    parser = make_parser()
+    args = parser.parse_args()
 
+    # Take in the name of the test for configuration purposes
+    NAME_OF_TEST = args.n
+
+    with open("../rtabmap/gt_analysis_config.json") as config_file:
+        config = json.load(config_file)[NAME_OF_TEST]
     
+    # By default, visualization is false. Only if tag -v is applied do we visualize
+    VISUALIZE = False
+    if args.v:
+        VISUALIZE = True
+        # Only used for visualization of tag positions:
+        
+    RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
+    OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
+    PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
+
     run(RTABMAP_DATA_PATH,OUTPUTTED_JSON_PATH,PROCESSED_GRAPH_DATA_PATH,VISUALIZE)
