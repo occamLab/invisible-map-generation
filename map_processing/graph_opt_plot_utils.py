@@ -87,7 +87,7 @@ def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False
     plt.show()
 
 
-def plot_optimization_result(
+def lplot_optimization_result(
         opt_odometry: np.ndarray,
         orig_odometry: np.ndarray,
         opt_tag_verts: np.ndarray,
@@ -143,14 +143,16 @@ def plot_optimization_result(
         world_frame_ground_truth = transform_gt_to_have_common_reference(
             anchor_pose=SE3Quat(ordered_opt_tags_array[anchor_tag_idx]),
             anchor_idx=anchor_tag_idx, ground_truth_tags=ground_truth_tags)
-
+        print(f"{ordered_opt_tags_array[anchor_tag_idx]}")
+        print("skip")
+        print(f"{world_frame_ground_truth[anchor_tag_idx]}")
         # pdb.set_trace()
 
         plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                  "o", c="k", label=f"Ground Truth Tags (anchor id={int(opt_tag_list[anchor_tag_idx][-1])})")
         draw_frames(world_frame_ground_truth, plt_axes=ax)
-        for i, tag in enumerate(world_frame_ground_truth):
-            ax.text(tag[0], tag[1], tag[2], str(tag_ids[i]), c='k')
+        # for i, tag in enumerate(world_frame_ground_truth):
+        #     ax.text(tag[0], tag[1], tag[2], str(tag_ids[i]), c='k')
 
     # Plot waypoint vertices and their labels
     plt.plot(opt_waypoint_verts[1][:, 0], opt_waypoint_verts[1][:, 1], opt_waypoint_verts[1][:, 2], "o", c="y",
