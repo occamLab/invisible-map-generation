@@ -14,8 +14,14 @@
     },
     "MAC_FULL":
     {
-        "RTABMAP_DATA_PATH" : "../rtabmap/poses28.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_ORDERED.json",
-        "PROCESSED_GRAPH_DATA_PATH": ""
+        "RTABMAP_DATA_PATH" : "../rtabmap/poses28_5.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_oriented.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/Hp3xdjbgz2REplAK7GIPdLamyfv1/richardPhoneBad.json"
+    },
+    "desnat":
+    {
+        "RTABMAP_DATA_PATH" : "../rtabmap/richardSucks.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_ayushSucks.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/desnat_test 877155274903541.json"
     }
 }
