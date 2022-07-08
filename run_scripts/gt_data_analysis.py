@@ -11,25 +11,16 @@ im = invisible map tag locations --> whenever "im" is used in this code, it's re
 received from invisible maps. Comes from the "processed_graph" data file.
 """
 
+import re
 import argparse
 import json
 import os
 import numpy as np
 import pyrr
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from scipy.spatial.transform import Rotation as R
 
-TEST = "MAC_FULL"
-
-with open("../rtabmap/gt_analysis_config.json") as jsonf:
-    config = json.load(jsonf)[TEST]
-    print(config)
-    
-VISUALIZE = True
-RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
-OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
-
-# Only used for visualization of tag positions:
-PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
 
 def make_parser():
     """
@@ -49,9 +40,9 @@ def make_parser():
     
     return p
 
-def check_data(new_data_entry):
+def check_quaternion_data(new_data_entry):
     """
-    The file containing all of the checks to ensure the processed data is useable
+    The file containing all of the checks to ensure the processed quaternion data is useable
 
     Args:
         new_data_entry (list): A list of all necessary data (ID + Translation + POSE)
@@ -72,7 +63,7 @@ def check_data(new_data_entry):
 
 def generate_correct_pose(pose):
     """
-    The data we get from RTABmap makes every number a string and is in a right-handed coordinate system, as opposed to the
+    The data we get from RTABmap is in a right-handed coordinate system, as opposed to the
     left-handed coordinate system that IM asks for. This function fixes both of those problems by negating the X axis + turning every number into a float.
 
     NOTE that RTABmap pose data appears to give z as the gravity axis, but IM uses y as the gravity axis, hence why we computed an "alignment quaternion" to
@@ -81,24 +72,16 @@ def generate_correct_pose(pose):
     Args:
         pose (list): the 7 numbers composing the pose of an object [x,y,z,qx,qy,qz,qw]
     """
-
-    # convert string to float
-    pose = [float(number) for number in pose]
-    
     
     # x, y, z, w, quaternion dictating initial orientation of tag
     rtabmap_quat = np.array([pose[3],pose[4],pose[5],pose[6]])
     
-    # -90 degrees around y, -90 old x
+    # Matching the April Tag's coordinate frame with RTABmap
     initial_alignment_quat = np.array([-0.5,0.5,0.5,0.5])
     
-    # 180 degrees around z
-    # matching_alignment_quat = np.array([0.5,0.5,0.5,0.5])
-    matching_alignment_quat = np.array([0,0,1,0])
-          
+    # Quaternion to match RTABmap's coordinate frame with IM
+    matching_alignment_quat = np.array([-0.5,0.5,0.5,0.5])
     final_quat = pyrr.quaternion.cross(pyrr.quaternion.cross(rtabmap_quat, matching_alignment_quat),initial_alignment_quat)
-    # final_quat = pyrr.quaternion.cross(rtabmap_quat, initial_alignment_quat)
-    # final_quat = [final_quat[1],final_quat[2],final_quat[3],final_quat[0]]
     
     # conver the pose using the alignment quaternion
     rtabmap_pose = np.array([pose[0],pose[1],pose[2]])
@@ -129,20 +112,25 @@ def process_IM_GT_data(file_path,tag_poses):
     """
     # Invisible Map Data
     IM_processed_poses = []
+    IM_processed_quats = []
     with open(file_path,"r") as json_file:
         data = json.load(json_file)
         for item in data["tag_vertices"]:
             IM_processed_poses.append([item["translation"]["x"],item["translation"]["y"],item["translation"]["z"]])
-            
+            if VISUALIZE == 2:
+                IM_processed_quats.append([item["rotation"]["x"],item["rotation"]["y"],item["rotation"]["z"],item["rotation"]["w"]])           
             
     # Ground Truth Data
     GT_processed_poses = []
+    GT_processed_quats = []
     for pos in tag_poses:
         GT_processed_poses.append(pos["pose"][0:3])
+        GT_processed_quats.append(pos["pose"][3:])
         
-    return np.array(IM_processed_poses),np.array(GT_processed_poses)
+        
+    return np.array(IM_processed_poses),np.array(GT_processed_poses),np.array(IM_processed_quats), np.array(GT_processed_quats)
 
-def plot_IM_GT_data(im,gt):
+def plot_IM_GT_data(im_pos,gt_pos,im_quat,gt_quat):
     """
     Visualize the positions of the IM tag data and the RTABmap tag data.
 
@@ -152,11 +140,11 @@ def plot_IM_GT_data(im,gt):
     """
     fig = plt.figure()
     ax = plt.axes(projection = "3d")
-    ax.set_xlim(-10,10)
+    ax.set_xlim(-1,10)
     ax.set_xlabel("x")
-    ax.set_ylim(-10,10)
+    ax.set_ylim(-1,10)
     ax.set_ylabel("y")
-    ax.set_zlim(-10,10)
+    ax.set_zlim(-1,10)
     ax.set_zlabel("z")
     ax.view_init(120,-90)
     
@@ -172,14 +160,24 @@ def plot_IM_GT_data(im,gt):
     #     plt.plot(gt[i,0],gt[i,1],gt[i,2], "o", c ="green")
     #     ax.text(gt[i,0],gt[i,1],gt[i,2], i)
     
-    plt.plot(im[:,0],im[:,1],im[:,2], "o", c ="red")
-    plt.plot(gt[:,0],gt[:,1],gt[:,2], "o", c ="green")
+    plt.plot(im_pos[:,0],im_pos[:,1],im_pos[:,2], "-o", c ="black")
+    plt.plot(gt_pos[:,0],gt_pos[:,1],gt_pos[:,2], "-o", c ="orange")
     
-    if VISUALIZE == 2:
-        # Show orientation
-        
-        pass
     
+    # If there were orientations computed
+    if len(im_quat > 0) and len(gt_quat>0):
+        # show orientation
+        for i in range(len(im_quat)):
+            im_coordinate_frame = R.from_quat(im_quat[i]).as_matrix()
+            ax.quiver(im_pos[i,0],im_pos[i,1],im_pos[i,2],im_coordinate_frame[0][0],im_coordinate_frame[1][0],im_coordinate_frame[2][0], color = "r")
+            ax.quiver(im_pos[i,0],im_pos[i,1],im_pos[i,2],im_coordinate_frame[0][1],im_coordinate_frame[1][1],im_coordinate_frame[2][1], color = "g")
+            ax.quiver(im_pos[i,0],im_pos[i,1],im_pos[i,2],im_coordinate_frame[0][2],im_coordinate_frame[1][2],im_coordinate_frame[2][2], color = "b")
+        for i in range(len(gt_quat)):
+            gt_coordinate_frame = R.from_quat(gt_quat[i]).as_matrix()
+            ax.quiver(gt_pos[i,0],gt_pos[i,1],gt_pos[i,2],gt_coordinate_frame[0][0],gt_coordinate_frame[1][0],gt_coordinate_frame[2][0], color = "r")
+            ax.quiver(gt_pos[i,0],gt_pos[i,1],gt_pos[i,2],gt_coordinate_frame[0][1],gt_coordinate_frame[1][1],gt_coordinate_frame[2][1], color = "g")
+            ax.quiver(gt_pos[i,0],gt_pos[i,1],gt_pos[i,2],gt_coordinate_frame[0][2],gt_coordinate_frame[1][2],gt_coordinate_frame[2][2], color = "b")
+   
     ax.legend(["invisible map","ground truth"])
     plt.show()
 
@@ -207,27 +205,39 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
     # Handling data
     with open(rtabmap_data_path, "r") as f:
         for line in f.readlines():
-            new_data_entry = line.split()
+            
+            new_data_entry = [entry for entry in re.split("=|,|\n|\|| |xyz|rpy| ", line) if entry != '']
+            # print(new_data_entry)
 
-            # Right now we only care about handling tags (aka MARKERs)
+            # XYZ and quaternion data, detecable because the first element of the list is "MARKER"
             if new_data_entry[0] == "MARKER":
-
+                
                 # Only append if the data is good
-                if check_data(new_data_entry):
-                    pose = generate_correct_pose(new_data_entry[2:])
+                if check_quaternion_data(new_data_entry):
+                    
+                    pose = generate_correct_pose([float(number) for number in new_data_entry[2:]])
                     
                     tag_poses.append(
                         {"tag_id": int(new_data_entry[1]), "pose": pose})
                 else:
                     print(f"This data is incorrectly formatted: {new_data_entry}")
-
+            
+            # XYZ and RPY data, detecable because the markers are negative + no text
+            elif new_data_entry[0][0] == "-":
+                # print("translation and roll pitch yaw")
+                new_data_entry = [float(entry) for entry in new_data_entry]
+                xyz = new_data_entry[1:4]
+                rpy = new_data_entry[4:]
+                quat = list(pyrr.quaternion.create_from_eulers(rpy))
+                pose = generate_correct_pose(xyz+quat)
+                tag_poses.append({"tag_id": -int(new_data_entry[0]), "pose": pose})
+                
             else:
                 print(f"I don't have any way to handle {new_data_entry}")
                 
     # dump it to a json file
     with open(outputted_json_path, "w") as f:
         tag_poses = sorted(tag_poses, key=lambda x: x['tag_id'])
-        print([item['tag_id'] for item in tag_poses])
         data = {
             "poses":
                 tag_poses
@@ -236,8 +246,8 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
         
     # Visualize anchor positions 
     if visualize > 0 and processed_graph_path != "":
-        im,gt = process_IM_GT_data(processed_graph_path,tag_poses)
-        plot_IM_GT_data(im,gt,visualize)
+        im_pos,gt_pos,im_quat,gt_quat = process_IM_GT_data(processed_graph_path,tag_poses)
+        plot_IM_GT_data(im_pos,gt_pos,im_quat,gt_quat)
 
 if __name__ == "__main__":
     parser = make_parser()
@@ -248,14 +258,16 @@ if __name__ == "__main__":
 
     with open("../rtabmap/gt_analysis_config.json") as config_file:
         config = json.load(config_file)[NAME_OF_TEST]
+        print(f"your configuration: {config}")
     
     # By default, visualization is 0. The addition of tags will change the value of visualize.
     VISUALIZE = 0
     if args.v:
+        # Visualize
         VISUALIZE = 1
         if args.o:
+            # Visualize orientations too
             VISUALIZE = 2
-        # Only used for visualization of tag positions:
         
     RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
     OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
