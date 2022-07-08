@@ -18,6 +18,18 @@ import numpy as np
 import pyrr
 import matplotlib.pyplot as plt
 
+TEST = "MAC_FULL"
+
+with open("../rtabmap/gt_analysis_config.json") as jsonf:
+    config = json.load(jsonf)[TEST]
+    print(config)
+    
+VISUALIZE = True
+RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
+OUTPUTTED_JSON_PATH = config["OUTPUTTED_JSON_PATH"]
+
+# Only used for visualization of tag positions:
+PROCESSED_GRAPH_DATA_PATH = config["PROCESSED_GRAPH_DATA_PATH"]
 
 def make_parser():
     """
@@ -215,6 +227,7 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
     # dump it to a json file
     with open(outputted_json_path, "w") as f:
         tag_poses = sorted(tag_poses, key=lambda x: x['tag_id'])
+        print([item['tag_id'] for item in tag_poses])
         data = {
             "poses":
                 tag_poses
