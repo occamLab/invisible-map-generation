@@ -31,7 +31,12 @@ def make_parser():
     p.add_argument(
         "-v", help = "triggers the visualizer", action = "store_true")
     
+    p.add_argument(
+        "-o", help = "triggers the visualization of orientation", action = "store_true"
+    )
+    
     return p
+
 def check_data(new_data_entry):
     """
     The file containing all of the checks to ensure the processed data is useable
@@ -151,16 +156,23 @@ def plot_IM_GT_data(im,gt):
     # for i in range(length_of_im_data[0]):
     #     plt.plot(im[i,0],im[i,1],im[i,2], "o", c ="red")
     #     ax.text(im[i,0],im[i,1],im[i,2], i)
-    # for i in range(length_of_gt_data[0]):
+    # for i in range(length_of_gt_data[0])s:
     #     plt.plot(gt[i,0],gt[i,1],gt[i,2], "o", c ="green")
     #     ax.text(gt[i,0],gt[i,1],gt[i,2], i)
     
     plt.plot(im[:,0],im[:,1],im[:,2], "o", c ="red")
     plt.plot(gt[:,0],gt[:,1],gt[:,2], "o", c ="green")
     
+    if VISUALIZE == 2:
+        # Show orientation
+        
+        pass
+    
     ax.legend(["invisible map","ground truth"])
     plt.show()
 
+
+    
 def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
     """
     Run the app's main pipeline
@@ -210,9 +222,9 @@ def run(rtabmap_data_path,outputted_json_path, processed_graph_path, visualize):
         json.dump(data, f, indent=2)
         
     # Visualize anchor positions 
-    if visualize and processed_graph_path != "":
+    if visualize > 0 and processed_graph_path != "":
         im,gt = process_IM_GT_data(processed_graph_path,tag_poses)
-        plot_IM_GT_data(im,gt)
+        plot_IM_GT_data(im,gt,visualize)
 
 if __name__ == "__main__":
     parser = make_parser()
@@ -224,10 +236,12 @@ if __name__ == "__main__":
     with open("../rtabmap/gt_analysis_config.json") as config_file:
         config = json.load(config_file)[NAME_OF_TEST]
     
-    # By default, visualization is false. Only if tag -v is applied do we visualize
-    VISUALIZE = False
+    # By default, visualization is 0. The addition of tags will change the value of visualize.
+    VISUALIZE = 0
     if args.v:
-        VISUALIZE = True
+        VISUALIZE = 1
+        if args.o:
+            VISUALIZE = 2
         # Only used for visualization of tag positions:
         
     RTABMAP_DATA_PATH = config["RTABMAP_DATA_PATH"]
