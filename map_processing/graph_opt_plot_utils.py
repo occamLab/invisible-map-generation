@@ -87,7 +87,7 @@ def plot_metrics(sweep: np.ndarray, metrics: np.ndarray, log_sweep: bool = False
     plt.show()
 
 
-def lplot_optimization_result(
+def plot_optimization_result(
         opt_odometry: np.ndarray,
         orig_odometry: np.ndarray,
         opt_tag_verts: np.ndarray,

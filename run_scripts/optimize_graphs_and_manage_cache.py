@@ -27,12 +27,13 @@ import numpy as np
 from firebase_admin import credentials
 from typing import Dict, Callable, Iterable, Any, Tuple
 
+import map_processing
 from map_processing import PrescalingOptEnum, VertexType
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.sweep import sweep_params
-import map_processing
+
 
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
@@ -205,7 +206,6 @@ if __name__ == "__main__":
     else:
         cms = CacheManagerSingleton(firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0)
 
-    
     # Download all maps from Firebase
     if args.f:
         cms.download_all_maps()
@@ -213,7 +213,6 @@ if __name__ == "__main__":
 
     map_pattern = args.p if args.p else ""
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
-
 
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
