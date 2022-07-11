@@ -132,25 +132,34 @@ def plot_optimization_result(
 
     # Plot ground truth vertices and their labels
     if ground_truth_tags is not None:
+        # pdb.set_trace()
         # noinspection PyTypeChecker
         opt_tag_list: List = opt_tag_verts.tolist()
-        opt_tag_list.sort(key=lambda x: x[-1])  # Sort by tag IDs
-        tag_ids = [int(id[-1]) for id in opt_tag_list]
-        # pdb.set_trace()
-        ordered_opt_tags_array = np.asarray([tag[0:-1] for tag in opt_tag_list])
+        tag_ids = [int(tag[-1]) for tag in opt_tag_list]
+        opt_tag_dict = {}
+        for se3_quat in opt_tag_list:
+            opt_tag_dict[se3_quat[-1]] = se3_quat[:-1]
 
-        anchor_tag_idx = 0  # Select arbitrarily
+        matching_ground_truth_tags = {}
+        for tag_id in tag_ids:
+            if tag_id in ground_truth_tags.as_dict_of_se3_arrays.keys():
+                matching_ground_truth_tags[tag_id] = SE3Quat(ground_truth_tags.as_dict_of_se3_arrays[tag_id])
+        # ordered_opt_tags_array = np.asarray([tag[0:-1] for tag in opt_tag_list])
+
+        anchor_tag_id = 16  # Select arbitrarily
+        print("Here")
         world_frame_ground_truth = transform_gt_to_have_common_reference(
-            anchor_pose=SE3Quat(ordered_opt_tags_array[anchor_tag_idx]),
-            anchor_idx=anchor_tag_idx, ground_truth_tags=ground_truth_tags)
-        print(f"{ordered_opt_tags_array[anchor_tag_idx]}")
-        print("skip")
-        print(f"{world_frame_ground_truth[anchor_tag_idx]}")
-        # pdb.set_trace()
+            anchor_pose=SE3Quat(opt_tag_dict[anchor_tag_id]),
+            anchor_id=anchor_tag_id, ground_truth_tags=matching_ground_truth_tags)
 
-        plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
-                 "o", c="k", label=f"Ground Truth Tags (anchor id={int(opt_tag_list[anchor_tag_idx][-1])})")
-        draw_frames(world_frame_ground_truth, plt_axes=ax)
+        tag_poses_to_plot = []
+        for (_, tag_pose) in world_frame_ground_truth.items():
+            tag_poses_to_plot.append(tag_pose)
+        tag_poses_to_plot = np.array(tag_poses_to_plot)
+        
+        plt.plot(tag_poses_to_plot[:, 0], tag_poses_to_plot[:, 1], tag_poses_to_plot[:, 2],
+                 "o", c="k", label=f"Ground Truth Tags (anchor id={anchor_tag_id})")
+        draw_frames(tag_poses_to_plot, plt_axes=ax)
         # for i, tag in enumerate(world_frame_ground_truth):
         #     ax.text(tag[0], tag[1], tag[2], str(tag_ids[i]), c='k')
 

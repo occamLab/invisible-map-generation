@@ -3,7 +3,7 @@
     {
         "RTABMAP_DATA_PATH" : "../rtabmap/MAC_2_3_FULL_RPY.txt",
         "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_2_3.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/Hp3xdjbgz2REplAK7GIPdLamyfv1/richardPhoneBad.json"
+        "PROCESSED_GRAPH_DATA_PATH": ""
     },
     "desnat":
     {
@@ -14,7 +14,7 @@
     "occam":
     {
         "RTABMAP_DATA_PATH" : "../rtabmap/OCCAM_RPY.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam.json",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam_rtabmap.json",
         "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/rucha-occum 1609467745874291.json"
     }
 }

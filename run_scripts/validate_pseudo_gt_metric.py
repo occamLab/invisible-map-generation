@@ -3,6 +3,7 @@ Script for generating the data to (in)validate the pseudo ground truth metric.
 """
 
 import os
+import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -27,7 +28,7 @@ GENERATE_FROM_PATH = True
 """
 If true, then a graph is generated from an existing data set. Otherwise, an elliptical parameterized path is used.
 """
-PATH_FROM = "duncan-occam-room-10-1-21-2-48 26773176629225.json"
+PATH_FROM = "MAC_2_3_711.json"
 NUM_REPEAT_GENERATE = 1
 
 if GENERATE_FROM_PATH:
@@ -85,7 +86,7 @@ def validate_pseudo_gt_metric():
     
     # Acquire the data set from which the generated maps are parsed
     matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
-    
+    pdb.set_trace()
     # Making sure there's exactly one map with that name
     if len(matching_maps) == 0:
         print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")

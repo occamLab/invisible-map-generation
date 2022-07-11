@@ -128,6 +128,7 @@ def holistic_optimize(
                     optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
                     ground_truth_tags=gt_data_as_dict_of_se3_arrays)
         return osg_pair_result
+
     opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
     processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
 
@@ -273,7 +274,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
             opt_tag_corners=opt_result_map.tagpoints,
             opt_waypoint_verts=(opt_result_map.waypoints_metadata, opt_result_map.waypoints_arr),
             orig_tag_verts=before_opt_map.tags,
-            ground_truth_tags=gt_data.sorted_poses_as_se3quat_list if gt_data is not None else None,
+            ground_truth_tags=gt_data if gt_data is not None else None,
             plot_title=oconfig.graph_plot_title,
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
