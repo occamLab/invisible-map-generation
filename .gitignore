@@ -22,5 +22,6 @@ venv
 
 /saved_sweeps/**/*sweep.*
 
+!ground_truth_mapping.json
 # Ignore rucha
 *.rucha
