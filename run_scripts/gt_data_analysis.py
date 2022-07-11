@@ -14,6 +14,11 @@ received from invisible maps. Comes from the "processed_graph" data file.
 import re
 import argparse
 import json
+<<<<<<< Updated upstream
+=======
+import os
+import pdb
+>>>>>>> Stashed changes
 import numpy as np
 import pyrr
 import matplotlib.pyplot as plt
@@ -80,6 +85,7 @@ def generate_correct_pose(pose):
     """
 
     # x, y, z, w, quaternion dictating initial orientation of tag
+<<<<<<< Updated upstream
     rtabmap_quat = np.array([pose[3], pose[4], pose[5], pose[6]])
 
     # Matching the April Tag's coordinate frame with RTABmap
@@ -89,6 +95,22 @@ def generate_correct_pose(pose):
     matching_alignment_quat = np.array([-0.5, 0.5, 0.5, 0.5])
     final_quat = pyrr.quaternion.cross(pyrr.quaternion.cross(
         rtabmap_quat, matching_alignment_quat), initial_alignment_quat)
+=======
+    rtabmap_quat = np.array([pose[3],pose[4],pose[5],pose[6]])
+    
+    # -90 degrees around y, -90 old x
+    initial_alignment_quat = np.array([-0.5,0.5,0.5,0.5])
+    
+    # 180 degrees around z
+    # matching_alignment_quat = np.array([0.5,0.5,0.5,0.5])
+    matching_alignment_quat = np.array([0,0,1,0])
+          
+    final_quat = pyrr.quaternion.cross(pyrr.quaternion.cross(rtabmap_quat, matching_alignment_quat),initial_alignment_quat)
+    # final_quat = pyrr.quaternion.cross(rtabmap_quat, initial_alignment_quat)
+    # final_quat = [final_quat[1],final_quat[2],final_quat[3],final_quat[0]]
+    
+    pdb.set_trace()
+>>>>>>> Stashed changes
 
     # conver the pose using the alignment quaternion
     rtabmap_pose = np.array([pose[0], pose[1], pose[2]])
@@ -140,7 +162,11 @@ def process_IM_GT_data(file_path, tag_poses):
     return np.array(IM_processed_poses), np.array(GT_processed_poses), np.array(IM_processed_quats), np.array(GT_processed_quats)
 
 
+<<<<<<< Updated upstream
 def plot_IM_GT_data(im_pos, gt_pos, im_quat, gt_quat):
+=======
+def plot_IM_GT_data(im,gt,visualize):
+>>>>>>> Stashed changes
     """
     Visualize the positions of the IM tag data and the RTABmap tag data.
 
