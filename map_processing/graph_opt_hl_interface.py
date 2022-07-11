@@ -144,9 +144,9 @@ def holistic_optimize(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays)
         if verbose:
-            print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f} \n Ground truth metric: " +
-                f"{opt_result.gt_metric_opt:.3f} (delta of {opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f}" +
-                " from pre-optimization)")
+            print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f}")
+            print(f"Ground truth metric: {opt_result.gt_metric_opt:.3f} ("
+                  f"delta of {opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)")
 
     CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, processed_map_json)
     if upload:
