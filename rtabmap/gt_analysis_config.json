@@ -1,27 +1,20 @@
 {
-    "robolab":
+    "mac_full":
     {
-        "RTABMAP_DATA_PATH" : "../rtabmap/poses27.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_robolab_test.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/robolab_test 828708745588041.json"
-    },
-
-    "mac_2_3":
-    {
-        "RTABMAP_DATA_PATH" : "../rtabmap/poses28.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_7_7_MAC_2_B.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/7_7_MAC_2_B 871763702915833.json"
-    },
-    "MAC_FULL":
-    {
-        "RTABMAP_DATA_PATH" : "../rtabmap/poses28_5.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_oriented.json",
+        "RTABMAP_DATA_PATH" : "../rtabmap/MAC_2_3_FULL_RPY.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_2_3.json",
         "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/Hp3xdjbgz2REplAK7GIPdLamyfv1/richardPhoneBad.json"
     },
     "desnat":
     {
-        "RTABMAP_DATA_PATH" : "../rtabmap/richardSucks.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_ayushSucks.json",
+        "RTABMAP_DATA_PATH" : "../rtabmap/DESNAT_RPY.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_desnat.json",
         "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/desnat_test 877155274903541.json"
+    },
+    "occam":
+    {
+        "RTABMAP_DATA_PATH" : "../rtabmap/OCCAM_RPY.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/rucha-occum 1609467745874291.json"
     }
 }
