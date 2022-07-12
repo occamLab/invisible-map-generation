@@ -234,8 +234,8 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
 
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-        world_frame_ground_truth = transform_gt_to_have_common_reference(anchor_tag_se3quat, anchor_tag,
-                                                                         ground_truth_as_se3)[:, :3]
+        world_frame_ground_truth = transform_gt_to_have_common_reference(IM_anchor_pose=anchor_tag_se3quat, GT_anchor_pose=ground_truth_as_se3[anchor_tag],\
+            ground_truth_tags=ground_truth_as_se3)[:, :3]
         sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))
