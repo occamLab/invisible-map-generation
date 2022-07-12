@@ -249,11 +249,11 @@ def transform_gt_to_have_common_reference(IM_anchor_pose: SE3Quat, GT_anchor_pos
     # noinspection GrazieInspection
     """
         Args:
-            anchor_pose: Pose of the anchor tag from the optimized data set. The anchor tag pose is the pose about which
+            IM_anchor_pose = Pose of the anchor tag from the optimized data set. The anchor tag pose is the pose about which
              the ground truth data is aligned (i.e., the transform between the optimized anchor tag and the
-             corresponding tag from the ground truth data set will always be the identity).
-            anchor_idx: Selects the ground truth tag pose from `ground_truth_tags` that corresponds to the same tag as
-             `anchor_pose`.
+             corresponding tag from the ground truth data set will always be identity).
+            GT_anchor_pose: Pose of the anchor tag from the ground truth data set that corresponds to the same tag id as the
+             IM_anchor_pose.
             ground_truth_tags: The ground truth data expressed in an arbitrary reference frame. Order matters insofar as
              `anchor_idx` selects the intended pose in this list.
 
