@@ -245,7 +245,7 @@ def norm_array_cols(arr: np.ndarray) -> np.ndarray:
     return arr
 
 
-def transform_gt_to_have_common_reference(anchor_pose: SE3Quat, anchor_idx: int, ground_truth_tags: List[SE3Quat]):
+def transform_gt_to_have_common_reference(IM_anchor_pose: SE3Quat, GT_anchor_pose: SE3Quat, ground_truth_tags: List[SE3Quat]):
     # noinspection GrazieInspection
     """
         Args:
@@ -309,7 +309,7 @@ def transform_gt_to_have_common_reference(anchor_pose: SE3Quat, anchor_idx: int,
 
             This is what is computed in the following code.
         """
-    to_world = anchor_pose * (ground_truth_tags[anchor_idx]).inverse()
+    to_world = IM_anchor_pose * (GT_anchor_pose).inverse()
     return np.asarray([(to_world * gt_tag).to_vector() for gt_tag in ground_truth_tags])
 
 

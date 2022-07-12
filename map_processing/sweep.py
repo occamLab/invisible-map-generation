@@ -26,11 +26,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
                  cache_results: bool = True) -> OSweepResults:
-    """TODO: Documentation and add SBA weighting to the sweeping
+    """
+    TODO: Documentation and add SBA weighting to the sweeping
     """
     graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices)
 
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
+
     # Expand sweep_config if it contains callables and arguments to those callables
     for key, value in sweep_config.items():
         if isinstance(value, np.ndarray):
@@ -40,6 +42,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
 
     if verbose:
         print("Generating list of optimization sweeping parameters...")
+
     products, oconfigs = OConfig.oconfig_generator(
         param_multiplicands=sweep_arrs, param_order=ordered_sweep_config_keys, base_oconfig=base_oconfig)
 
@@ -53,7 +56,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_param_to_result_idx_mappings[key] = {sweep_arg: sweep_idx for sweep_idx, sweep_arg in
                                                    enumerate(sweep_arrs[key])}
     sweep_args = []
-    for i, oconfig in enumerate(oconfigs):
+    for i, oconfig in (enumerate(oconfigs)):
         sweep_args.append((graph_to_opt, oconfig, ground_truth_data, (i, len(oconfigs)), verbose))
     if verbose:
         print(f"{len(sweep_args)} parameters generated for sweeping")
@@ -63,22 +66,25 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if num_processes == 1:  # Skip multiprocessing if only one process is specified
         if verbose:
             print("Starting single-process optimization parameter sweep...")
-        results_tuples = [_sweep_target(sweep_arg) for sweep_arg in sweep_args]
+        for sweep_arg in sweep_args:
+            results_tuples = [_sweep_target(sweep_arg)]
     else:
         if verbose:
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
         with mp.Pool(processes=num_processes) as pool:
             results_tuples = pool.map(_sweep_target, sweep_args)
 
+    # Configure results
     results: List[float] = []
     results_indices: List[int] = []
+    results_first_oresult = results_tuples[0][2]
     for result_tuple in results_tuples:
         results.append(result_tuple[0])
         results_indices.append(result_tuple[1])
 
     results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
     results_arr = np.ones(results_arr_dims) * -1
-    for result, result_idx in results_tuples:
+    for result, result_idx, result_oresult in results_tuples:
         result_arr_idx = []
         for key_idx, key in enumerate(ordered_sweep_config_keys):
             result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
@@ -92,8 +98,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from)
     if verbose:
-        print(f"\nMinimum ground truth value: {sweep_results.min_gt_result:.3f} with parameters:\n" +
-              json.dumps(sweep_results.args_producing_min, indent=2))
+        print(f"Pre-optimization value: {results_first_oresult.gt_metric_pre:.3f}")
+        print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
+              f"{results_first_oresult.gt_metric_pre - sweep_results.min_gt_result:.3f})")
+        print("Parameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
 
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     if cache_results:
@@ -108,13 +116,15 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     return sweep_results
 
 
-def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
+def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool], last_run=False) \
         -> Tuple[float, int]:
     """Target callable used in the sweep_params function.
 
     Args:
         sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
          as the argument), (2) the optimization configuration, and (3) the ground truth tags dictionary.
+        last_run: If this is the last parameter being swept, then last_run is entered as True, which results in the
+         pre-optimization metric being returned too.
 
     Returns:
         Return value from GraphManager.optimize_graph
@@ -123,6 +133,10 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     gt_result = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
+    oresult.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
+        optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
+        ground_truth_tags=sweep_args_tuple[2])
     if sweep_args_tuple[4]:
         print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
-    return gt_result, sweep_args_tuple[3][0]
+
+    return gt_result, sweep_args_tuple[3][0], oresult
