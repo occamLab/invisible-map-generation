@@ -1214,6 +1214,10 @@ class OSweepResults(BaseModel):
         return np.max(self.gt_results_list)
 
     @property
+    def min_gt_result_idx(self) -> float:
+        return np.argmin(self.gt_results_list)
+
+    @property
     def where_min(self) -> Tuple[int, ...]:
         # noinspection PyTypeChecker
         where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(self.gt_results_arr == self.min_gt_result)

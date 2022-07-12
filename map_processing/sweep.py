@@ -77,12 +77,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     # Configure results
     results: List[float] = []
     results_indices: List[int] = []
-    results_first_oresult = results_tuples[0][2]
+    results_oresults = []
 
     # Result_tuple: (gt metric: Float, index: Int, oresult: OResult)
     for result_tuple in results_tuples:
         results.append(result_tuple[0])
         results_indices.append(result_tuple[1])
+        results_oresults.append(result_tuple[2])
 
     results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
     results_arr = np.ones(results_arr_dims) * -1
@@ -102,11 +103,14 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from)
+    min_value_idx = sweep_results.min_gt_result_idx
+
     if verbose:
-        print(f"\n Pre-optimization value: {results_first_oresult.gt_metric_pre:.3f}")
+        print(f"\n Pre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
         print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
-              f"{(sweep_results.min_gt_result - results_first_oresult.gt_metric_pre):.3f})")
-        print(f"")
+              f"{(sweep_results.min_gt_result - results_oresults[0].gt_metric_pre):.3f})")
+        print(f"Fitness metrics: \n"
+              f"{results_oresults[min_value_idx].fitness_metrics.repr_as_list()}")
         print("Parameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
 
     # Cache file from sweep
@@ -125,7 +129,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     return sweep_results
 
 
-def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool], last_run=False) \
+def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
         -> Tuple[float, int]:
     """Target callable used in the sweep_params function.
     *****NOTE: This function is what individually optimizes each of the parameters provided through the sweep.
@@ -150,6 +154,7 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     oresult.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
         ground_truth_tags=sweep_args_tuple[2])
+    oresult.gt_metric_opt = gt_result
 
     if sweep_args_tuple[4]:
         print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
