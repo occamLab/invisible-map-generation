@@ -16,5 +16,11 @@
         "RTABMAP_DATA_PATH" : "../rtabmap/OCCAM_RPY.txt",
         "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam_rtab.json",
         "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/occa-no-0 1731960600836333.json"
+    },
+    "mac_1_2":
+    {
+        "RTABMAP_DATA_PATH" : "../rtabmap/mac_1_2.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_1_2.json",
+        "PROCESSED_GRAPH_DATA_PATH": ""
     }
 }
