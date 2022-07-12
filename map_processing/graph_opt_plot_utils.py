@@ -98,10 +98,6 @@ def plot_optimization_result(
         plot_title: Union[str, None] = None
 ) -> None:
     """Visualization used during the optimization routine.
-
-    Notes:
-        Assumes that `ground_truth_tags` has been sorted such that the tags poses are in ascending order according to
-        their tag IDs.
     """
     f = plt.figure()
     ax = f.add_axes([0.1, 0.1, 0.6, 0.75], projection="3d")
@@ -132,7 +128,6 @@ def plot_optimization_result(
 
     # Plot ground truth vertices and their labels
     if ground_truth_tags is not None:
-        # pdb.set_trace()
         # noinspection PyTypeChecker
         opt_tag_list: List = opt_tag_verts.tolist()
         opt_tag_list.sort(key=lambda x: x[-1])  # Sort by tag IDs
