@@ -14,7 +14,7 @@
     "occam":
     {
         "RTABMAP_DATA_PATH" : "../rtabmap/OCCAM_RPY.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/rucha-occum 1609467745874291.json"
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam_rtab.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/occa-no-0 1731960600836333.json"
     }
 }
