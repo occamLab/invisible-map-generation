@@ -9,7 +9,7 @@ import numpy as np
 from g2o import SE3Quat
 from matplotlib import pyplot as plt, cm
 
-from map_processing.data_models import OG2oOptimizer
+from map_processing.data_models import GTDataSet, OG2oOptimizer
 from map_processing.transform_utils import transform_vector_to_matrix, transform_gt_to_have_common_reference
 
 # Arrays for use in drawing reference frames
@@ -135,33 +135,32 @@ def plot_optimization_result(
         # pdb.set_trace()
         # noinspection PyTypeChecker
         opt_tag_list: List = opt_tag_verts.tolist()
-        tag_ids = [int(tag[-1]) for tag in opt_tag_list]
-        opt_tag_dict = {}
-        for se3_quat in opt_tag_list:
-            opt_tag_dict[se3_quat[-1]] = se3_quat[:-1]
+        opt_tag_list.sort(key=lambda x: x[-1])  # Sort by tag IDs
+        opt_tag_dict = {int(opt_tag[-1]): opt_tag[0:-1] for opt_tag in opt_tag_list}
+        opt_tag_ids = [int(id[-1]) for id in opt_tag_list]
 
-        matching_ground_truth_tags = {}
-        for tag_id in tag_ids:
-            if tag_id in ground_truth_tags.as_dict_of_se3_arrays.keys():
-                matching_ground_truth_tags[tag_id] = SE3Quat(ground_truth_tags.as_dict_of_se3_arrays[tag_id])
-        # ordered_opt_tags_array = np.asarray([tag[0:-1] for tag in opt_tag_list])
+        matching_ground_truth_tags = GTDataSet()
+        for gtTagPose in ground_truth_tags.poses:
+            if gtTagPose.tag_id in opt_tag_ids:
+                matching_ground_truth_tags.poses.append(gtTagPose)
 
-        anchor_tag_id = 16  # Select arbitrarily
-        print("Here")
+        gt_tag_ids = matching_ground_truth_tags.pose_ids_as_list
+
+
+        # TODO: Maybe fix anchor_tag_id selection to be more robust? problem is in MAC_2_3_711
+        for opt_tag_id in opt_tag_ids:
+            if opt_tag_id in gt_tag_ids:
+                anchor_tag_id = opt_tag_id
+                break
         world_frame_ground_truth = transform_gt_to_have_common_reference(
-            anchor_pose=SE3Quat(opt_tag_dict[anchor_tag_id]),
-            anchor_id=anchor_tag_id, ground_truth_tags=matching_ground_truth_tags)
+            IM_anchor_pose=SE3Quat(opt_tag_dict[anchor_tag_id]),
+            GT_anchor_pose=SE3Quat(matching_ground_truth_tags.as_dict_of_se3_arrays[anchor_tag_id]), ground_truth_tags=matching_ground_truth_tags.sorted_poses_as_se3quat_list)
 
-        tag_poses_to_plot = []
-        for (_, tag_pose) in world_frame_ground_truth.items():
-            tag_poses_to_plot.append(tag_pose)
-        tag_poses_to_plot = np.array(tag_poses_to_plot)
-        
-        plt.plot(tag_poses_to_plot[:, 0], tag_poses_to_plot[:, 1], tag_poses_to_plot[:, 2],
+        plt.plot(world_frame_ground_truth[:, 0], world_frame_ground_truth[:, 1], world_frame_ground_truth[:, 2],
                  "o", c="k", label=f"Ground Truth Tags (anchor id={anchor_tag_id})")
-        draw_frames(tag_poses_to_plot, plt_axes=ax)
-        # for i, tag in enumerate(world_frame_ground_truth):
-        #     ax.text(tag[0], tag[1], tag[2], str(tag_ids[i]), c='k')
+        draw_frames(world_frame_ground_truth, plt_axes=ax)
+        for i, tag in enumerate(world_frame_ground_truth):
+            ax.text(tag[0], tag[1], tag[2], str(gt_tag_ids[i]), c='k')
 
     # Plot waypoint vertices and their labels
     plt.plot(opt_waypoint_verts[1][:, 0], opt_waypoint_verts[1][:, 1], opt_waypoint_verts[1][:, 2], "o", c="y",
