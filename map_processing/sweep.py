@@ -126,7 +126,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
 
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool], last_run=False) \
-        -> Tuple[float, int, OResult]:
+        -> Tuple[float, int]:
     """Target callable used in the sweep_params function.
     *****NOTE: This function is what individually optimizes each of the parameters provided through the sweep.
 
