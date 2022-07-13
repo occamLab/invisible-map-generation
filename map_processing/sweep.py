@@ -13,7 +13,7 @@ from matplotlib import pyplot as plt
 
 from map_processing import TIME_FORMAT
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
-from map_processing.data_models import OConfig, OSweepResults, UGDataSet
+from map_processing.data_models import OConfig, OSweepResults, UGDataSet, GTDataSet
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
@@ -128,7 +128,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                         dpi=500)
 
     # Visualize the best option
-    oresult_new = optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1], visualize=True)
+    optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
+                   visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) if ground_truth_data is not None else None)
     return sweep_results
 
 
@@ -139,13 +140,6 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
 
     Args:
         sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
-         as the argument), (2) the optimization configuration, and (3) the ground truth tags dictionary.
-        last_run: If this is the last parameter being swept, then last_run is entered as True, which results in the
-         pre-optimization metric being returned too.
-
-    Returns:
-        Return a tuple containing:
-            gt_result: Float representing ground truth value metric
             sweep_args_tuple[3][0]: Int representing the index of the sweep parameter
             oresult: OResult representing the result of GraphManager.optimize_graph
     """
