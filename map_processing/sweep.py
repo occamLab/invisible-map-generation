@@ -106,7 +106,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     min_value_idx = sweep_results.min_gt_result_idx
 
     if verbose:
-        print(f"\n Pre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
+        print(f"\nPre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
         print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
               f"{(sweep_results.min_gt_result - results_oresults[0].gt_metric_pre):.3f})")
         print(f"Fitness metrics: \n"
