@@ -1100,6 +1100,10 @@ class OResult(BaseModel):
         fitness_metrics: The chi2 metrics before and after optimization
         gt_metric_pre: Ground truth metric of the pre-optimized map
         gt_metric_opt: Ground truth metric of the optimized map
+        max_pre: Maximum distance between two nodes of pre-optimized map
+        max_opt: Maximum distance between two nodes of optimized map
+        max_idx_pre: Index of node with maximum distance of pre-optimized map
+        max_idx_opt: Index of node with maximum distance of optimized map
     """
     oconfig: OConfig
     map_pre: OG2oOptimizer
@@ -1107,6 +1111,10 @@ class OResult(BaseModel):
     fitness_metrics: OResultFitnessMetrics
     gt_metric_pre: Optional[float] = None
     gt_metric_opt: Optional[float] = None
+    max_pre: Optional[float] = None
+    max_opt:Optional[float] = None
+    max_idx_pre: Optional[float] = None
+    max_idx_opt: Optional[float] = None
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
@@ -1156,6 +1164,7 @@ class OSweepResults(BaseModel):
     base_oconfig: OConfig
     map_name: str
     generated_params: Optional[GenerateParams] = None
+    oresults_list: List[OResult]
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
@@ -1216,6 +1225,10 @@ class OSweepResults(BaseModel):
     @property
     def min_gt_result_idx(self) -> float:
         return np.argmin(self.gt_results_list)
+
+    @property
+    def min_oresult(self) -> OResult:
+        return self.oresults_list[self.min_gt_result_idx]
 
     @property
     def where_min(self) -> Tuple[int, ...]:

@@ -102,13 +102,16 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
-        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from)
+        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
     min_value_idx = sweep_results.min_gt_result_idx
+    min_oresult = sweep_results.min_oresult
 
     if verbose:
         print(f"\nPre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
         print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
               f"{(sweep_results.min_gt_result - results_oresults[0].gt_metric_pre):.3f})")
+        print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
+        print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
         print(f"Fitness metrics: \n"
               f"{results_oresults[min_value_idx].fitness_metrics.repr_as_list()}")
         print("Parameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
@@ -145,13 +148,18 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     """
     # Same framework as holistic_optimize from graph_opt_hl_interface
     oresult = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
-    gt_result = ground_truth_metric_with_tag_id_intersection(
+    gt_result, max_diff, max_diff_idx = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
-    oresult.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
+    gt_result_pre, max_diff_pre, max_diff_idx_pre = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
         ground_truth_tags=sweep_args_tuple[2])
+    oresult.gt_metric_pre = gt_result_pre
     oresult.gt_metric_opt = gt_result
+    oresult.max_pre = max_diff_pre
+    oresult.max_opt = max_diff
+    oresult.max_idx_pre = max_diff_idx_pre
+    oresult.max_idx_opt = max_diff_idx
 
     if sweep_args_tuple[4]:
         print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")

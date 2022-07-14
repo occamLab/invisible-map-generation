@@ -214,8 +214,8 @@ def sum_optimizer_edges_chi2(
     return total_chi2, total_alpha
 
 
-def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \
-        -> float:
+def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \
+        -> Tuple[float, float, int]:
     """Error metric for tag pose accuracy.
 
     Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
@@ -226,7 +226,8 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
         ground_truth_tags: A n-by-7 numpy array containing length-7 pose vectors.
 
     Returns:
-        A float representing the average difference in tag positions (translation only) in meters.
+        A float representing the average difference in tag positions (translation only) in meters as well as the maximum
+        difference in tag positions and an int representing the index of the maximum difference
     """
     num_tags = optimized_tag_verts.shape[0]
     sum_trans_diffs = np.zeros((num_tags,))
@@ -234,12 +235,16 @@ def ground_truth_metric(optimized_tag_verts: np.ndarray, ground_truth_tags: np.n
 
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
-        world_frame_ground_truth = transform_gt_to_have_common_reference(IM_anchor_pose=anchor_tag_se3quat, GT_anchor_pose=ground_truth_as_se3[anchor_tag],\
-            ground_truth_tags=ground_truth_as_se3)[:, :3]
-        sum_trans_diffs += np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
+        world_frame_ground_truth = transform_gt_to_have_common_reference(IM_anchor_pose=anchor_tag_se3quat,
+                                                                         GT_anchor_pose=ground_truth_as_se3[anchor_tag],
+                                                                         ground_truth_tags=ground_truth_as_se3)[:, :3]
+        this_diff = np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
+        sum_trans_diffs += this_diff
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))
-    return avg
+    max_diff = max(avg_trans_diffs)
+    max_diff_idx = tag_ids[np.argmax(avg_trans_diffs)]
+    return avg, max_diff, max_diff_idx
 
 
 def make_processed_map_json(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
