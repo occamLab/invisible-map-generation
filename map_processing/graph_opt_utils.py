@@ -243,7 +243,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
                                                                          ground_truth_tags=ground_truth_as_se3)[:, :3]
         this_diff = np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
         sum_trans_diffs += this_diff
-        ground_truth_by_tag[tag_ids[anchor_tag]] = this_diff
+        ground_truth_by_tag[tag_ids[anchor_tag]] = np.mean(this_diff)
 
     # Find average error across all anchor tags
     avg_trans_diffs = sum_trans_diffs / num_tags
