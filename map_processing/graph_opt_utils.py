@@ -233,6 +233,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
     sum_trans_diffs = np.zeros((num_tags,))
     ground_truth_as_se3 = [SE3Quat(tag_pose) for tag_pose in ground_truth_tags]
 
+    # Turn each tag into anchor tag for map and find difference in distances between real and optimized tags (error)
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
         world_frame_ground_truth = transform_gt_to_have_common_reference(IM_anchor_pose=anchor_tag_se3quat,
@@ -240,10 +241,15 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
                                                                          ground_truth_tags=ground_truth_as_se3)[:, :3]
         this_diff = np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
         sum_trans_diffs += this_diff
+
+    # Find average error across all anchor tags
     avg_trans_diffs = sum_trans_diffs / num_tags
     avg = float(np.mean(avg_trans_diffs))
+
+    # Find the tag with maximum distance across all anchor tags
     max_diff = max(avg_trans_diffs)
     max_diff_idx = tag_ids[np.argmax(avg_trans_diffs)]
+
     return avg, max_diff, max_diff_idx
 
 

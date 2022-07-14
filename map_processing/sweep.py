@@ -30,7 +30,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     TODO: Documentation and add SBA weighting to the sweeping
     """
     graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices)
-
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
 
     # Expand sweep_config if it contains callables and arguments to those callables
@@ -39,13 +38,11 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             sweep_arrs[key] = value
         else:  # Assume that value[0] is a callable and value[1] contains its arguments
             sweep_arrs[key] = value[0](*value[1])
-
     if verbose:
         print("Generating list of optimization sweeping parameters...")
 
     products, oconfigs = OConfig.oconfig_generator(
         param_multiplicands=sweep_arrs, param_order=ordered_sweep_config_keys, base_oconfig=base_oconfig)
-
     if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
         raise Exception("Non-unique set of optimization configurations generated")
 
@@ -88,7 +85,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
     results_arr = np.ones(results_arr_dims) * -1
 
-    # Currently only uses result (metric) and result_idx
+    # Populate sweep results array and create OSweepResults
     for result, result_idx, result_oresult in results_tuples:
         result_arr_idx = []
         for key_idx, key in enumerate(ordered_sweep_config_keys):
@@ -97,7 +94,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if np.any(results_arr < 0):
         raise Exception("Array of sweep results was not completely populated")
 
-    # Print results from sweep
     sweep_results = OSweepResults(
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
@@ -106,6 +102,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
 
+    # Print results
     if verbose:
         print(f"\nPre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
         print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
@@ -146,7 +143,7 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
             sweep_args_tuple[3][0]: Int representing the index of the sweep parameter
             oresult: OResult representing the result of GraphManager.optimize_graph
     """
-    # Same framework as holistic_optimize from graph_opt_hl_interface
+    # Same workflow as holistic_optimize from graph_opt_hl_interface
     oresult = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
     gt_result, max_diff, max_diff_idx = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
@@ -154,6 +151,8 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     gt_result_pre, max_diff_pre, max_diff_idx_pre = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
         ground_truth_tags=sweep_args_tuple[2])
+
+    # Add metrics to corresponding OResult
     oresult.gt_metric_pre = gt_result_pre
     oresult.gt_metric_opt = gt_result
     oresult.max_pre = max_diff_pre
