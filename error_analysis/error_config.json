@@ -1,0 +1,7 @@
+{
+    "209_to_occam":
+    {
+        "OBLIQUE_DATA_PATH" : "../error_analysis/datasets/oblique_209_occam.json",
+        "STRAIGHT_ON_DATA_PATH": "../error_analysis/datasets/straight_209_occam.json"
+    }
+}
