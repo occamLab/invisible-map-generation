@@ -222,6 +222,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
     then compares the transforms and finds the difference in the translation components.
 
     Args:
+        tag_ids: A list of tag ids by index (sorted)
         optimized_tag_verts: A n-by-7 numpy array containing length-7 pose vectors.
         ground_truth_tags: A n-by-7 numpy array containing length-7 pose vectors.
 

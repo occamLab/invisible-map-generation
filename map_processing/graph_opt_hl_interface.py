@@ -29,7 +29,7 @@ class WeightSpecifier(Enum):
     VARIABLE = 6
     TRUST_GRAVITY = 7
 
-
+# Testing dicts for different weight defaults
 WEIGHTS_DICT: Dict[WeightSpecifier, Weights] = {  # TODO: revisit these
     WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(
         orig_odometry=np.array([-6., -6., -6., -6., -6., -6.]),
@@ -119,6 +119,8 @@ def holistic_optimize(
         g1sg, g2sg = create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct, pso=pso)
         osg_pair_result = subgraph_pair_optimize(subgraphs=(g1sg, g2sg), oconfig_1=oconfig,
                                                  oconfig_2=oconfig, pso=pso)
+
+        # Find metrics for the two OResults to be compared
         for oresult in [osg_pair_result.sg1_oresult, osg_pair_result.sg2_oresult]:
             if gt_data_as_dict_of_se3_arrays is not None:
                 gt_metric_pre, max_diff_pre, max_diff_idx_pre = ground_truth_metric_with_tag_id_intersection(
@@ -133,6 +135,7 @@ def holistic_optimize(
                 oresult.gt_metric_opt = gt_metric
                 oresult.max_opt = max_diff
                 oresult.max_idx_opt = max_diff_idx
+
         return osg_pair_result
 
     opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
@@ -143,6 +146,7 @@ def holistic_optimize(
         print(opt_result.fitness_metrics.repr_as_list())
 
     if gt_data_as_dict_of_se3_arrays is not None:
+        # Find metrics
         intersection = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays)
@@ -157,6 +161,8 @@ def holistic_optimize(
         opt_result.gt_metric_opt = gt_metric
         opt_result.max_opt = max_diff
         opt_result.max_idx_opt = max_diff_idx
+
+        # Print results
         if verbose:
             print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f}")
             print(f"Ground truth metric: {opt_result.gt_metric_opt:.3f} ("
