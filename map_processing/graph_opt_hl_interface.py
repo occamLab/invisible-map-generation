@@ -36,9 +36,9 @@ WEIGHTS_DICT: Dict[WeightSpecifier, Weights] = {  # TODO: revisit these
         orig_tag=np.array([18, 18, 0, 0, 0, 0]),
         orig_tag_sba=np.array([18, 18])),
     WeightSpecifier.TRUST_ODOM: Weights(
-        orig_odometry=np.array([-3., -3., -3., -3., -3., -3.]),
+        orig_odometry=np.array([1., 1., 1., 0.01, 0.01, 0.01]),
         orig_tag=np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
-        orig_tag_sba=np.array([10.6, 10.6])),
+        orig_tag_sba=np.array([10**7, 10**7])),
     WeightSpecifier.TRUST_TAGS: Weights(
         orig_odometry=np.array([10, 10, 10, 10, 10, 10]),
         orig_tag=np.array([-10.6, -10.6, -10.6, -10.6, -10.6, -10.6]),
@@ -146,7 +146,7 @@ def holistic_optimize(
         print(opt_result.fitness_metrics.repr_as_list())
 
     if gt_data_as_dict_of_se3_arrays is not None:
-        # Find metrics
+        # Find metrics translational
         intersection = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays)

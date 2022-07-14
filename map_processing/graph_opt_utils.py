@@ -15,6 +15,7 @@ from . import graph_util_get_neighbors, VertexType
 from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, PGWaypointVertex, PGDataSet, \
     OG2oOptimizer
 from .transform_utils import transform_gt_to_have_common_reference
+from scipy.spatial.transform import Rotation as R
 
 
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> OG2oOptimizer:
@@ -228,7 +229,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
 
     Returns:
         A float representing the average difference in tag positions (translation only) in meters as well as the maximum
-        difference in tag positions and an int representing the index of the maximum difference
+        difference in tag positions and an int representing the tag id of the tag with the maximum difference
     """
     num_tags = optimized_tag_verts.shape[0]
     sum_trans_diffs = np.zeros((num_tags,))
@@ -253,6 +254,53 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
 
     return avg, max_diff, max_diff_idx
 
+def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> Tuple[np.ndarray, float, int]:
+    """ Error metric for rotational tag pose accuracy between the two arrays
+
+    Calculates the rotational transform from the first tag to each other tag for the two tag arrays entered,
+    then compares the transforms and finds the difference in the rotational components.
+
+    Args:
+        first_tag_vert: A n-by-7 numpy array containing length-7 pose vectors.
+        second_tag_vert: A n-by-7 numpy array containing length-7 pose vectors.
+
+    Returns:
+        A tuple representing the average difference in tag positions (rotational only) in degrees as well as the maximum
+        rotational error across the dataset and the tag id for the tag with the maximum rotation error.
+    """
+    rot_firsts = []
+    rot_seconds = []
+    num_tags = first_tag_vert.shape[0]
+    rot_diffs = np.zeros((num_tags, 3))
+
+    # Find rotational differences for each tag
+    for tag in range(num_tags):
+        # Convert to Rotation matrix
+        rot_first = R.from_quat(first_tag_vert[tag][3:-1]).as_matrix()
+        rot_second = R.from_quat(second_tag_vert[tag][3:-1]).as_matrix()
+
+        rot_firsts.append(R.from_quat(first_tag_vert[tag][3:-1]).as_euler('xyz', degrees=True))
+        rot_seconds.append(R.from_quat(second_tag_vert[tag][3:-1]).as_euler('xyz', degrees=True))
+
+        # Find difference
+        rot_diff = np.linalg.inv(rot_first)@rot_second
+        rot_diff_euler = np.abs(R.from_matrix(rot_diff).as_euler("xyz", degrees=True))
+
+        rot_diffs[tag] = rot_diff_euler
+
+    # Find sum across columns and rows
+    sum_rot_diffs_columns = np.sum(rot_diffs, axis=0)
+    print(rot_diffs)
+    sum_rot_diffs_rows = np.sum(rot_diffs, axis=1)
+
+    # Give metrics
+    avg_rot_diffs_columns = (sum_rot_diffs_columns / num_tags)
+    avg_rot_diffs_rows = (sum_rot_diffs_rows / 3)
+
+    max_rot_diff = np.max(rot_diffs, axis=0)
+    max_rot_diff_idx = first_tag_vert[np.argmax(avg_rot_diffs_rows)][7]
+
+    return avg_rot_diffs_columns, max_rot_diff, max_rot_diff_idx
 
 def make_processed_map_json(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
         -> str:

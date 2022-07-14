@@ -33,6 +33,7 @@ from map_processing import PrescalingOptEnum, VertexType
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
+from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
 
 
@@ -243,3 +244,13 @@ if __name__ == "__main__":
                 map_info=map_info, pso=PrescalingOptEnum(args.pso), oconfig=oconfig,
                 fixed_vertices=fixed_vertices, verbose=True, visualize=args.v, compare=args.c, upload=args.F,
                 gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None)
+
+            # Get rotational metrics
+            pre_optimized_tags = opt_result.map_pre.tags
+            optimized_tags = opt_result.map_opt.tags
+            rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+            print(f"Rotation metric: {rot_metric}")
+            print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+
+
+
