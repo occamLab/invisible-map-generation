@@ -1104,6 +1104,7 @@ class OResult(BaseModel):
         max_opt: Maximum distance between two nodes of optimized map
         max_idx_pre: Index of node with maximum distance of pre-optimized map
         max_idx_opt: Index of node with maximum distance of optimized map
+        gt_per_anchor_tag_opt: Dictionary mapping id tag to ground truth value when it is made anchor
     """
     oconfig: OConfig
     map_pre: OG2oOptimizer
@@ -1112,9 +1113,22 @@ class OResult(BaseModel):
     gt_metric_pre: Optional[float] = None
     gt_metric_opt: Optional[float] = None
     max_pre: Optional[float] = None
-    max_opt:Optional[float] = None
+    max_opt: Optional[float] = None
     max_idx_pre: Optional[float] = None
     max_idx_opt: Optional[float] = None
+    gt_per_anchor_tag_opt: Optional[Dict[int, float]] = [None, None]
+
+    @property
+    def find_max_gt(self):
+        return max(self.gt_per_anchor_tag_opt.values())
+
+    @property
+    def find_max_gt_tag(self):
+        return max(self.gt_per_anchor_tag_opt, key=self.gt_per_anchor_tag_opt.get)
+
+    @property
+    def find_max_gt_idx(self):
+        return np.argmax(list(self.gt_per_anchor_tag_opt))
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}

@@ -216,7 +216,7 @@ def sum_optimizer_edges_chi2(
 
 
 def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \
-        -> Tuple[float, float, int]:
+        -> Tuple[float, float, int, dict]:
     """Error metric for tag pose accuracy.
 
     Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
@@ -229,7 +229,8 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
 
     Returns:
         A float representing the average difference in tag positions (translation only) in meters as well as the maximum
-        difference in tag positions and an int representing the tag id of the tag with the maximum difference
+        difference in tag positions and an int representing the tag id of the tag with the maximum difference.
+        The last dictionary maps ground truth values to anchor tag ids
     """
     num_tags = optimized_tag_verts.shape[0]
     sum_trans_diffs = np.zeros((num_tags,))
@@ -253,9 +254,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
     max_diff = max(avg_trans_diffs)
     max_diff_idx = tag_ids[np.argmax(avg_trans_diffs)]
 
-    print(f"Ground Truth by Tag ID: {ground_truth_by_tag}")
-
-    return avg, max_diff, max_diff_idx
+    return avg, max_diff, max_diff_idx, ground_truth_by_tag
 
 def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> Tuple[np.ndarray, float, int]:
     """ Error metric for rotational tag pose accuracy between the two arrays

@@ -100,6 +100,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
+
+    # Best result
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
 
@@ -110,6 +112,14 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     print(f"Rotation metric: {rot_metric}")
     print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
 
+    # Get ground truth for each tag as anchor tag
+    best_oresult = results_oresults[min_value_idx]
+
+    # Get max ground truth from above dict
+    max_gt = best_oresult.find_max_gt
+    max_gt_tag = best_oresult.find_max_gt_tag
+    max_gt_idx = best_oresult.find_max_gt_idx
+
     # Print results
     if verbose:
         print(f"\nPre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
@@ -119,7 +129,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
         print(f"Fitness metrics: \n"
               f"{results_oresults[min_value_idx].fitness_metrics.repr_as_list()}")
-        print("Parameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+        print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
 
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
@@ -135,9 +145,16 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
 
-    # Visualize the best option
-    optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
-                   visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) if ground_truth_data is not None else None)
+    # Visualize the worst option
+    optimize_graph(graph=deepcopy(sweep_args[max_gt_idx][0]), oconfig=sweep_args[max_gt_idx][1],
+                   visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+            if ground_truth_data is not None else None)
+
+    # Print ground truth for each tag as anchor
+    if verbose:
+        print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+        print(f"Ground Truth per Tag: \n {best_oresult.gt_per_anchor_tag_opt}")
+
     return sweep_results
 
 
@@ -153,10 +170,11 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     """
     # Same workflow as holistic_optimize from graph_opt_hl_interface
     oresult = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
-    gt_result, max_diff, max_diff_idx = ground_truth_metric_with_tag_id_intersection(
+    gt_result, max_diff, max_diff_idx, gt_per_anchor_tag = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
-    gt_result_pre, max_diff_pre, max_diff_idx_pre = ground_truth_metric_with_tag_id_intersection(
+    oresult.gt_per_anchor_tag_opt = gt_per_anchor_tag
+    gt_result_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_tag_pre = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
         ground_truth_tags=sweep_args_tuple[2])
 

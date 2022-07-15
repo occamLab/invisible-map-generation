@@ -135,12 +135,13 @@ def validate_pseudo_gt_metric():
         for mi, gt_data_set in mi_and_gt_data_set_list:
             generate_idx += 1
             oresult = optimize_graph(graph=Graph.as_graph(data_set=UGDataSet.parse_obj(mi.map_dct)), oconfig=oconfig)
-            gt_metric, max_diff, max_diff_idx = ground_truth_metric_with_tag_id_intersection(
+            gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
                 optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
                 ground_truth_tags=gt_data_set)
             oresult.gt_metric_opt = gt_metric
             oresult.max_opt = max_diff
             oresult.max_idx_opt = max_diff_idx
+            oresult.gt_per_anchor_tag_opt = gt_per_anchor
 
             osg_pair_result: OSGPairResult = holistic_optimize(
                 map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
