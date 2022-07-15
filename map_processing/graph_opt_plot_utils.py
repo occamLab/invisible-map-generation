@@ -147,7 +147,7 @@ def plot_optimization_result(
         #     if opt_tag_id in gt_tag_ids:
         #         anchor_tag_id = opt_tag_id
         #         break
-        anchor_tag_id = 305
+        anchor_tag_id = 0
         world_frame_ground_truth = transform_gt_to_have_common_reference(
             IM_anchor_pose=SE3Quat(opt_tag_dict[anchor_tag_id]),
             GT_anchor_pose=SE3Quat(matching_ground_truth_tags.as_dict_of_se3_arrays[anchor_tag_id]), ground_truth_tags=matching_ground_truth_tags.sorted_poses_as_se3quat_list)

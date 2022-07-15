@@ -18,6 +18,7 @@ from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
 from map_processing.graph_vertex_edge_classes import VertexType
+from map_processing.graph_opt_utils import rotation_metric
 
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
@@ -101,6 +102,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
+
+    # Get rotational metrics for min_oresult
+    pre_optimized_tags = min_oresult.map_pre.tags
+    optimized_tags = min_oresult.map_opt.tags
+    rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+    print(f"Rotation metric: {rot_metric}")
+    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
 
     # Print results
     if verbose:
