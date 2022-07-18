@@ -120,38 +120,38 @@ def run(tag_idx, unprocessed_map_data):
     
     # This equation, whiteboarded out, to convert from the tag frame's corner pixels to the
     # corner pixels we see on the phone. 
-    sba_xyz = camera_intrinsics@MATRIX_SIZE_CONVERTER@tag_pose@corner_pixel_poses
+    sba_pixel_corners = camera_intrinsics@MATRIX_SIZE_CONVERTER@tag_pose@corner_pixel_poses
  
     for i in range(4):
         for j in range(3):
-            sba_xyz[j, i] = sba_xyz[j, i]/sba_xyz[2,i]
+            sba_pixel_corners[j, i] = sba_pixel_corners[j, i]/sba_pixel_corners[2,i]
             
     # pdb.set_trace()
-    sba_xyz = sba_xyz[0:-1] 
+    sba_pixel_corners = sba_pixel_corners[0:-1] 
     
     if SHOW_INDIVIDUAL_COORDS:
         
         print("bottom left:")
-        print(sba_xyz[:2,0])
+        print(sba_pixel_corners[:2,0])
         
         print("bottom right:")
-        print(sba_xyz[:2,1])
+        print(sba_pixel_corners[:2,1])
         
         print("top right:")
         
-        print(sba_xyz[:2,2])
+        print(sba_pixel_corners[:2,2])
         
         print("top left:")
-        print(sba_xyz[:2,3])
+        print(sba_pixel_corners[:2,3])
         
         print("\n")
     
     relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"]   
-    RMS_error, throw = sba_error_metric(sba_xyz, observed_pixels)
+    RMS_error, throw = sba_error_metric(sba_pixel_corners, observed_pixels)
     # print(f"tag {relevant_tag} RMS error: {RMS_error}")
     
     if VISUALIZE and not throw: 
-        visualizing_difference(sba_xyz, observed_pixels, relevant_tag)
+        visualizing_difference(sba_pixel_corners, observed_pixels, relevant_tag)
     
     return RMS_error, throw, relevant_tag
 
@@ -190,5 +190,5 @@ def throw_out_bad_tags(data_path):
     # print(f"most error: {max(errors)} at tag {tag_id_of_most_error}")
     
 if __name__ == "__main__":
-    print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft copy.json"))
+    print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft.json"))
     
