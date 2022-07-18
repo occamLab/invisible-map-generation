@@ -114,16 +114,16 @@ def holistic_optimize(
     graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso)
 
     # Get sba preprocessed tag corners and save to json
-    unprocessed_data_set = UGDataSet(**map_info.map_dct)
-    tag_corners = unprocessed_data_set.tag_corners
-    tag_corners = tag_corners.reshape(len(tag_corners), 8)
-    tag_corners_dict = {}
-    for tag in range(len(tag_corners)):
-        tag_corners_this = tag_corners[tag].reshape(4, 2)  # Order is [x y]
-        tag_corners_dict[{tag}] = tag_corners_this.tolist()
+    # unprocessed_data_set = UGDataSet(**map_info.map_dct)
+    # tag_corners = unprocessed_data_set.tag_corners
+    # tag_corners = tag_corners.reshape(len(tag_corners), 8)
+    # tag_corners_dict = {}
+    # for tag in range(len(tag_corners)):
+    #     tag_corners_this = tag_corners[tag].reshape(4, 2)  # Order is [x y]
+    #     tag_corners_dict[{tag}] = tag_corners_this.tolist()
 
-    with open("sba_corner_pixels.json", "w") as outfile:
-        json.dump(tag_corners_dict, outfile, indent=4)
+    # with open("sba_corner_pixels.json", "w") as outfile:
+    #     json.dump(tag_corners_dict, outfile, indent=4)
 
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
