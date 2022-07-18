@@ -164,7 +164,7 @@ def throw_out_bad_tags(data_path):
     errors = []
     
     for i in range(len(unprocessed_map_data["tag_data"])):
-        sba_rms_error, throw,relevant_tag = run(i, unprocessed_map_data)
+        sba_rms_error, throw, relevant_tag = run(i, unprocessed_map_data)
         
         if throw: 
             throws.append(relevant_tag)
@@ -172,14 +172,13 @@ def throw_out_bad_tags(data_path):
             continue
         
         errors.append(sba_rms_error)
-   
 
     unprocessed_map_data["tag_data"] = [i for j, i in enumerate(unprocessed_map_data["tag_data"]) if j not in throws_indeces]
         
-    with open(data_path,"w") as f:
+    with open(data_path, "w") as f:
         json.dump(unprocessed_map_data, f, indent = 2)
-        
-    percent_thrown = 100* (len(throws)/len(errors))
+
+    percent_thrown = 100 * (len(throws)/len(errors))
     
     return (f"average error: {np.mean(errors)}" + "\n" + 
             f"list of tags thrown: {throws}" + "\n" +

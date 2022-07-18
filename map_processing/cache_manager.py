@@ -265,7 +265,7 @@ class CacheManagerSingleton:
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
 
     @staticmethod
-    def find_maps(pattern: str, search_only_unprocessed: bool = True) -> Set[MapInfo]:
+    def find_maps(pattern: str, search_only_unprocessed: bool = True, paths: bool = False) -> Set[MapInfo]:
         """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
         directory.
 
@@ -280,14 +280,19 @@ class CacheManagerSingleton:
         Returns:
             Set of matched files as absolute file paths
         """
+        recursive = True
+
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH, os.path.join(
                     CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_only_unprocessed else "", "**", pattern
                 )
             ),
-            recursive=True
+            recursive=recursive
         )
+
+        if paths:
+            return matching_filepaths
 
         matches: Set[MapInfo] = set()
         for match in matching_filepaths:
