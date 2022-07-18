@@ -3,7 +3,6 @@ Script for generating the data to (in)validate the pseudo ground truth metric.
 """
 
 import os
-import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
