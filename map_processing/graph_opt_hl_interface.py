@@ -122,7 +122,7 @@ def holistic_optimize(
         tag_corners_this = tag_corners[tag].reshape(4, 2)  # Order is [x y]
         tag_corners_dict[f'tag_index: {tag}'] = tag_corners_this.tolist()
 
-    with open("sbo_corner_pixels.json", "w") as outfile:
+    with open("sba_corner_pixels.json", "w") as outfile:
         json.dump(tag_corners_dict, outfile, indent=4)
 
     if generate_plot_titles:
