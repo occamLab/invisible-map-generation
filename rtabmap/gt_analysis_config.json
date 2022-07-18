@@ -22,5 +22,11 @@
         "RTABMAP_DATA_PATH" : "../rtabmap/mac_1_2.txt",
         "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_1_2.json",
         "PROCESSED_GRAPH_DATA_PATH": ""
+    },
+    "robolab":
+    {
+        "RTABMAP_DATA_PATH" : "../rtabmap/mac_1_2.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_1_2.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/rcoUcRDVoKf0y5ahbK6jMLtMYx72/robolab_straight_on.json"
     }
 }
