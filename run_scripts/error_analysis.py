@@ -1,5 +1,5 @@
 """
-Analyzing the error distribution of oblique tag observations v.s. head-on tag observations.
+Analyzing the error distribution of oblique tag observations v.s. straight-on tag observations.
 """
 
 import json
@@ -56,6 +56,7 @@ def error_information (rpys):
     """
     names = ["oblique-rolls","oblique-pitches","oblique-yaws",
              "straight-rolls","straight-pitches","straight-yaws"]
+    
     for i, dataset in enumerate(rpys):
         # print(dataset)
         print(names[i])
