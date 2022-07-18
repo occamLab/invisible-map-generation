@@ -12,23 +12,13 @@ TAG_SIZE = 0.152
 MATRIX_SIZE_CONVERTER = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0]])
 CAMERA_POSE_FLIPPER = np.array([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
 
-
-TAG_IDX_TO_INVESTIGATE = 1
+ERROR_THRESHOLD = 20
 SHOW_INDIVIDUAL_COORDS = False
 VISUALIZE = False
 
-DATA_PATH = "../error_analysis/datasets/floor_2_obleft.json"
 
 
-with open(DATA_PATH) as datafile:
-    data = json.load(datafile)
-
-with open("sba_corner_pixels.json","r") as observed_pixel_data_file:
-    duncan_pixels = json.load(observed_pixel_data_file)
-   #  print(observed_pixels)
-    
-
-def compute_camera_intrinsics(tag_idx):
+def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     """
     Camera intrisics allow us to convert 3D information into a 2D space
     by using the pinhole camera model: https://en.wikipedia.org/wiki/Pinhole_camera_model
@@ -40,15 +30,17 @@ def compute_camera_intrinsics(tag_idx):
     Returns:
         camera_intrinsics: 3x3 matrix expressing the camera intrinsics.
     """
-    [fx,fy,Cx,Cy] = data["tag_data"][tag_idx][0]["camera_intrinsics"]
+    [fx,fy,Cx,Cy] = unprocessed_map_data["tag_data"][tag_idx][0]["camera_intrinsics"]
     camera_intrinsics = np.array([[fx,0,Cx],[0,fy,Cy],[0,0,1]])
-    return camera_intrinsics , Cx
+    
+    return camera_intrinsics
 
-def compute_camera_pose(camera_pose_id):
-    poses = data["pose_data"][camera_pose_id+1]["pose"]
+def compute_camera_pose(camera_pose_id, unprocessed_map_data):
+    poses = unprocessed_map_data["pose_data"][camera_pose_id+1]["pose"]
+    
     return np.reshape(poses, [4, 4], order='F')
 
-def compute_tag_pose(tag_idx):
+def compute_tag_pose(tag_idx, unprocessed_map_data):
     """
     Returns the tag_pose at 4x4 matrix instead of a list of 16 numbers
 
@@ -58,15 +50,9 @@ def compute_tag_pose(tag_idx):
     Returns:
         pose: 4x4 pose matrix
     """
-    poses = data["tag_data"][tag_idx][0]["tag_pose"]
-    other_pose = data["tag_data"][tag_idx][0]["orig_pose"]
+    poses = unprocessed_map_data["tag_data"][tag_idx][0]["tag_pose"]
     pose = np.reshape(poses, [4, 4])
-    
-    # print("orig_pose")
-    # print(np.reshape(other_pose, [4,4]))
-    
-    # print("tag_pose")
-    # print(pose)
+
     return pose
 
 def compute_corner_pixels():
@@ -117,27 +103,20 @@ def sba_error_metric(calculated_pixels, observed_pixels):
     distance_between_points = np.linalg.norm(calculated_pixels - observed_pixels, axis = 0)
     sba_error = np.sqrt(np.square(distance_between_points)).mean()
     
-    if sba_error >= 20:
+    if sba_error >= ERROR_THRESHOLD:
         throw = True
 
     return sba_error, throw
 
-def run(tag_idx):  
+def run(tag_idx, unprocessed_map_data):  
     """
     Run the SBA evaluator. 
     """  
-    camera_intrinsics, Cx = compute_camera_intrinsics(tag_idx)
-
     
-    observed_pixels = np.reshape(data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
-
-    tag_pose = compute_tag_pose(tag_idx)
-    
+    camera_intrinsics = compute_camera_intrinsics(tag_idx,unprocessed_map_data)
+    observed_pixels = np.reshape(unprocessed_map_data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
+    tag_pose = compute_tag_pose(tag_idx,unprocessed_map_data)
     corner_pixel_poses = compute_corner_pixels()
-    
-  
-    # camera_pose_id = data["tag_data"][tag_idx][0]["pose_id"]
-    # camera_pose = compute_camera_pose(camera_pose_id)
     
     # This equation, whiteboarded out, to convert from the tag frame's corner pixels to the
     # corner pixels we see on the phone. 
@@ -149,8 +128,6 @@ def run(tag_idx):
             
     # pdb.set_trace()
     sba_xyz = sba_xyz[0:-1] 
-    # print(sba_xyz)
-    # sba_xyz[0][:] = 2*Cx- sba_xyz[0][:]
     
     if SHOW_INDIVIDUAL_COORDS:
         
@@ -169,51 +146,49 @@ def run(tag_idx):
         
         print("\n")
     
-    # print(sba_xyz)
-    # print(duncan_pixels)
-    # duncan_pixels = np.transpose(duncan_pixels)
-    # observed_pixels = np.reshape(observed_pixels, (2,4), order = "F")
-    # duncan_pixels = (duncan_pixels[:,[1,0,3,2]])
-    
-    # print(duncan_pixels)
-    # print(duncan_pixels)
-    #observed_pixels = duncan_pixels
-    # print(observed_pixels)
-    # print(sba_xyz)
-    relevant_tag = data["tag_data"][tag_idx][0]["tag_id"]   
+    relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"]   
     RMS_error, throw = sba_error_metric(sba_xyz, observed_pixels)
-    print(f"tag {relevant_tag} RMS error: {RMS_error}")
+    # print(f"tag {relevant_tag} RMS error: {RMS_error}")
     
     if VISUALIZE and not throw: 
         visualizing_difference(sba_xyz, observed_pixels, relevant_tag)
     
     return RMS_error, throw, relevant_tag
 
-    
-if __name__ == "__main__":
-    # NUMBER OF OBSERVED TAGS 
+def throw_out_bad_tags(data_path):
+    with open(data_path) as data_file:
+        unprocessed_map_data = json.load(data_file)
     
     throws = []
+    throws_indeces = []
     errors = []
-    for i in range(len(data["tag_data"])):
-        # sba_rms_error = run(i,duncan_pixels[f"tag_index: {i}"])
-        sba_rms_error, throw,relevant_tag = run(i)
+    
+    for i in range(len(unprocessed_map_data["tag_data"])):
+        sba_rms_error, throw,relevant_tag = run(i, unprocessed_map_data)
         
         if throw: 
             throws.append(relevant_tag)
+            throws_indeces.append(i)
             continue
         
         errors.append(sba_rms_error)
-    
-    # tag_id_of_most_error = data["tag_data"][errors.index(max(errors))][0]["tag_id"]
-    # tag_id_of_least_error = data["tag_data"][errors.index(min(errors))][0]["tag_id"]
+   
+
+    unprocessed_map_data["tag_data"] = [i for j, i in enumerate(unprocessed_map_data["tag_data"]) if j not in throws_indeces]
+        
+    with open(data_path,"w") as f:
+        json.dump(unprocessed_map_data, f, indent = 2)
+        
     percent_thrown = 100* (len(throws)/len(errors))
-    print(f"average error: {np.mean(errors)}")
-    print(f"list of tags thrown: {throws}")
-    print(f"percentage of tags thrown: {percent_thrown:.2f}%")
+    
+    return (f"average error: {np.mean(errors)}" + "\n" + 
+            f"list of tags thrown: {throws}" + "\n" +
+            f"percentage of tags thrown: {percent_thrown:.2f}%")
+
    
     # print(f"least error: {min(errors)} at tag {tag_id_of_least_error}")
     # print(f"most error: {max(errors)} at tag {tag_id_of_most_error}")
     
-    # run(TAG_IDX_TO_INVESTIGATE, duncan_pixels[f"tag_index: {1}"])
-       
+if __name__ == "__main__":
+    print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft copy.json"))
+    
