@@ -146,7 +146,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                         dpi=500)
 
     # Visualize the worst option
-    optimize_graph(graph=deepcopy(sweep_args[max_gt_idx][0]), oconfig=sweep_args[max_gt_idx][1],
+    optimize_graph(graph=deepcopy(sweep_args[min_oresult][0]), oconfig=sweep_args[min_oresult][1],
                    visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
             if ground_truth_data is not None else None)
 

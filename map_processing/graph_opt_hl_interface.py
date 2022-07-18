@@ -15,8 +15,10 @@ from geneticalgorithm import geneticalgorithm as ga
 
 from . import PrescalingOptEnum, VertexType, graph_opt_utils, graph_opt_plot_utils
 from .cache_manager import CacheManagerSingleton, MapInfo
-from .data_models import Weights, OConfig, GTDataSet, OResult, OSGPairResult
+from .data_models import Weights, OConfig, GTDataSet, OResult, OSGPairResult, UGDataSet
 from .graph import Graph
+import json
+import datetime
 
 
 class WeightSpecifier(Enum):
@@ -110,6 +112,17 @@ def holistic_optimize(
         gt_data_as_dict_of_se3_arrays = gt_data.as_dict_of_se3_arrays
 
     graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso)
+
+    # Get sba preprocessed tag corners and save to json
+    unprocessed_data_set = UGDataSet(**map_info.map_dct)
+    tag_corners = unprocessed_data_set.tag_corners.reshape(79, 8)
+    tag_corners_dict = {}
+    for tag in range(len(tag_corners)):
+        tag_corners_this = tag_corners[tag].reshape(4, 2)  # Order is [x y]
+        tag_corners_dict[f'tag_index: {tag}'] = tag_corners_this.tolist()
+
+    with open(f"{datetime.datetime.now()}.json", "w") as outfile:
+        json.dump(tag_corners_dict, outfile, indent=4)
 
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)

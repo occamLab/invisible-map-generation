@@ -922,6 +922,7 @@ class Graph:
                 if use_sba:
                     measurement_arg = (SE3Quat(vertices[waypoint_vertex_id].estimate) * SE3Quat(
                         vertices[current_odom_vertex_uid].estimate).inverse()).to_vector()
+                    data_set.tag_corners = tag_corners
                 else:
                     measurement_arg = waypoint_edge_measurements[waypoint_index]
                 edges[edge_counter] = Edge(
@@ -968,6 +969,8 @@ class Graph:
 
         # TODO: Huber delta should probably scale with pixels rather than error
         resulting_graph = Graph(edges, is_sba=use_sba, use_huber=False, huber_delta=None)
+
+        # Create file with sba optimized pixel corners per tag
         return resulting_graph
 
     @staticmethod
