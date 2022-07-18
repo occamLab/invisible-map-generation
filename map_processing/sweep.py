@@ -6,6 +6,7 @@ import json
 import multiprocessing as mp
 import os
 from copy import deepcopy
+import pdb
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
 import numpy as np
@@ -148,7 +149,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     # Visualize the worst option
     optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
                    visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-            if ground_truth_data is not None else None)
+            if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
 
     # Print ground truth for each tag as anchor
     if verbose:

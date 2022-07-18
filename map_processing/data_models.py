@@ -1128,7 +1128,7 @@ class OResult(BaseModel):
 
     @property
     def find_max_gt_idx(self):
-        return np.argmax(list(self.gt_per_anchor_tag_opt))
+        return np.where(list(self.gt_per_anchor_tag_opt.keys()) == self.find_max_gt_tag)[0][0]
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}

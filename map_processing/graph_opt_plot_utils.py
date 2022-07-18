@@ -95,7 +95,8 @@ def plot_optimization_result(
         opt_waypoint_verts: Tuple[List, np.ndarray],
         orig_tag_verts: Optional[np.ndarray] = None,
         ground_truth_tags: Optional[List[SE3Quat]] = None,
-        plot_title: Union[str, None] = None
+        plot_title: Union[str, None] = None,
+        anchor_tag_id = None
 ) -> None:
     """Visualization used during the optimization routine.
     """
@@ -141,12 +142,12 @@ def plot_optimization_result(
 
         gt_tag_ids = matching_ground_truth_tags.pose_ids_as_list
 
-
-        # TODO: Maybe fix anchor_tag_id selection to be more robust? problem is in MAC_2_3_711
-        for opt_tag_id in opt_tag_ids:
-            if opt_tag_id in gt_tag_ids:
-                anchor_tag_id = opt_tag_id
-                break
+        if anchor_tag_id is None:
+            # TODO: Maybe fix anchor_tag_id selection to be more robust? problem is in MAC_2_3_711
+            for opt_tag_id in opt_tag_ids:
+                if opt_tag_id in gt_tag_ids:
+                    anchor_tag_id = opt_tag_id
+                    break
         world_frame_ground_truth = transform_gt_to_have_common_reference(
             IM_anchor_pose=SE3Quat(opt_tag_dict[anchor_tag_id]),
             GT_anchor_pose=SE3Quat(matching_ground_truth_tags.as_dict_of_se3_arrays[anchor_tag_id]), ground_truth_tags=matching_ground_truth_tags.sorted_poses_as_se3quat_list)
