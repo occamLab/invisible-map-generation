@@ -292,7 +292,6 @@ def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> 
 
     # Find sum across columns and rows
     sum_rot_diffs_columns = np.sum(rot_diffs, axis=0)
-    print(rot_diffs)
     sum_rot_diffs_rows = np.sum(rot_diffs, axis=1)
 
     # Give metrics

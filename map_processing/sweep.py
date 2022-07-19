@@ -69,22 +69,23 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
         with mp.Pool(processes=num_processes) as pool:
             results_tuples = pool.map(_sweep_target, sweep_args)
-    return OSweepData(results_tuples=results_tuples, products=products, sweep_arrs=sweep_arrs,\
-        sweep_param_to_result_idx_mappings=sweep_param_to_result_idx_mappings, sweep_args=sweep_args,\
-        ordered_sweep_config_keys=ordered_sweep_config_keys, mi=mi, base_oconfig=base_oconfig)
 
-def config_sweep_results(osweep_data: OSweepData):
-    results_arr = osweep_data.results_arr
-    result_arr_idx, results_arr = osweep_data.populate_sweep_results(results_arr)
+    results_oresults = [result[2] for result in results_tuples]
+    results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
+    results_arr = np.ones(results_arr_dims) * -1
+    for result, result_idx, _ in results_tuples:
+        result_arr_idx = []
+        for key_idx, key in enumerate(ordered_sweep_config_keys):
+            result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
+        results_arr[tuple(result_arr_idx)] = result
+    if np.any(results_arr < 0):
+        raise Exception("Array of sweep results was not completely populated")
 
     return OSweepResults(
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
-        sweep_config={item[0]: list(item[1]) for item in osweep_data.sweep_arrs.items()},
-        sweep_config_keys_order=osweep_data.ordered_sweep_config_keys, base_oconfig=osweep_data.base_config,
-        map_name=osweep_data.mi.map_name, generated_params=UGDataSet.parse_obj(osweep_data.mi.map_dct).generated_from,\
-        oresults_list=osweep_data.results_oresults
-    )
-
+        sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
+        sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
+        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
@@ -98,45 +99,41 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if base_oconfig.is_sba:
         non_sba_base_oconfig = deepcopy(base_oconfig)
         non_sba_base_oconfig.is_sba = False
-        sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
+        sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
-        non_sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
+        non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+
+        min_sba_gt = sba_osweep_results.min_gt
+        min_non_sba_gt = non_sba_osweep_results.min_gt
+
+        if min_sba_gt < min_non_sba_gt:
+            min_value_idx = sba_osweep_results.min_gt_result_idx
+            min_oresult = sba_osweep_results.min_oresult
+            print("SBA Performed better than No SBA")
+            print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
+            print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
+            pre_optimized_tags = min_oresult.map_pre.tags
+            optimized_tags = min_oresult.map_opt.tags
+            rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+            print(f"Rotation metric: {rot_metric}")
+            print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+        else:
+            print("No SBA performed better than SBA")
+            print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
+            print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
+        
     else:
-        non_sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
+        non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+        
+        pre_optimized_tags = min_oresult.map_pre.tags
 
-    # Configure results
-    results: List[float] = []
-    results_indices: List[int] = []
-    results_oresults = []
-
-    # Result_tuple: (gt metric: Float, index: Int, oresult: OResult)
-    for result_tuple in results_tuples:
-        results.append(result_tuple[0])
-        results_indices.append(result_tuple[1])
-        results_oresults.append(result_tuple[2])
-
-    results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
-    results_arr = np.ones(results_arr_dims) * -1
-
-    # Populate sweep results array and create OSweepResults
-    for result, result_idx, result_oresult in results_tuples:
-        result_arr_idx = []
-        for key_idx, key in enumerate(ordered_sweep_config_keys):
-            result_arr_idx.append(sweep_param_to_result_idx_mappings[key][products[result_idx][key_idx]])
-        results_arr[tuple(result_arr_idx)] = result
-    if np.any(results_arr < 0):
-        raise Exception("Array of sweep results was not completely populated")
-
-    sweep_results = OSweepResults(
-        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
-        sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
-        sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
-        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
+        min_value_idx = non_sba_osweep_results.min_gt_result_idx
+        min_result = non_sba_osweep_results.min_oresult
 
     # Best result
     min_value_idx = sweep_results.min_gt_result_idx

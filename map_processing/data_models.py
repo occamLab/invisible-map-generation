@@ -1135,43 +1135,6 @@ class OResult(BaseModel):
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
-class OSweepData(BaseModel):
-    results_tuples: Tuple[float, int, OResult]
-    products: List[OConfig]
-    sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray]
-    sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]]
-    sweep_args: List
-    ordered_sweep_config_keys: List[OConfig.OConfigEnum]
-    mi: MapInfo
-    base_config = OConfig
-
-    @property
-    def results(self):
-        return [result[0] for result in self.results_tuples]
-
-    @property
-    def results_indices(self):
-        return [result[1] for result in self.results_tuples]
-    
-    @property 
-    def results_oresults(self):
-        return [result[2] for result in self.results_tuples]
-
-    @property
-    def results_arr(self):
-        results_arr_dims = [len(self.sweep_arrs[key]) for key in self.ordered_sweep_config_keys]
-        return np.ones(results_arr_dims) * -1
-
-    def populate_sweep_results(self, results_arr):
-        for result, result_idx, result_oreself in self.results_tuples:
-            result_arr_idx = []
-            for key_idx, key in enumerate(self.ordered_sweep_config_keys):
-                result_arr_idx.append(self.sweep_param_to_result_idx_mappings[key][self.products[result_idx][key_idx]])
-            results_arr[tuple(result_arr_idx)] = result
-        if np.any(results_arr < 0):
-            raise Exception("Array of sweep results was not completely populated")
-        return result_arr_idx, results_arr
-
 class OSGPairResult(BaseModel):
     sg1_oresult: OResult
     sg2_oresult: OResult
@@ -1281,6 +1244,10 @@ class OSweepResults(BaseModel):
     @property
     def min_oresult(self) -> OResult:
         return self.oresults_list[self.min_gt_result_idx]
+
+    @property
+    def min_gt(self) -> float:
+        return self.min_oresult.gt_metric_opt
 
     @property
     def where_min(self) -> Tuple[int, ...]:
