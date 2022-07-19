@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 import pdb
-np.set_printoptions(suppress= True)
 
 TAG_SIZE = 0.152
 MATRIX_SIZE_CONVERTER = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0]])
@@ -193,5 +192,5 @@ def throw_out_bad_tags(data_path):
     # print(f"most error: {max(errors)} at tag {tag_id_of_most_error}")
     
 if __name__ == "__main__":
+    np.set_printoptions(suppress= True)
     print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft.json"))
-    
