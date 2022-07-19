@@ -118,8 +118,19 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             pre_optimized_tags = min_oresult.map_pre.tags
             optimized_tags = min_oresult.map_opt.tags
             rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-            print(f"Rotation metric: {rot_metric}")
-            print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+
+            max_gt = min_oresult.find_max_gt
+            max_gt_tag = best_oresult.find_max_gt_tag
+            # Print results
+            if verbose:
+                print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
+                print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
+                print(f"Fitness metrics: \n"
+                    f"{min_oresult.fitness_metrics.repr_as_list()}")
+                print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+                print(f"Rotation metric: {rot_metric}")
+                print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+
         else:
             print("No SBA performed better than SBA")
             print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
