@@ -22,7 +22,6 @@ Notes:
 import itertools
 from enum import Enum
 from typing import Union, Optional, Dict, List, Tuple, Any
-from xml.sax.handler import property_declaration_handler
 
 import numpy as np
 from g2o import SE3Quat
@@ -30,7 +29,6 @@ from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
 from map_processing import VertexType, ASSUMED_TAG_SIZE
-from map_processing.cache_manager import MapInfo
 from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector, LEN_3_UNIT_VEC
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -1249,6 +1247,10 @@ class OSweepResults(BaseModel):
     @property
     def min_gt(self) -> float:
         return self.min_oresult.gt_metric_opt
+
+    @property
+    def pre_opt_gt(self):
+        return self.min_oresult.gt_metric_pre
 
     @property
     def where_min(self) -> Tuple[int, ...]:
