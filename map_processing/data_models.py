@@ -1180,6 +1180,7 @@ class OSweepResults(BaseModel):
     map_name: str
     generated_params: Optional[GenerateParams] = None
     oresults_list: List[OResult]
+    sweep_args: List
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}

@@ -11,10 +11,11 @@ from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, 
 
 import numpy as np
 from matplotlib import pyplot as plt
+from pyrfc3339 import generate
 
 from map_processing import TIME_FORMAT
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
-from map_processing.data_models import OConfig, OResult, OSweepData, OSweepResults, UGDataSet, GTDataSet
+from map_processing.data_models import OConfig, OResult, OSweepResults, UGDataSet, GTDataSet
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
@@ -85,7 +86,7 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
-        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults)
+        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults, sweep_args=sweep_args)
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
@@ -112,96 +113,121 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         if min_sba_gt < min_non_sba_gt:
             min_value_idx = sba_osweep_results.min_gt_result_idx
             min_oresult = sba_osweep_results.min_oresult
-            print("SBA Performed better than No SBA")
-            print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
-            print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
             pre_optimized_tags = min_oresult.map_pre.tags
             optimized_tags = min_oresult.map_opt.tags
             rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
 
             max_gt = min_oresult.find_max_gt
-            max_gt_tag = best_oresult.find_max_gt_tag
+            max_gt_tag = min_oresult.find_max_gt_tag
             # Print results
             if verbose:
+                print("SBA Performed better than No SBA")
+                print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
+                print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
                 print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
                 print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
                 print(f"Fitness metrics: \n"
                     f"{min_oresult.fitness_metrics.repr_as_list()}")
-                print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+                print("\nParameters:\n" + json.dumps(sba_osweep_results.args_producing_min, indent=2))
                 print(f"Rotation metric: {rot_metric}")
                 print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-
+                optimize_graph(graph=deepcopy(sba_osweep_results.sweep_args[min_value_idx][0]), oconfig=sba_osweep_results.sweep_args[min_value_idx][1],
+                                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                                    if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+                print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+                print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+            # Cache file from sweep
+            results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
+            if cache_results:
+                CacheManagerSingleton.cache_sweep_results(sba_osweep_results, results_cache_file_name_no_ext)
+            if generate_plot:
+                fig = sba_osweep_results.visualize_results_heatmap()
+                if show_plot:
+                    plt.show()
+                if cache_results:
+                    fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+                        dpi=500)
+            return sba_osweep_results
         else:
-            print("No SBA performed better than SBA")
-            print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
-            print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
-        
+            min_value_idx = non_sba_osweep_results.min_gt_result_idx
+            min_oresult = non_sba_osweep_results.min_oresult
+            pre_optimized_tags = min_oresult.map_pre.tags
+            optimized_tags = min_oresult.map_opt.tags
+            rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+
+            max_gt = min_oresult.find_max_gt
+            max_gt_tag = min_oresult.find_max_gt_tag
+            # Print results
+            if verbose:
+                print("No SBA performed better than SBA")
+                print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
+                print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
+                print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
+                print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
+                print(f"Fitness metrics: \n"
+                    f"{min_oresult.fitness_metrics.repr_as_list()}")
+                print("\nParameters:\n" + json.dumps(non_sba_osweep_results.args_producing_min, indent=2))
+                print(f"Rotation metric: {rot_metric}")
+                print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+                optimize_graph(graph=deepcopy(non_sba_osweep_results.sweep_args[min_value_idx][0]), oconfig=non_sba_osweep_results.sweep_args[min_value_idx][1],
+                                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                                    if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+                print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+                print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+            # Cache file from sweep
+            results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
+            if cache_results:
+                CacheManagerSingleton.cache_sweep_results(non_sba_osweep_results, results_cache_file_name_no_ext)
+            if generate_plot:
+                fig = non_sba_osweep_results.visualize_results_heatmap()
+                if show_plot:
+                    plt.show()
+                if cache_results:
+                    fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+                        dpi=500)
+            return non_sba_osweep_results
     else:
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
         
-        pre_optimized_tags = min_oresult.map_pre.tags
-
         min_value_idx = non_sba_osweep_results.min_gt_result_idx
-        min_result = non_sba_osweep_results.min_oresult
+        min_oresult = non_sba_osweep_results.min_oresult
+        pre_optimized_tags = min_oresult.map_pre.tags
+        optimized_tags = min_oresult.map_opt.tags
+        rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
 
-    # Best result
-    min_value_idx = sweep_results.min_gt_result_idx
-    min_oresult = sweep_results.min_oresult
-
-    # Get rotational metrics for min_oresult
-    pre_optimized_tags = min_oresult.map_pre.tags
-    optimized_tags = min_oresult.map_opt.tags
-    rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-    print(f"Rotation metric: {rot_metric}")
-    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-
-    # Get ground truth for each tag as anchor tag
-    best_oresult = results_oresults[min_value_idx]
-
-    # Get max ground truth from above dict
-    max_gt = best_oresult.find_max_gt
-    max_gt_tag = best_oresult.find_max_gt_tag
-    max_gt_idx = best_oresult.find_max_gt_idx
-
-    # Print results
-    if verbose:
-        print(f"\nPre-optimization value: {results_oresults[0].gt_metric_pre:.3f}")
-        print(f"Minimum ground truth value: {sweep_results.min_gt_result:.3f} (delta is "
-              f"{(sweep_results.min_gt_result - results_oresults[0].gt_metric_pre):.3f})")
-        print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
-        print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
-        print(f"Fitness metrics: \n"
-              f"{results_oresults[min_value_idx].fitness_metrics.repr_as_list()}")
-        print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
-
-    # Cache file from sweep
-    results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
-    if cache_results:
-        CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
-
-    # Show heatmap from sweep
-    if generate_plot:
-        fig = sweep_results.visualize_results_heatmap()
-        if show_plot:
-            plt.show()
+        max_gt = min_oresult.find_max_gt
+        max_gt_tag = min_oresult.find_max_gt_tag
+        # Print results
+        if verbose:
+            print("No SBA performed better than SBA")
+            print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-min_oresult.gt_metric_pre})")
+            print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-min_result.gt_metric_pre})")
+            print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
+            print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
+            print(f"Fitness metrics: \n"
+                f"{min_oresult.fitness_metrics.repr_as_list()}")
+            print("\nParameters:\n" + json.dumps(non_sba_osweep_results.args_producing_min, indent=2))
+            print(f"Rotation metric: {rot_metric}")
+            print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+            optimize_graph(graph=deepcopy(non_sba_osweep_results.sweep_args[min_value_idx][0]), oconfig=non_sba_osweep_results.sweep_args[min_value_idx][1],
+                            visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                                if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+            print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+            print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+        # Cache file from sweep
+        results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
         if cache_results:
-            fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
-                        dpi=500)
-
-    # Visualize the worst option
-    optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
-                   visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-            if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
-
-    # Print ground truth for each tag as anchor
-    if verbose:
-        print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
-        print(f"Ground Truth per Tag: \n {best_oresult.gt_per_anchor_tag_opt}")
-
-    return sweep_results
-
+            CacheManagerSingleton.cache_sweep_results(non_sba_osweep_results, results_cache_file_name_no_ext)
+        if generate_plot:
+            fig = non_sba_osweep_results.visualize_results_heatmap()
+            if show_plot:
+                plt.show()
+            if cache_results:
+                fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+                    dpi=500)
+        return non_sba_osweep_results        
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
         -> Tuple[float, int]:
