@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 
 from map_processing import TIME_FORMAT
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
-from map_processing.data_models import OConfig, OSweepResults, UGDataSet, GTDataSet
+from map_processing.data_models import OConfig, OResult, OSweepData, OSweepResults, UGDataSet, GTDataSet
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
@@ -22,17 +22,13 @@ from map_processing.graph_vertex_edge_classes import VertexType
 from map_processing.graph_opt_utils import rotation_metric
 from . import PrescalingOptEnum
 
-
-def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
+def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
-                 verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
-                 cache_results: bool = True) -> OSweepResults:
-    """
-    TODO: Documentation and add SBA weighting to the sweeping
-    """
-    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=PrescalingOptEnum.USE_SBA if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV)
+                 verbose: bool = False, num_processes: int = 1) -> Tuple[float, int, OResult]:
+    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=PrescalingOptEnum.USE_SBA\
+        if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV)
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
 
     # Expand sweep_config if it contains callables and arguments to those callables
@@ -73,6 +69,39 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
         with mp.Pool(processes=num_processes) as pool:
             results_tuples = pool.map(_sweep_target, sweep_args)
+    return OSweepData(results_tuples=results_tuples, products=products, sweep_arrs=sweep_arrs,\
+        sweep_param_to_result_idx_mappings=sweep_param_to_result_idx_mappings, sweep_args=sweep_args,\
+        ordered_sweep_config_keys=ordered_sweep_config_keys)
+
+def config_sweep_results(osweep_data: OSweepData):
+    results: List[float] = osweep_data.results
+    results_indices: List[int] = osweep_data.results_indices
+    results_oresults =  osweep_data.results_oresults
+    results_arr = osweep_data.results_arr
+
+
+def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
+                 sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
+                                     Dict[OConfig.OConfigEnum, np.ndarray]],
+                 ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
+                 verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
+                 cache_results: bool = True) -> OSweepResults:
+    """
+    TODO: Documentation and add SBA weighting to the sweeping
+    """
+    if base_oconfig.is_sba:
+        non_sba_base_oconfig = deepcopy(base_oconfig)
+        non_sba_base_oconfig.is_sba = False
+        sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
+            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
+            verbose=verbose, num_processes=num_processes)
+        non_sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
+            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
+            verbose=verbose, num_processes=num_processes)
+    else:
+        non_sba_osweep_data = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
+            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
+            verbose=verbose, num_processes=num_processes)
 
     # Configure results
     results: List[float] = []

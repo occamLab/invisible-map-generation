@@ -22,6 +22,7 @@ Notes:
 import itertools
 from enum import Enum
 from typing import Union, Optional, Dict, List, Tuple, Any
+from xml.sax.handler import property_declaration_handler
 
 import numpy as np
 from g2o import SE3Quat
@@ -1132,6 +1133,31 @@ class OResult(BaseModel):
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+
+class OSweepData(BaseModel):
+    results_tuples: Tuple[float, int, OResult]
+    products: List[OConfig]
+    sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray]
+    sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]]
+    sweep_args: List
+    ordered_sweep_config_keys: List[OConfig.OConfigEnum]
+
+    @property
+    def results(self):
+        return [result[0] for result in self.results_tuples]
+
+    @property
+    def results_indices(self):
+        return [result[1] for result in self.results_tuples]
+    
+    @property 
+    def results_oresults(self):
+        return [result[2] for result in self.results_tuples]
+
+    @property
+    def results_arr(self):
+        results_arr_dims = [len(self.sweep_arrs[key]) for key in self.ordered_sweep_config_keys]
+        return np.ones(results_arr_dims) * -1
 
 
 class OSGPairResult(BaseModel):
