@@ -111,6 +111,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
     rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+    max_rot_tag = optimized_tags[max_rot_diff_idx]
     print(f"Rotation metric: {rot_metric}")
     print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
 
@@ -147,10 +148,15 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
 
-    # Visualize the worst option
+    # Visualize the worst anchor point from the best OResult (gt)
+    # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
+    #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+    #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+
+    # Visualize the worst anchor point from the best OResult (rotation)
     optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
                    visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-            if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+            if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
 
     # Print ground truth for each tag as anchor
     if verbose:
