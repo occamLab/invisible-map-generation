@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 import pdb
-np.set_printoptions(suppress= True)
 
 TAG_SIZE = 0.152
 MATRIX_SIZE_CONVERTER = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,0]])
@@ -73,7 +72,9 @@ def compute_corner_pixels():
     return pixels
 
 def visualizing_difference(calculated_pixels, observed_pixels, tag_id):
-    
+    """
+    Visualize the corner pixels of both the calculated and observed pixels
+    """
     calculated_pixels = np.matrix.transpose(calculated_pixels)
     observed_pixels = np.matrix.transpose(observed_pixels)
 
@@ -110,7 +111,22 @@ def sba_error_metric(calculated_pixels, observed_pixels):
 
 def run(tag_idx, unprocessed_map_data):  
     """
-    Run the SBA evaluator. 
+    Run the SBA evaluator on a tag.
+    
+    Workflow is as follows:
+    - Compute where the corner pixels "should" be given the tag's pose and camera intrinsics. (computed pixels)
+    - Compare this to where invisible maps says the corner pixels are on the screen. (observed pixels)
+    - If the error is too large, make "throw" true
+    
+    Args:
+        tag_idx: tag index. We iterate through all of the tags, tag_idx is just a way to index into the dictionary.
+        unprocessed_map_data: the dictionary pulled from the .json file containing all of the data regarding the map.
+        
+    Returns:
+        RMS_error (float): a float expressing the amount of error found between the observed pixels and computed pixels
+        throw (bool): true if the value should be thrown out. False otherwise.
+        relevant tag : the tag corresponding to the current index.
+        
     """  
     
     camera_intrinsics = compute_camera_intrinsics(tag_idx,unprocessed_map_data)
@@ -153,9 +169,22 @@ def run(tag_idx, unprocessed_map_data):
     if VISUALIZE and not throw: 
         visualizing_difference(sba_pixel_corners, observed_pixels, relevant_tag)
     
-    return RMS_error, throw, relevant_tag
+    
+    return RMS_error, throw, relevant_tag, sba_pixel_corners
 
 def throw_out_bad_tags(data_path):
+    """
+    Helper function to throw out tags with too high of an error based upon the calculation done in
+    run(). 
+
+    Args:
+        data_path (str): path to the file to be overwritten
+
+    Returns:
+        a bunch of print statements, but the helper function overwrites a file in its workflow.
+        the print statement is just an indication of how much stuff was thrown out. 
+    """
+    
     with open(data_path) as data_file:
         unprocessed_map_data = json.load(data_file)
     
@@ -164,7 +193,9 @@ def throw_out_bad_tags(data_path):
     errors = []
     
     for i in range(len(unprocessed_map_data["tag_data"])):
-        sba_rms_error, throw, relevant_tag = run(i, unprocessed_map_data)
+        sba_rms_error, throw,relevant_tag, corner_pixels = run(i, unprocessed_map_data)
+
+        unprocessed_map_data["tag_data"][i][0]["tag_corners_pixel_coordinates"] = np.ndarray.flatten(corner_pixels, order = "F").tolist()
         
         if throw: 
             throws.append(relevant_tag)
@@ -172,13 +203,14 @@ def throw_out_bad_tags(data_path):
             continue
         
         errors.append(sba_rms_error)
+   
 
     unprocessed_map_data["tag_data"] = [i for j, i in enumerate(unprocessed_map_data["tag_data"]) if j not in throws_indeces]
         
-    with open(data_path, "w") as f:
+    with open(data_path,"w") as f:
         json.dump(unprocessed_map_data, f, indent = 2)
-
-    percent_thrown = 100 * (len(throws)/len(errors))
+        
+    percent_thrown = 100* (len(throws)/len(errors))
     
     return (f"average error: {np.mean(errors)}" + "\n" + 
             f"list of tags thrown: {throws}" + "\n" +
@@ -189,5 +221,5 @@ def throw_out_bad_tags(data_path):
     # print(f"most error: {max(errors)} at tag {tag_id_of_most_error}")
     
 if __name__ == "__main__":
+    np.set_printoptions(suppress= True)
     print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft.json"))
-    
