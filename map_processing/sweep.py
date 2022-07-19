@@ -110,10 +110,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     # Get rotational metrics for min_oresult
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
-    rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-    max_rot_tag = optimized_tags[max_rot_diff_idx]
+    rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+    max_rot_tag = optimized_tags[max_rot_diff_tag_id]
     print(f"Rotation metric: {rot_metric}")
-    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
 
     # Get ground truth for each tag as anchor tag
     best_oresult = results_oresults[min_value_idx]
