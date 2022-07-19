@@ -221,5 +221,5 @@ def throw_out_bad_tags(data_path):
     # print(f"most error: {max(errors)} at tag {tag_id_of_most_error}")
     
 if __name__ == "__main__":
-    np.set_printoptions(suppress= True)
+    np.set_printoptions(suppress=True)
     print(throw_out_bad_tags("../error_analysis/datasets/floor_2_obleft.json"))

@@ -256,7 +256,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
 
     return avg, max_diff, max_diff_idx, ground_truth_by_tag
 
-def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> Tuple[np.ndarray, float, int]:
+def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> Tuple[np.ndarray, float, int, int]:
     """ Error metric for rotational tag pose accuracy between the two arrays
 
     Calculates the rotational transform from the first tag to each other tag for the two tag arrays entered,
@@ -268,7 +268,7 @@ def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> 
 
     Returns:
         A tuple representing the average difference in tag positions (rotational only) in degrees as well as the maximum
-        rotational error across the dataset and the tag id for the tag with the maximum rotation error.
+        rotational error across the dataset and the tag id and index for the tag with the maximum rotation error
     """
     rot_firsts = []
     rot_seconds = []
@@ -292,7 +292,6 @@ def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> 
 
     # Find sum across columns and rows
     sum_rot_diffs_columns = np.sum(rot_diffs, axis=0)
-    print(rot_diffs)
     sum_rot_diffs_rows = np.sum(rot_diffs, axis=1)
 
     # Give metrics
@@ -300,9 +299,10 @@ def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> 
     avg_rot_diffs_rows = (sum_rot_diffs_rows / 3)
 
     max_rot_diff = np.max(rot_diffs, axis=0)
-    max_rot_diff_idx = first_tag_vert[np.argmax(avg_rot_diffs_rows)][7]
+    max_rot_diff_tag_id = first_tag_vert[np.argmax(avg_rot_diffs_rows)][7]
+    max_rot_diff_idx = np.argmax(avg_rot_diffs_rows, axis=0)
 
-    return avg_rot_diffs_columns, max_rot_diff, max_rot_diff_idx
+    return avg_rot_diffs_columns, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx
 
 def make_processed_map_json(opt_result: OG2oOptimizer, calculate_intersections: bool = False) \
         -> str:
