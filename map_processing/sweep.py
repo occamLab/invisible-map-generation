@@ -20,6 +20,7 @@ from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_m
     tag_pose_array_with_metadata_to_map
 from map_processing.graph_vertex_edge_classes import VertexType
 from map_processing.graph_opt_utils import rotation_metric
+from . import PrescalingOptEnum
 
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
@@ -31,7 +32,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
-    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices)
+    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=PrescalingOptEnum.USE_SBA if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV)
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
 
     # Expand sweep_config if it contains callables and arguments to those callables
