@@ -91,16 +91,18 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
-                 cache_results: bool = True) -> OSweepResults:
+                 cache_results: bool = True, no_sba_baseline: bool = False) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
-    if base_oconfig.is_sba:
+    if no_sba_baseline:
         non_sba_base_oconfig = deepcopy(base_oconfig)
         non_sba_base_oconfig.is_sba = False
+        print("Running SBA Sweep")
         sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+        print("Running No SBA Sweep")
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
@@ -120,7 +122,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-sweep_results.pre_opt_gt})")
         print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-sweep_results.pre_opt_gt})")
     else:
-        sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
+        sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
     min_value_idx = sweep_results.min_gt_result_idx
@@ -137,10 +139,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
         print(f"Fitness metrics: \n"
             f"{min_oresult.fitness_metrics.repr_as_list()}")
-        print("\nParameters:\n" + json.dumps(non_sba_osweep_results.args_producing_min, indent=2))
+        print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
         print(f"Rotation metric: {rot_metric}")
         print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-        optimize_graph(graph=deepcopy(non_sba_osweep_results.sweep_args[min_value_idx][0]), oconfig=non_sba_osweep_results.sweep_args[min_value_idx][1],
+        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
                         visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
                             if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
         print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
@@ -148,9 +150,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     if cache_results:
-        CacheManagerSingleton.cache_sweep_results(non_sba_osweep_results, results_cache_file_name_no_ext)
+        CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
     if generate_plot:
-        fig = non_sba_osweep_results.visualize_results_heatmap()
+        fig = sweep_results.visualize_results_heatmap()
         if show_plot:
             plt.show()
         if cache_results:
