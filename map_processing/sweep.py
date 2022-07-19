@@ -71,13 +71,19 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             results_tuples = pool.map(_sweep_target, sweep_args)
     return OSweepData(results_tuples=results_tuples, products=products, sweep_arrs=sweep_arrs,\
         sweep_param_to_result_idx_mappings=sweep_param_to_result_idx_mappings, sweep_args=sweep_args,\
-        ordered_sweep_config_keys=ordered_sweep_config_keys)
+        ordered_sweep_config_keys=ordered_sweep_config_keys, mi=mi, base_oconfig=base_oconfig)
 
 def config_sweep_results(osweep_data: OSweepData):
-    results: List[float] = osweep_data.results
-    results_indices: List[int] = osweep_data.results_indices
-    results_oresults =  osweep_data.results_oresults
     results_arr = osweep_data.results_arr
+    result_arr_idx, results_arr = osweep_data.populate_sweep_results(results_arr)
+
+    return OSweepResults(
+        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
+        sweep_config={item[0]: list(item[1]) for item in osweep_data.sweep_arrs.items()},
+        sweep_config_keys_order=osweep_data.ordered_sweep_config_keys, base_oconfig=osweep_data.base_config,
+        map_name=osweep_data.mi.map_name, generated_params=UGDataSet.parse_obj(osweep_data.mi.map_dct).generated_from,\
+        oresults_list=osweep_data.results_oresults
+    )
 
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,

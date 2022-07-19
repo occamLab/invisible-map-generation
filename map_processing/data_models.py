@@ -1159,6 +1159,15 @@ class OSweepData(BaseModel):
         results_arr_dims = [len(self.sweep_arrs[key]) for key in self.ordered_sweep_config_keys]
         return np.ones(results_arr_dims) * -1
 
+    def populate_sweep_results(self, results_arr):
+        for result, result_idx, result_oreself in self.results_tuples:
+            result_arr_idx = []
+            for key_idx, key in enumerate(self.ordered_sweep_config_keys):
+                result_arr_idx.append(self.sweep_param_to_result_idx_mappings[key][self.products[result_idx][key_idx]])
+            results_arr[tuple(result_arr_idx)] = result
+        if np.any(results_arr < 0):
+            raise Exception("Array of sweep results was not completely populated")
+        return result_arr_idx, results_arr
 
 class OSGPairResult(BaseModel):
     sg1_oresult: OResult
