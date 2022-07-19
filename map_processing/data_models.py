@@ -30,6 +30,7 @@ from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
 from map_processing import VertexType, ASSUMED_TAG_SIZE
+from map_processing.cache_manager import MapInfo
 from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector, LEN_3_UNIT_VEC
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -1141,6 +1142,8 @@ class OSweepData(BaseModel):
     sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]]
     sweep_args: List
     ordered_sweep_config_keys: List[OConfig.OConfigEnum]
+    mi: MapInfo
+    base_config = OConfig
 
     @property
     def results(self):
