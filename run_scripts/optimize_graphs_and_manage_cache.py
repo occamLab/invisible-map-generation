@@ -17,7 +17,6 @@ Notes:
 """
 
 import os
-import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -27,7 +26,6 @@ import argparse
 import numpy as np
 from firebase_admin import credentials
 from typing import Dict, Callable, Iterable, Any, Tuple
-import glob
 
 import map_processing
 from map_processing import PrescalingOptEnum, VertexType
@@ -36,7 +34,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-import sba_evaluator as sba
+import sba_evaluator_replace_pixels as sba
 
 
 
@@ -120,7 +118,7 @@ def make_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "-t",
-        type=str,
+        action="store_true",
         help="Throw out data values that are too far off",
         default=False
     )
@@ -223,15 +221,15 @@ if __name__ == "__main__":
 
     map_pattern = args.p if args.p else ""
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
-
-    # Remove tag observations that are bad
-    if args.t:
-        path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
-        sba.throw_out_bad_tags(path[0])
-
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)
+
+    # Remove tag observations that are bad
+    if args.t:
+        this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
+        print(this_path)
+        sba.throw_out_bad_tags(this_path[0])
 
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
