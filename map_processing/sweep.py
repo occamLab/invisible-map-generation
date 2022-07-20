@@ -127,20 +127,20 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
+
     rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
     print(f"Rotation metric: {rot_metric}")
     print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
 
-    # Get ground truth for each tag as anchor tag
-    best_oresult = results_oresults[min_value_idx]
 
     # Get max ground truth from above dict
-    max_gt = best_oresult.find_max_gt
-    max_gt_tag = best_oresult.find_max_gt_tag
+    max_gt = min_oresult.find_max_gt
+    max_gt_tag = min_oresult.find_max_gt_tag
     max_rot_tag = optimized_tags[max_rot_diff_idx][7]
 
     # Print results
