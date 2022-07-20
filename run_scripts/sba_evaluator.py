@@ -14,6 +14,7 @@ CAMERA_POSE_FLIPPER = np.array([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
 ERROR_THRESHOLD = 20
 SHOW_INDIVIDUAL_COORDS = False
 VISUALIZE = False
+FIX_IT = False
 
 
 
@@ -35,7 +36,7 @@ def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     return camera_intrinsics
 
 def compute_camera_pose(camera_pose_id, unprocessed_map_data):
-    poses = unprocessed_map_data["pose_data"][camera_pose_id+1]["pose"]
+    poses = unprocessed_map_data["pose_data"][camera_pose_id]["pose"]
     
     return np.reshape(poses, [4, 4], order='F')
 
@@ -206,9 +207,9 @@ def throw_out_bad_tags(data_path):
    
 
     unprocessed_map_data["tag_data"] = [i for j, i in enumerate(unprocessed_map_data["tag_data"]) if j not in throws_indeces]
-        
-    with open(data_path,"w") as f:
-        json.dump(unprocessed_map_data, f, indent = 2)
+    if FIX_IT:  
+        with open(data_path,"w") as f:
+            json.dump(unprocessed_map_data, f, indent = 2)
         
     percent_thrown = 100* (len(throws)/len(errors))
     
