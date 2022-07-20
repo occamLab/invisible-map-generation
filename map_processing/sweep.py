@@ -130,8 +130,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     min_oresult = sweep_results.min_oresult
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
-    rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-
+    rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+    max_rot_tag = optimized_tags[max_rot_diff_tag_id]
     max_gt = min_oresult.find_max_gt
     max_gt_tag = min_oresult.find_max_gt_tag
     # Print results
@@ -150,9 +150,15 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
     if generate_plot:
+        # Visualize the worst anchor point from the best OResult (gt)
+        # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
+        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+        #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+
+        # Visualize the worst anchor point from the best OResult (rotation)
         optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
-                            visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-                                if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
         fig = sweep_results.visualize_results_heatmap()
         if show_plot:
             plt.show()
