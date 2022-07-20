@@ -10,6 +10,7 @@ from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, 
 
 import numpy as np
 from matplotlib import pyplot as plt
+from pyrfc3339 import generate
 
 from map_processing import TIME_FORMAT
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
@@ -142,9 +143,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
         print(f"Rotation metric: {rot_metric}")
         print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
-                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-                            if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
         print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
         print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
     # Cache file from sweep
@@ -152,6 +150,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
     if generate_plot:
+        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
+                            visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                                if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
         fig = sweep_results.visualize_results_heatmap()
         if show_plot:
             plt.show()
