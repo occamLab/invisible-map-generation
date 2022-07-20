@@ -34,7 +34,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-import sba_evaluator_replace_pixels as sba
+import sba_evaluator as sba
 
 
 
@@ -76,6 +76,12 @@ def make_parser() -> argparse.ArgumentParser:
              " 3-Tag prescaling is a matrix of ones.",
         default=0,
         choices={0, 1, 2, 3}
+    )
+    p.add_argument(
+        "-nsb",
+        action="store_true",
+        help="Flag to run no SBA baseline against SBA to test SBA effectiveness. Must be done with --pso 0 (SBA) and a parameter sweep.",
+        default=False
     )
 
     weights_options = [f"{weight_option.value}-'{str(weight_option)[len(WeightSpecifier.__name__) + 1:]}'"
@@ -207,6 +213,10 @@ if __name__ == "__main__":
         print("Mutually exclusive flags with -c used")
         exit(-1)
 
+    if args.pso != 0 and args.nsb or args.nsb and not args.s:
+        print("No SBA Baseline must be run with SBA (pso 0) and a parameter sweep.")
+        exit(-1)
+
     # Fetch the service account key JSON file contents
     env_variable = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
     if env_variable is None:
@@ -241,7 +251,7 @@ if __name__ == "__main__":
                          base_oconfig=OConfig(is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
                                               compute_inf_params=compute_inf_params),
                          sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
-                         verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np)
+                         verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np, no_sba_baseline = args.nsb)
         
         # If you simply want to run the optimizer 
         else:
