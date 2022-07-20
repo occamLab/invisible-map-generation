@@ -35,11 +35,6 @@ def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     
     return camera_intrinsics
 
-def compute_camera_pose(camera_pose_id, unprocessed_map_data):
-    poses = unprocessed_map_data["pose_data"][camera_pose_id]["pose"]
-    
-    return np.reshape(poses, [4, 4], order='F')
-
 def compute_tag_pose(tag_idx, unprocessed_map_data):
     """
     Returns the tag_pose at 4x4 matrix instead of a list of 16 numbers
@@ -87,7 +82,7 @@ def visualizing_difference(calculated_pixels, observed_pixels, tag_id):
     plt.title(tag_id)
     plt.show()
 
-def sba_error_metric(calculated_pixels, observed_pixels):
+def error_metric(calculated_pixels, observed_pixels):
     """
     Not certain what the best error metric is for this sort of thing. 
     We decided to take the root mean squared value of the distances
@@ -164,7 +159,7 @@ def run(tag_idx, unprocessed_map_data):
         print("\n")
     
     relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"]   
-    RMS_error, throw = sba_error_metric(sba_pixel_corners, observed_pixels)
+    RMS_error, throw = error_metric(sba_pixel_corners, observed_pixels)
     # print(f"tag {relevant_tag} RMS error: {RMS_error}")
     
     if VISUALIZE and not throw: 
