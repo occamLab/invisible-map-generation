@@ -5,6 +5,7 @@ Contains the CacheManagerSingleton class used for managing the local cache.
 import glob
 import json
 import os
+import pdb
 from threading import Semaphore, Thread, Timer
 from typing import Dict, Union, List, Optional, Set, Callable
 
@@ -477,6 +478,9 @@ class CacheManagerSingleton:
         if not os.path.exists(CacheManagerSingleton.SWEEP_RESULTS_PATH):
             os.mkdir(CacheManagerSingleton.SWEEP_RESULTS_PATH)
 
+        if sr.sweep_args is not None:
+            sr.sweep_args = None
+            
         with open(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, file_name), "w") as f:
             f.write(sr.json(indent=2))
 

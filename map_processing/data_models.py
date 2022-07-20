@@ -1133,7 +1133,6 @@ class OResult(BaseModel):
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
 
-
 class OSGPairResult(BaseModel):
     sg1_oresult: OResult
     sg2_oresult: OResult
@@ -1179,6 +1178,7 @@ class OSweepResults(BaseModel):
     map_name: str
     generated_params: Optional[GenerateParams] = None
     oresults_list: List[OResult]
+    sweep_args: List
 
     class Config:
         json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
@@ -1243,6 +1243,14 @@ class OSweepResults(BaseModel):
     @property
     def min_oresult(self) -> OResult:
         return self.oresults_list[self.min_gt_result_idx]
+
+    @property
+    def min_gt(self) -> float:
+        return self.min_oresult.gt_metric_opt
+
+    @property
+    def pre_opt_gt(self):
+        return self.min_oresult.gt_metric_pre
 
     @property
     def where_min(self) -> Tuple[int, ...]:
