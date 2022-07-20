@@ -221,3 +221,64 @@ Parameters:
 *** Pixel coordinates changing doesn't do anything if no sba
 
 6. "obleft" (no sba, lower parameters)
+Rotation metric: [0.02088048 3.89038216 0.02604206]
+Maximum rotation: [ 0.22819989 11.8977332   0.33018249] (tag id: 324.0)
+
+Pre-optimization value: 2.242
+Minimum ground truth value: 1.529 (delta is -0.712)
+Maximum difference metric (pre-optimized): 3.819 (tag id: 300.0)
+Maximum difference metric (optimized): 2.115 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 3.2e+10
+>       alpha_all_before: 1.6e+10
+> se3_not_gravity_before: 3.2e+10
+>          psi2uv_before: 0
+>         gravity_before: 5.7e-13
+---------------------------------
+>         chi2_all_after: 0.065
+>        alpha_all_after: 9.7e+02
+>  se3_not_gravity_after: 0.065
+>           psi2uv_after: 0
+>          gravity_after: 0.00015
+
+Parameters:
+{
+  "lin_vel_var": 1.0,
+  "ang_vel_var": 1.0,
+  "tag_sba_var": 1e-20
+}
+Maximum ground truth metric: 3.6695106632314607 (tag id: 301.0)
+Ground Truth per Tag: 
+ {300.0: 3.5801318142466045, 301.0: 3.6695106632314607, 302.0: 1.5473798941857566, 303.0: 2.7681401456275956, 304.0: 1.816855339538218, 305.0: 1.061351851892061, 306.0: 2.3700160764840006, 307.0: 0.7743125267970973, 308.0: 0.6801760472480655, 309.0: 1.8606485650211033, 310.0: 1.0647995685570992, 311.0: 1.0742994379015938, 312.0: 1.8762207604074057, 313.0: 0.8998147274546052, 314.0: 0.8799302051194969, 315.0: 1.1445353059420595, 316.0: 1.24852963206368, 317.0: 0.7834493569587327, 318.0: 1.4548555804223193, 319.0: 1.3115108902243486, 320.0: 1.1737874196515024, 321.0: 1.6077715984502425, 322.0: 1.240947804903118, 323.0: 1.4474630169135452, 324.0: 0.8965936895100026}
+
+(Even more extreme parameters)
+
+Rotation metric: [0.03741137 0.00495409 0.01081784]
+Maximum rotation: [0.17787561 0.02539721 0.05164858] (tag id: 303.0)
+
+Pre-optimization value: 2.242
+Minimum ground truth value: 2.241 (delta is -0.001)
+Maximum difference metric (pre-optimized): 3.819 (tag id: 300.0)
+Maximum difference metric (optimized): 3.814 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 2.4e+13
+>       alpha_all_before: 1.2e+13
+> se3_not_gravity_before: 2.4e+13
+>          psi2uv_before: 0
+>         gravity_before: 5.7e-13
+---------------------------------
+>         chi2_all_after: 5.9e+09
+>        alpha_all_after: 3e+09
+>  se3_not_gravity_after: 5.9e+09
+>           psi2uv_after: 0
+>          gravity_after: 0.094
+
+Parameters:
+{
+  "lin_vel_var": 2.1544346900318868e-11,
+  "ang_vel_var": 1668.100537200059,
+  "tag_sba_var": 1e-50
+}
+Maximum ground truth metric: 5.487071510533375 (tag id: 324.0)
+Ground Truth per Tag: 
+ {300.0: 3.386194754556807, 301.0: 3.168294411004407, 302.0: 1.0609905968160402, 303.0: 2.557945493660028, 304.0: 1.0280120722206783, 305.0: 0.8602978673515744, 306.0: 3.8007743122390503, 307.0: 1.5370311004505282, 308.0: 1.8863012910113872, 309.0: 2.4214654352068696, 310.0: 1.7741136369230879, 311.0: 1.1413789696175365, 312.0: 1.300061563554203, 313.0: 2.462164884753693, 314.0: 2.092198374457659, 315.0: 2.288883001985822, 316.0: 1.5927893584450181, 317.0: 1.54636796899783, 318.0: 1.3492038328361102, 319.0: 2.7503051677899926, 320.0: 2.5899075394266804, 321.0: 2.4792067498979176, 322.0: 2.078510462673607, 323.0: 3.3829726915192424, 324.0: 5.487071510533375}

@@ -40,9 +40,9 @@ import sba_evaluator as sba
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-20, 1, 10]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1, 100, 10]),
-    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-20, 1, 10]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-20, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e5, 10, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-50, 1e-5, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 

@@ -127,14 +127,22 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
+
     rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-    max_rot_tag = optimized_tags[max_rot_diff_idx][7]
+    print(f"Rotation metric: {rot_metric}")
+    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
+
+
+    # Get max ground truth from above dict
     max_gt = min_oresult.find_max_gt
     max_gt_tag = min_oresult.find_max_gt_tag
+    max_rot_tag = optimized_tags[max_rot_diff_idx][7]
+
     # Print results
     if verbose:
         print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
@@ -157,7 +165,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
 
         # Visualize the worst anchor point from the best OResult (rotation)
-        pdb.set_trace()
         optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
                 if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
@@ -166,8 +173,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             plt.show()
         if cache_results:
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
-                dpi=500)
-    return sweep_results        
+                        dpi=500)
+
+    return sweep_results
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
         -> Tuple[float, int]:
