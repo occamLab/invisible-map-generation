@@ -6,6 +6,7 @@ import json
 import multiprocessing as mp
 import os
 from copy import deepcopy
+import pdb
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
 import numpy as np
@@ -131,7 +132,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     pre_optimized_tags = min_oresult.map_pre.tags
     optimized_tags = min_oresult.map_opt.tags
     rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-    max_rot_tag = optimized_tags[max_rot_diff_tag_id]
+    max_rot_tag = optimized_tags[max_rot_diff_idx][7]
     max_gt = min_oresult.find_max_gt
     max_gt_tag = min_oresult.find_max_gt_tag
     # Print results
@@ -142,13 +143,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             f"{min_oresult.fitness_metrics.repr_as_list()}")
         print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
         print(f"Rotation metric: {rot_metric}")
-        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
         print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
         print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     if cache_results:
-        CacheManagerSingleton.cache_sweep_results(sweep_results, results_cache_file_name_no_ext)
+        CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
     if generate_plot:
         # Visualize the worst anchor point from the best OResult (gt)
         # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
@@ -156,6 +157,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
 
         # Visualize the worst anchor point from the best OResult (rotation)
+        pdb.set_trace()
         optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
                 if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
