@@ -40,9 +40,9 @@ import sba_evaluator as sba
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-20, 10, 10]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e5, 10, 10]),
-    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-50, 1e-5, 10]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 
@@ -251,7 +251,8 @@ if __name__ == "__main__":
                          base_oconfig=OConfig(is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
                                               compute_inf_params=compute_inf_params),
                          sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
-                         verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np, no_sba_baseline = args.nsb)
+                         verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np, 
+                         no_sba_baseline = args.nsb, upload_best=args.F, cms=cms)
         
         # If you simply want to run the optimizer 
         else:
