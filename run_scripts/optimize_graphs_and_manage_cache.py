@@ -34,7 +34,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-import sba_evaluator_replace_pixels as sba
+import sba_evaluator as sba
 
 
 
