@@ -1,0 +1,209 @@
+*floor_2 *
+Running SBA Sweep
+Running No SBA Sweep
+No SBA performed better than SBA
+Pre-Optimization GT: 3.9018626332890256
+Best SBA GT: 3.7459626334975087 (delta: -0.15589999979151692)
+Best No SBA GT: 2.730934719314117 (delta: -1.1709279139749085)
+Maximum difference metric (pre-optimized): 8.221 (tag id: 300.0)
+Maximum difference metric (optimized): 6.358 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 6e+08
+>       alpha_all_before: inf
+> se3_not_gravity_before: 6e+08
+>          psi2uv_before: 0
+>         gravity_before: 5.3e-13
+---------------------------------
+>         chi2_all_after: 24
+>        alpha_all_after: inf
+>  se3_not_gravity_after: 24
+>           psi2uv_after: 0
+>          gravity_after: 0.098
+
+Parameters:
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 0.002154434690031887,
+  "tag_sba_var": 1e-10
+}
+Rotation metric: [2.86399466 4.28184479 5.08980962]
+Maximum rotation: [ 67.23922983  89.42564604 102.86303826] (tag id: 323.0)
+Maximum ground truth metric: 31.364852441208242 (tag id: 323.0)
+Ground Truth per Tag: 
+ {300.0: 0.8781004071157535, 301.0: 1.3294619684824907, 302.0: 0.8705538586257127, 303.0: 1.2460100444030664, 304.0: 0.8694230191893968, 305.0: 0.9648741951860517, 306.0: 3.167406576181476, 307.0: 1.5559155594721061, 308.0: 1.0586311461216156, 309.0: 1.6544906742122742, 310.0: 1.221817774241198, 311.0: 0.9541655494578255, 312.0: 1.7197235632382615, 313.0: 1.8137142722206319, 314.0: 1.0945707673110388, 315.0: 1.7468256107314153, 316.0: 1.3594576906283706, 317.0: 1.8703404450386774, 318.0: 2.3963732574066743, 319.0: 1.8179441277254482, 320.0: 2.8476726720545047, 321.0: 2.0449542531281026, 322.0: 1.1916786215105188, 323.0: 31.364852441208242, 324.0: 1.2344094879620613}
+
+*floor_2_obright*
+Running SBA Sweep
+*floor_2_obright*
+Running SBA Sweep
+Running No SBA Sweep
+No SBA performed better than SBA
+Pre-Optimization GT: 2.00499045094081
+Best SBA GT: 2.4018399300705937 (delta: 0.39684947912978386)
+Best No SBA GT: 1.0949620346049764 (delta: -0.9100284163358334)
+Maximum difference metric (pre-optimized): 4.464 (tag id: 300.0)
+Maximum difference metric (optimized): 1.593 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 2.3e+08
+>       alpha_all_before: 1.1e+08
+> se3_not_gravity_before: 2.3e+08
+>          psi2uv_before: 0
+>         gravity_before: 5.3e-13
+---------------------------------
+>         chi2_all_after: 0.0017
+>        alpha_all_after: 1.2e+04
+>  se3_not_gravity_after: 0.0017
+>           psi2uv_after: 0
+>          gravity_after: 1e-05
+
+Parameters:
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 10.0,
+  "tag_sba_var": 1e-10
+}
+Rotation metric: [3.52155600e-03 4.49216645e+00 4.58669291e-03]
+Maximum rotation: [0.02583524 7.83801309 0.02185154] (tag id: 319.0)
+Maximum ground truth metric: 1.9637894448463453 (tag id: 306.0)
+Ground Truth per Tag: 
+ {300.0: 1.76430286498667, 301.0: 1.2050001535525583, 302.0: 0.9136934859188044, 303.0: 0.6838647152826155, 304.0: 1.0904863591099154, 305.0: 0.7966903325919793, 306.0: 1.9637894448463453, 307.0: 0.9729581460914751, 308.0: 0.8059110282252893, 309.0: 1.1941564033206369, 310.0: 0.8838107711704088, 311.0: 1.237657212016666, 312.0: 0.9871394958471355, 313.0: 0.8531454316419262, 314.0: 1.4402093499675035, 315.0: 1.0363863217945244, 316.0: 1.0833984435911885, 317.0: 0.91647641371151, 318.0: 1.2914237288309287, 319.0: 0.5628592675986976, 320.0: 1.3147403070955916, 321.0: 1.2198836200063037, 322.0: 1.1281734592832313, 323.0: 1.288873971562094, 324.0: 0.7390201370804119}
+
+*floor_2_obleft*
+Running SBA Sweep
+Running No SBA Sweep
+No SBA performed better than SBA
+Pre-Optimization GT: 2.2417323715841735
+Best SBA GT: 6.3823658396949545 (delta: 4.1406334681107815)
+Best No SBA GT: 2.237759932122632 (delta: -0.003972439461541466)
+Maximum difference metric (pre-optimized): 3.819 (tag id: 300.0)
+Maximum difference metric (optimized): 3.812 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 1.1e+12
+>       alpha_all_before: 5.6e+11
+> se3_not_gravity_before: 1.1e+12
+>          psi2uv_before: 0
+>         gravity_before: 5.7e-13
+---------------------------------
+>         chi2_all_after: 2.6e+09
+>        alpha_all_after: 1.3e+09
+>  se3_not_gravity_after: 2.6e+09
+>           psi2uv_after: 0
+>          gravity_after: 0.13
+
+Parameters:
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 10.0,
+  "tag_sba_var": 1e-10
+}
+Rotation metric: [0.26374567 0.02981307 0.09793604]
+Maximum rotation: [1.47343267 0.19299232 0.76119507] (tag id: 303.0)
+Maximum ground truth metric: 5.469132222463389 (tag id: 324.0)
+Ground Truth per Tag: 
+ {300.0: 3.3682988829168674, 301.0: 3.1034900428644687, 302.0: 1.1238057019606378, 303.0: 2.4515862310354812, 304.0: 1.0226561410172064, 305.0: 0.822306100490717, 306.0: 3.815690845732027, 307.0: 1.515200490445289, 308.0: 1.8799756052059922, 309.0: 2.399905361214117, 310.0: 1.7945091780718514, 311.0: 1.2045736735894002, 312.0: 1.3591706531508572, 313.0: 2.454669647738528, 314.0: 2.0998532309050724, 315.0: 2.277809419831967, 316.0: 1.5873092743945434, 317.0: 1.5481110084270018, 318.0: 1.3900526458699252, 319.0: 2.7532729277830215, 320.0: 2.5752872946765093, 321.0: 2.4713489897561756, 322.0: 2.0847686720205347, 323.0: 3.37121406150421, 324.0: 5.469132222463389}
+
+*floor_2_right_once*
+Running SBA Sweep
+Running No SBA Sweep
+No SBA performed better than SBA
+Pre-Optimization GT: 3.14570687516519
+Best SBA GT: 2.9575275577916362 (delta: -0.18817931737355398)
+Best No SBA GT: 2.7621308965933076 (delta: -0.38357597857188264)
+Maximum difference metric (pre-optimized): 5.247 (tag id: 300.0)
+Maximum difference metric (optimized): 4.557 (tag id: 300.0)
+Fitness metrics: 
+>        chi2_all_before: 7.1e+05
+>       alpha_all_before: 3.3e+05
+> se3_not_gravity_before: 7.1e+05
+>          psi2uv_before: 0
+>         gravity_before: 5e-13
+----------------------------------
+>         chi2_all_after: 6.4
+>        alpha_all_after: -2.5e+04
+>  se3_not_gravity_after: 6.4
+>           psi2uv_after: 0
+>          gravity_after: 0.00067
+
+Parameters:
+{
+  "lin_vel_var": 0.00012915496650148855,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 1e-10
+}
+Rotation metric: [0.05059783 0.83966769 0.05199175]
+Maximum rotation: [0.28214829 5.4920364  0.34793034] (tag id: 303.0)
+Maximum ground truth metric: 4.949976649091644 (tag id: 305.0)
+Ground Truth per Tag: 
+ {300.0: 3.712816363758475, 301.0: 4.343147568103671, 302.0: 3.09228944706658, 303.0: 1.2230562324842633, 304.0: 3.2995053436084487, 305.0: 4.949976649091644, 306.0: 4.270972710040893, 307.0: 1.6030472415400931, 308.0: 1.479026832046488, 309.0: 1.9947840621523198, 311.0: 1.5331346538533408, 312.0: 1.9517632299057455, 313.0: 2.919005008101381, 314.0: 1.6204779108360206, 315.0: 3.350467030334191, 316.0: 2.1673880255225777, 317.0: 3.6053659692246383, 318.0: 2.0527351309166773, 320.0: 1.4897846463040216, 321.0: 3.1160840874746643, 323.0: 3.6928947361825366, 324.0: 3.299156846504094}
+
+straight_209_occam
+No matches for straight_209_occam in recursive search of /home/ayush/Documents/invisible-map-generation/map_processing/../.cache
+
+*209_occam_obleft_once*
+Running SBA Sweep
+Running No SBA Sweep
+SBA performed better than No SBA
+Pre-Optimization GT: 0.8624129867805487
+Best SBA GT: 0.61425752547419 (delta: -0.24815546130635868)
+Best No SBA GT: 0.8564900733897481 (delta: -0.005922913390800533)
+Maximum difference metric (pre-optimized): 1.138 (tag id: 3.0)
+Maximum difference metric (optimized): 0.864 (tag id: 3.0)
+Fitness metrics: 
+>        chi2_all_before: 3.7e+06
+>       alpha_all_before: 1.8e+06
+> se3_not_gravity_before: 1.8e-22
+>          psi2uv_before: 3.7e+06
+>         gravity_before: 2.5e-12
+----------------------------------
+>         chi2_all_after: 1.1e+04
+>        alpha_all_after: -2.4e+04
+>  se3_not_gravity_after: 2.4e+02
+>           psi2uv_after: 1.1e+04
+>          gravity_after: 0.023
+
+Parameters:
+{
+  "lin_vel_var": 0.002154434690031887,
+  "ang_vel_var": 0.5994842503189421,
+  "tag_sba_var": 0.0359381366380464
+}
+Rotation metric: [0.88980595 0.18466241 0.19425386]
+Maximum rotation: [2.11798292 0.46029388 0.44028871] (tag id: 2.0)
+Maximum ground truth metric: 1.8991177318427122 (tag id: 306.0)
+Ground Truth per Tag: 
+ {1.0: 0.7222500653425639, 2.0: 0.6953877315612257, 3.0: 0.685732922098282, 4.0: 0.44229408702831796, 5.0: 0.45405407912832846, 6.0: 0.5499263732040267, 303.0: 0.4839317232643623, 304.0: 0.5906884331828101, 305.0: 0.6816831747223265, 306.0: 1.8991177318427122, 307.0: 0.33267736129631037, 325.0: 0.3980336380378419, 326.0: 0.5881775081263164, 327.0: 0.5604876055988075, 329.0: 0.42241024371399155, 330.0: 0.4031229860843634, 331.0: 0.1949797082838158, 332.0: 0.3557778984068585, 333.0: 1.2101597130863486}
+
+*mac-1-2-official*
+Running SBA Sweep
+Running No SBA Sweep
+No SBA performed better than SBA
+Pre-Optimization GT: 1.3877280569221058
+Best SBA GT: 3.8376531517618577 (delta: 2.449925094839752)
+Best No SBA GT: 1.0060093991233812 (delta: -0.3817186577987246)
+Maximum difference metric (pre-optimized): 2.234 (tag id: 300)
+Maximum difference metric (optimized): 1.427 (tag id: 300)
+Fitness metrics: 
+>        chi2_all_before: 1.7e+09
+>       alpha_all_before: 8.4e+08
+> se3_not_gravity_before: 1.7e+09
+>          psi2uv_before: 0
+>         gravity_before: 5.2e-12
+---------------------------------
+>         chi2_all_after: 0.33
+>        alpha_all_after: 2.2e+04
+>  se3_not_gravity_after: 0.32
+>           psi2uv_after: 0
+>          gravity_after: 0.0049
+
+Parameters:
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 0.5994842503189421,
+  "tag_sba_var": 1e-10
+}
+Rotation metric: [0.05460058 2.62668923 0.16281661]
+Maximum rotation: [0.23669233 6.93174955 1.39796686] (tag id: 5.0)
+Maximum ground truth metric: 2.891773376595535 (tag id: 321)
+Ground Truth per Tag: 
+ {1: 0.8882793163150016, 2: 1.8592177819999542, 3: 0.6298391031843272, 4: 0.7250956045139324, 5: 1.370730763393246, 6: 0.9196636078619718, 7: 1.91723801488279, 300: 0.7396136771211712, 301: 1.191046335200244, 302: 0.5383561241633561, 303: 0.5278970241599722, 304: 0.44791002224604093, 305: 0.7626434428154489, 306: 2.545325242240566, 307: 0.7577922308928334, 308: 0.5355635375963195, 309: 0.5158672913947433, 310: 0.7590486326312048, 311: 0.6634843280459191, 312: 0.5035548086998515, 313: 1.2405669130009533, 314: 1.3384008502828306, 315: 1.4363916444903082, 316: 1.3655957550931415, 317: 0.6323315473885422, 318: 1.643560016891044, 319: 0.6950157970943138, 320: 0.5324042866727267, 321: 2.891773376595535, 322: 0.6583065010405735, 323: 2.3164401177062492, 324: 0.5203307684981915, 325: 0.5900729655665563, 326: 1.6549958920688348, 327: 0.8102780965828621, 328: 0.8473125562128178, 329: 1.153084392381595, 330: 0.46484673911039326, 331: 0.6452956251561714, 332: 0.45150310387880754, 333: 1.948305441490397, 334: 0.4702562391451775, 335: 1.1037022555484706, 336: 1.3920362472923045, 337: 0.8838131596611356, 338: 0.3720651605125703, 339: 0.8794960755423322, 340: 1.4338932821751729, 341: 0.7454640884831073, 342: 0.706267063584948, 343: 0.8190965009966802, 344: 0.8714194049121863}
+
