@@ -50,7 +50,7 @@ def compute_tag_pose(tag_idx, unprocessed_map_data):
 
     return pose
 
-def compute_corner_pixels():
+def set_corner_pixels_tag_frame():
     """
     Return the location of the corner pixels of a tag, as compared to the
     origin of the tag. Note that the third value is always 0 because we just
@@ -128,7 +128,7 @@ def run(tag_idx, unprocessed_map_data):
     camera_intrinsics = compute_camera_intrinsics(tag_idx,unprocessed_map_data)
     observed_pixels = np.reshape(unprocessed_map_data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
     tag_pose = compute_tag_pose(tag_idx,unprocessed_map_data)
-    corner_pixel_poses = compute_corner_pixels()
+    corner_pixel_poses = set_corner_pixels_tag_frame()
     
     # This equation, whiteboarded out, to convert from the tag frame's corner pixels to the
     # corner pixels we see on the phone. 
