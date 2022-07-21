@@ -97,8 +97,9 @@ def do_sweeping(sweep: np.ndarray):
         single_graph_chi2[run] = opt_chi2
 
         print("standard optimization ground truth:")
-        single_graph_gt[run] = gm.optimize_and_get_ground_truth_error_metric(
+        oresult, ograph = gm.optimize_and_get_ground_truth_error_metric(
             weights=weights, graph=graph, ground_truth_tags=ground_truth_dict).gt_metric_opt
+        single_graph_gt[run] = oresult
 
         print("subgraph pair optimization...")
         for second_subgraph_weights_key in subgraph_pair_chi2_diff.keys():

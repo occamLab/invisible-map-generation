@@ -8,7 +8,6 @@ import sba_evaluator as sba
 
 CAMERA_POSE_FLIPPER = np.array([[1,0,0,0],[0,-1,0,0],[0,0,-1,0],[0,0,0,1]])
 
-
 def create_unprocessed_json(unprocessed_path, processed_path):
     """
 

@@ -1178,6 +1178,7 @@ class OSweepResults(BaseModel):
     map_name: str
     generated_params: Optional[GenerateParams] = None
     oresults_list: List[OResult]
+    ographs_list: List
     sweep_args: List
 
     class Config:
@@ -1243,6 +1244,10 @@ class OSweepResults(BaseModel):
     @property
     def min_oresult(self) -> OResult:
         return self.oresults_list[self.min_gt_result_idx]
+
+    @property
+    def min_ograph(self):
+        return self.ographs_list[self.min_gt_result_idx]
 
     @property
     def min_gt(self) -> float:

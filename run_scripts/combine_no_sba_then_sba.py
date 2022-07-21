@@ -4,11 +4,10 @@ Script that first finds a map without applying sba, and then applies sba on that
 import os
 import sys
 
-repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-sys.path.append(repository_root)
-
-import argparse
 import numpy as np
+import argparse
+import optimize_graphs_and_manage_cache as ogmc
+
 from firebase_admin import credentials
 
 import map_processing
@@ -16,9 +15,10 @@ from map_processing import PrescalingOptEnum, VertexType
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
-from map_processing.graph_opt_utils import rotation_metric
-from map_processing.sweep import sweep_params
-import optimize_graphs_and_manage_cache as ogmc
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Graph optimization utility for optimizing, plotting, and database "
@@ -53,7 +53,8 @@ def make_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "-nsb",
         action="store_true",
-        help="Flag to run no SBA baseline against SBA to test SBA effectiveness. Must be done with --pso 0 (SBA) and a parameter sweep.",
+        help="Flag to run no SBA baseline against SBA to test SBA effectiveness. Must be done with --pso 0 (SBA) and a"
+             "parameter sweep.",
         default=False
     )
 
@@ -183,6 +184,7 @@ def make_parser() -> argparse.ArgumentParser:
     )
     return p
 
+
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
@@ -211,11 +213,17 @@ if __name__ == "__main__":
                                            ang_vel_var=args.avv)
 
     if args.ntsba:
+        # Run without sba
+        ograph = ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t,
+                                       sweep=args.s, sba=1, visualize=False, map_pattern=map_pattern,
+                                       sbea=args.sbea, compare=args.F, num_processes=args.np)
+
+        # Run with sba
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=args.sba, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
-                              num_processes=args.np)
+                              sba=0, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              num_processes=args.np, ograph=ograph)
 
     else:
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=args.sba, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              sba=args.pso, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np)

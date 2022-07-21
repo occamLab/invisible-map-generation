@@ -8,7 +8,7 @@ Notes:
 """
 
 from enum import Enum
-from typing import Optional, Dict, Union, Tuple, Set
+from typing import Optional, Dict, Union, Tuple, Set, List
 
 import numpy as np
 from geneticalgorithm import geneticalgorithm as ga
@@ -59,7 +59,7 @@ def holistic_optimize(
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         cms: Optional[CacheManagerSingleton] = None, gt_data: Optional[GTDataSet] = None, verbose: bool = False,
         visualize: bool = True, compare: bool = False, upload: bool = False, generate_plot_titles: bool = True) \
-        -> Union[OResult, OSGPairResult]:
+        -> List:
     """Optimizes graph, caches the result, and if specified by the arguments: upload the processed graph, visualize
     the graph optimization, and/or compute the ground truth metric.
 
@@ -93,7 +93,8 @@ def holistic_optimize(
            g1sg which is optimized using the weights selected by iter_weights)
 
     Returns:
-        An OResult object if compare is false, and an OSGPairResult result if compare is true.
+        A Tuple consisting of an OResult object if compare is false, and an OSGPairResult result if compare is true,
+        along with a Graph representing the optimized graph
     
     Raises:
         ValueError - If `upload` and `compare` are both True.
@@ -125,21 +126,24 @@ def holistic_optimize(
     # with open("sba_corner_pixels.json", "w") as outfile:
     #     json.dump(tag_corners_dict, outfile, indent=4)
 
+    return_value = []
+
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(map_info.map_name)
         oconfig.chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
     if compare:
         g1sg, g2sg = create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct, pso=pso)
-        osg_pair_result = subgraph_pair_optimize(subgraphs=(g1sg, g2sg), oconfig_1=oconfig,
-                                                 oconfig_2=oconfig, pso=pso)
+        osg_pair_result, opt_graph1, opt_graph2 = subgraph_pair_optimize(subgraphs=(g1sg, g2sg), oconfig_1=oconfig,
+                                                                         oconfig_2=oconfig, pso=pso)
 
         # Find metrics for the two OResults to be compared
         for oresult in [osg_pair_result.sg1_oresult, osg_pair_result.sg2_oresult]:
             if gt_data_as_dict_of_se3_arrays is not None:
-                gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = ground_truth_metric_with_tag_id_intersection(
-                    optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
-                    ground_truth_tags=gt_data_as_dict_of_se3_arrays)
+                gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = \
+                    ground_truth_metric_with_tag_id_intersection(
+                        optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
+                        ground_truth_tags=gt_data_as_dict_of_se3_arrays)
                 oresult.gt_metric_pre = gt_metric_pre
                 oresult.max_pre = max_diff_pre
                 oresult.max_idx_pre = max_diff_idx_pre
@@ -151,45 +155,50 @@ def holistic_optimize(
                 oresult.max_idx_opt = max_diff_idx
                 oresult.gt_per_anchor_tag_opt = gt_per_anchor
 
-        return osg_pair_result
+        # Returns first optimized graph currently because this doesn't matter because opt_graph isn't being used
+        return_value.append(osg_pair_result)
+        return_value.append(opt_graph1)
 
-    opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
-    processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
+    if not compare:
+        opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
+        processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
 
-    if verbose:
-        print(f"Optimized {map_info.map_name}.\nResulting chi2 metrics:")
-        print(opt_result.fitness_metrics.repr_as_list())
-
-    if gt_data_as_dict_of_se3_arrays is not None:
-        # Find metrics translational
-        intersection = ground_truth_metric_with_tag_id_intersection(
-            optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
-            ground_truth_tags=gt_data_as_dict_of_se3_arrays)
-        gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = intersection
-        opt_result.gt_metric_pre = gt_metric_pre
-        opt_result.max_pre = max_diff_pre
-        opt_result.max_idx_pre = max_diff_idx_pre
-
-        gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
-            optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
-            ground_truth_tags=gt_data_as_dict_of_se3_arrays)
-        opt_result.gt_metric_opt = gt_metric
-        opt_result.max_opt = max_diff
-        opt_result.max_idx_opt = max_diff_idx
-        opt_result.gt_per_anchor_tag_opt = gt_per_anchor
-
-        # Print results
         if verbose:
-            print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f}")
-            print(f"Ground truth metric: {opt_result.gt_metric_opt:.3f} ("
-                  f"delta of {opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)")
-            print(f"Maximum difference metric (pre-optimized): {opt_result.max_pre:.3f} (tag id: {opt_result.max_idx_pre})")
-            print(f"Maximum difference metric (optimized): {opt_result.max_opt:.3f} (tag id: {opt_result.max_idx_opt})")
+            print(f"Optimized {map_info.map_name}.\nResulting chi2 metrics:")
+            print(opt_result.fitness_metrics.repr_as_list())
 
-    CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, processed_map_json)
-    if upload:
-        cms.upload(map_info, processed_map_json, verbose=verbose)
-    return opt_result
+        if gt_data_as_dict_of_se3_arrays is not None:
+            # Find metrics translational
+            intersection = ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
+                ground_truth_tags=gt_data_as_dict_of_se3_arrays)
+            gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = intersection
+            opt_result.gt_metric_pre = gt_metric_pre
+            opt_result.max_pre = max_diff_pre
+            opt_result.max_idx_pre = max_diff_idx_pre
+
+            gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
+                optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
+                ground_truth_tags=gt_data_as_dict_of_se3_arrays)
+            opt_result.gt_metric_opt = gt_metric
+            opt_result.max_opt = max_diff
+            opt_result.max_idx_opt = max_diff_idx
+            opt_result.gt_per_anchor_tag_opt = gt_per_anchor
+
+            # Print results
+            if verbose:
+                print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f}")
+                print(f"Ground truth metric: {opt_result.gt_metric_opt:.3f} ("
+                      f"delta of {opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)")
+                print(f"Maximum difference metric (pre-optimized): {opt_result.max_pre:.3f} (tag id: {opt_result.max_idx_pre})")
+                print(f"Maximum difference metric (optimized): {opt_result.max_opt:.3f} (tag id: {opt_result.max_idx_opt})")
+
+        CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, processed_map_json)
+        if upload:
+            cms.upload(map_info, processed_map_json, verbose=verbose)
+        return_value.append(opt_result)
+        return_value.append(opt_graph)
+    return return_value
 
 
 # noinspection PyUnreachableCode,PyUnusedLocal
@@ -264,7 +273,7 @@ def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOp
 
 
 def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
-                   gt_data: Optional[GTDataSet] = None, max_gt_tag: float = None) -> OResult:
+                   gt_data: Optional[GTDataSet] = None, max_gt_tag: float = None) -> Tuple[OResult, Graph]:
     """Optimizes the input graph.
 
     Notes:
@@ -283,11 +292,14 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         gt_data: If provided, only used for the downstream optimization visualization.
 
     Returns:
+    OResult:
         A tuple containing in the following order: (1) The total chi2 value of the optimized graph as returned by
          the optimize_graph method of the graph instance. (2) The dictionary returned by
          `map_processing.graph_opt_utils.optimizer_to_map_chi2` when called on the optimized graph. (3) The
          dictionary returned by `map_processing.graph_opt_utils.optimizer_to_map_chi2` when called on the
          graph before optimization.
+    Graph:
+        A Graph object representing the optimized graph vertices and edges
     """
     is_sba = oconfig.is_sba
     graph.set_weights(weights=oconfig.weights,
@@ -318,12 +330,8 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
             anchor_tag_id=max_gt_tag
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
-    return OResult(
-        oconfig=oconfig,
-        map_pre=before_opt_map,
-        map_opt=opt_result_map,
-        fitness_metrics=fitness_metrics
-    )
+    return (OResult(oconfig=oconfig, map_pre=before_opt_map, map_opt=opt_result_map, fitness_metrics=fitness_metrics),
+            graph)
 
 
 def optimize_and_get_ground_truth_error_metric(
@@ -331,7 +339,7 @@ def optimize_and_get_ground_truth_error_metric(
         visualize: bool = False) -> OResult:
     """Light wrapper for the optimize_graph instance method and ground_truth_metric_with_tag_id_intersection method.
     """
-    opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize)
+    opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize)
     gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
         ground_truth_tags=ground_truth_tags)
@@ -340,7 +348,7 @@ def optimize_and_get_ground_truth_error_metric(
     opt_result.max_idx_opt = max_diff_idx
     opt_result.gt_per_anchor_tag_opt = gt_per_anchor
 
-    return opt_result
+    return opt_result, opt_graph
 
 
 def tag_pose_array_with_metadata_to_map(tag_array_with_metadata: np.ndarray) -> Dict[int, np.ndarray]:
@@ -387,7 +395,7 @@ def ground_truth_metric_with_tag_id_intersection(optimized_tags: Dict[int, np.nd
 
 
 def subgraph_pair_optimize(subgraphs: Union[Tuple[Graph, Graph], Dict], oconfig_1: OConfig,
-                           oconfig_2: OConfig, pso: PrescalingOptEnum) -> OSGPairResult:
+                           oconfig_2: OConfig, pso: PrescalingOptEnum) -> Tuple[OSGPairResult, Graph, Graph]:
     """Perform the subgraph pair optimization routine and return the difference between the first subgraph's chi2
     metric value and the second subgraph's.
 
@@ -404,11 +412,11 @@ def subgraph_pair_optimize(subgraphs: Union[Tuple[Graph, Graph], Dict], oconfig_
          pso: TODO
 
      Returns:
-         Difference of the subgraph's chi2 metrics.
+         Difference of the subgraph's chi2 metrics, first optimized Graph, second optimized Graph
     """
     if isinstance(subgraphs, Dict):
         subgraphs = create_subgraphs_for_subgraph_chi2_comparison(subgraphs, pso=pso)
-    opt1_result = optimize_graph(graph=subgraphs[0], oconfig=oconfig_1)
+    opt1_result, opt1_graph = optimize_graph(graph=subgraphs[0], oconfig=oconfig_1)
     Graph.transfer_vertex_estimates(subgraphs[0], subgraphs[1], filter_by={VertexType.TAG, VertexType.TAGPOINT})
-    opt2_result = optimize_graph(graph=subgraphs[1], oconfig=oconfig_2)
-    return OSGPairResult(sg1_oresult=opt1_result, sg2_oresult=opt2_result)
+    opt2_result, opt2_graph = optimize_graph(graph=subgraphs[1], oconfig=oconfig_2)
+    return OSGPairResult(sg1_oresult=opt1_result, sg2_oresult=opt2_result), opt1_graph, opt2_graph

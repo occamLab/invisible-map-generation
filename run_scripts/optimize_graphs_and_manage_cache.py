@@ -25,7 +25,9 @@ sys.path.append(repository_root)
 import numpy as np
 from typing import Dict, Callable, Iterable, Any, Tuple, List
 
+import sba_evaluator as sbaeval
 from map_processing import PrescalingOptEnum, VertexType
+from map_processing.graph import Graph
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
@@ -40,10 +42,11 @@ SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 
+
 def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_params: OComputeInfParams,
                      weights: int = 5, remove_bad_tag: bool = False, sweep: bool = False, sba: int = 0,
                      visualize: bool = False, map_pattern: str = "", sbea: bool = False, compare: bool = False,
-                     upload: bool = False, num_processes: int = 1):
+                     upload: bool = False, num_processes: int = 1, ograph: Graph = None) -> Graph:
     """
     Based on parameters specified in the main script, the optimal map will be found and returned
 
@@ -61,9 +64,10 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         compare: A Boolean representing whether compare should be applied or not
         upload: A Boolean representing whether the files are to be uploaded to FireBase or not
         num_processes: An int representing the number of processes to run the sweep with
+        ograph: A Graph representing the best graph result (from no sba) in the case of no sba then sba
 
     Returns:
-
+    A Graph object representing the graph of the optimized result
     """
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
     if len(matching_maps) == 0:
@@ -73,7 +77,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
     # Remove tag observations that are bad
     if remove_bad_tag:
         this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
-        sba.throw_out_bad_tags(this_path[0])
+        sbaeval.throw_out_bad_tags(this_path[0])
 
     # Run optimizer
     for map_info in matching_maps:
@@ -81,12 +85,15 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
 
         # Run sweep if specified
         if sweep:
-            sweep_params(mi=map_info, ground_truth_data=gt_data,
-                         base_oconfig=OConfig(is_sba=sba == PrescalingOptEnum.USE_SBA.value,
-                                              compute_inf_params=compute_inf_params),
-                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
-                         verbose=True, generate_plot=True, show_plot=visualize, num_processes=num_processes,
-                         no_sba_baseline=False)
+            sweep_result = sweep_params(mi=map_info, ground_truth_data=gt_data,
+                                        base_oconfig=OConfig(is_sba=sba == PrescalingOptEnum.USE_SBA.value,
+                                                             compute_inf_params=compute_inf_params),
+                                        sweep_config=SWEEP_CONFIG,
+                                        ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()], verbose=True,
+                                        generate_plot=True, show_plot=visualize, num_processes=num_processes,
+                                        no_sba_baseline=False)
+
+            return sweep_result.min_ograph
 
         # If no sweep, then run basic optimization
         oconfig = OConfig(is_sba=sba == 0, weights=WEIGHTS_DICT[WeightSpecifier(weights)],
@@ -94,18 +101,21 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         fixed_vertices = set()
         for tag_type in to_fix:
             fixed_vertices.add(VertexType(tag_type))
-        opt_result = holistic_optimize(
+        opt_results = holistic_optimize(
             map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
             fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
             gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None)
+        opt_result = opt_results[0]
+        opt_graph = opt_results[1]
 
         # Get rotational metrics
         pre_optimized_tags = opt_result.map_pre.tags
         optimized_tags = opt_result.map_opt.tags
-        rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+        rot_metric, max_rot_diff, max_rot_diff_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
         print(f"Rotation metric: {rot_metric}")
-        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_id})")
 
+        return opt_graph
 
 
 
