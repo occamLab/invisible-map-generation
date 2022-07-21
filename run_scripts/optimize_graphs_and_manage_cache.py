@@ -34,13 +34,11 @@ from map_processing.sweep import sweep_params
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-20, 10, 10]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e5, 10, 10]),
-    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-50, 1e-5, 10]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
-
-def processed_to_
 
 def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_params: OComputeInfParams,
                      weights: int = 5, remove_bad_tag: bool = False, sweep: bool = False, sba: int = 0,
@@ -107,13 +105,6 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
         print(f"Rotation metric: {rot_metric}")
         print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-
-
-
-
-
-
-
 
 
 

@@ -6,14 +6,13 @@ import json
 import multiprocessing as mp
 import os
 from copy import deepcopy
-import pdb
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
 import numpy as np
 from matplotlib import pyplot as plt
-from pyrfc3339 import generate
 
 from map_processing import TIME_FORMAT
+from map_processing import graph_opt_utils
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
 from map_processing.data_models import OConfig, OResult, OSweepResults, UGDataSet, GTDataSet
 from map_processing.graph import Graph
@@ -93,7 +92,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
-                 cache_results: bool = True, no_sba_baseline: bool = False) -> OSweepResults:
+                 cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False, cms: CacheManagerSingleton = None) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
@@ -168,12 +167,17 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
                 if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+
         fig = sweep_results.visualize_results_heatmap()
         if show_plot:
             plt.show()
         if cache_results:
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
+
+    if upload_best:
+        processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt)
+        cms.upload(mi, processed_map_json, verbose=verbose)
 
     return sweep_results
 

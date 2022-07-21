@@ -35,11 +35,6 @@ def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     
     return camera_intrinsics
 
-def compute_camera_pose(camera_pose_id, unprocessed_map_data):
-    poses = unprocessed_map_data["pose_data"][camera_pose_id]["pose"]
-    
-    return np.reshape(poses, [4, 4], order='F')
-
 def compute_tag_pose(tag_idx, unprocessed_map_data):
     """
     Returns the tag_pose at 4x4 matrix instead of a list of 16 numbers
@@ -55,7 +50,7 @@ def compute_tag_pose(tag_idx, unprocessed_map_data):
 
     return pose
 
-def compute_corner_pixels():
+def set_corner_pixels_tag_frame():
     """
     Return the location of the corner pixels of a tag, as compared to the
     origin of the tag. Note that the third value is always 0 because we just
@@ -87,7 +82,7 @@ def visualizing_difference(calculated_pixels, observed_pixels, tag_id):
     plt.title(tag_id)
     plt.show()
 
-def sba_error_metric(calculated_pixels, observed_pixels):
+def error_metric(calculated_pixels, observed_pixels):
     """
     Not certain what the best error metric is for this sort of thing. 
     We decided to take the root mean squared value of the distances
@@ -133,7 +128,7 @@ def run(tag_idx, unprocessed_map_data):
     camera_intrinsics = compute_camera_intrinsics(tag_idx,unprocessed_map_data)
     observed_pixels = np.reshape(unprocessed_map_data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
     tag_pose = compute_tag_pose(tag_idx,unprocessed_map_data)
-    corner_pixel_poses = compute_corner_pixels()
+    corner_pixel_poses = set_corner_pixels_tag_frame()
     
     # This equation, whiteboarded out, to convert from the tag frame's corner pixels to the
     # corner pixels we see on the phone. 
@@ -164,7 +159,7 @@ def run(tag_idx, unprocessed_map_data):
         print("\n")
     
     relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"]   
-    RMS_error, throw = sba_error_metric(sba_pixel_corners, observed_pixels)
+    RMS_error, throw = error_metric(sba_pixel_corners, observed_pixels)
     # print(f"tag {relevant_tag} RMS error: {RMS_error}")
     
     if VISUALIZE and not throw: 
