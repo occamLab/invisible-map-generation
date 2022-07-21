@@ -368,6 +368,9 @@ def make_processed_map_json(opt_result: OG2oOptimizer, calculate_intersections: 
             odom_vertex_list[index].neighbors = neighbors
         for intersection in intersections:
             odom_vertex_list.append(PGOdomVertex(**intersection))
+    else:
+        for index in range(0, len(odom_vertex_list)):
+            odom_vertex_list[index].neighbors = []
 
     waypoint_vertex_list: List[PGWaypointVertex] = []
     for idx in range(len(waypoint_locations[0])):
