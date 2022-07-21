@@ -126,6 +126,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
             verbose=verbose, num_processes=num_processes)
+        min_gt = sweep_results.min_gt
+        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
 
     min_value_idx = sweep_results.min_gt_result_idx
     min_oresult = sweep_results.min_oresult
