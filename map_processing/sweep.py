@@ -158,8 +158,12 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
+    
+    processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt)
+
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
+        CacheManagerSingleton.cache_map(CacheManagerSingleton.SWEEP_PROCESSED_UPLOAD_TO, mi, processed_map_json)
     if generate_plot:
         # Visualize the worst anchor point from the best OResult (gt)
         # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
@@ -178,8 +182,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
 
+
     if upload_best:
-        processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt)
         cms.upload(mi, processed_map_json, verbose=verbose)
 
     return sweep_results
