@@ -81,6 +81,7 @@ class CacheManagerSingleton:
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
     PROCESSED_UPLOAD_TO: str = "TestProcessed"
+    SWEEP_PROCESSED_UPLOAD_TO: str = "SweepProcessed"
     GROUND_TRUTH_PARENT: str = "ground_truth"
     SWEEP_RESULTS_PARENT: str = "sweep_results"
     PGT_VALIDATION_RESULTS_PARENT: str = "pgt_validation_results"
