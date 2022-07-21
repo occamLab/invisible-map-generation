@@ -27,7 +27,7 @@ def create_unprocessed_json(unprocessed_path, processed_path):
         # Rewrite pose data with processed pose data
         translation_pose = processed_data["odometry_vertices"][pose_idx]["translation"]
         rotation_pose = processed_data["odometry_vertices"][pose_idx]["rotation"]
-        pose_id = processed_data["odometry_["poseId"]
+        # pose_id = processed_data["odometry_["poseId"]
 
 
 create_unprocessed_json("/home/rdave/invisible-map-generation/.cache/unprocessed_maps/rawMapData/zfd9Row5EpX9fhTgdYlBtTxliqR2/floor_2_obleft 83183896790958.json", "/home/rdave/invisible-map-generation/.cache/TestProcessed/rawMapData/zfd9Row5EpX9fhTgdYlBtTxliqR2/floor_2_obleft 83183896790958.json")
