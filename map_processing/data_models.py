@@ -606,6 +606,10 @@ class UGDataSet(BaseModel):
     tag_data: List[List[UGTagDatum]] = []
     generated_from: Optional[GenerateParams] = None
 
+    # For times where optimized map is passed in again
+    tag_estimates: Optional[List[List[UGTagDatum]]] = []
+    pose_estimates: Optional[List[UGPoseDatum]] = None
+
     # TODO: Add documentation for the following properties
 
     @property
@@ -640,6 +644,10 @@ class UGDataSet(BaseModel):
         return np.array([pose_datum.pose for pose_datum in self.pose_data]).reshape((-1, 4, 4), order="F")
 
     @property
+    def pose_estimate_matrices(self) -> np.ndarray:
+        return np.array([pose_datum.pose for pose_datum in self.pose_estimates]).reshape((-1, 4, 4), order="F")
+
+    @property
     def poses_by_pose_ids(self) -> Dict[int, np.ndarray]:
         ret: Dict[int, np.ndarray] = {}
         pose_matrices = self.pose_matrices
@@ -654,6 +662,12 @@ class UGDataSet(BaseModel):
         return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
             np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
                                                       self.tag_data]).reshape([-1, 4, 4], order="C"))
+
+    @property
+    def tag_edge_measurements_estimate_matrix(self) -> np.ndarray:
+        return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
+            np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
+                                                      self.tag_estimates]).reshape([-1, 4, 4], order="C"))
 
     @property
     def timestamps(self) -> np.ndarray:

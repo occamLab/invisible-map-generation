@@ -28,10 +28,10 @@ def on_event(event):
     cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=True)
 
 
-def for_each_map_info(map_info: MapInfo) -> None:
+def for_each_map_info(map_info: MapInfo, ntsba: bool = False) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
-    graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
+    graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES, ntsba=ntsba)
     optimization_config = OConfig(
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP])
     opt_chi2, opt_result, _ = optimize_graph(graph=graph, oconfig=optimization_config)

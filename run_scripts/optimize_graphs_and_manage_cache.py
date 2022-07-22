@@ -47,7 +47,7 @@ SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
 def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_params: OComputeInfParams,
                      weights: int = 5, remove_bad_tag: bool = False, sweep: bool = False, sba: int = 0,
                      visualize: bool = False, map_pattern: str = "", sbea: bool = False, compare: bool = False,
-                     upload: bool = False, num_processes: int = 1):
+                     upload: bool = False, num_processes: int = 1, ntsba: bool = False):
     """
     Based on parameters specified in the main script, the optimal map will be found and returned
 
@@ -65,6 +65,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         compare: A Boolean representing whether compare should be applied or not
         upload: A Boolean representing whether the files are to be uploaded to FireBase or not
         num_processes: An int representing the number of processes to run the sweep with
+        ntsba: A boolean representing whether optimized graph is being passed in or not
 
     Returns:
 
@@ -91,7 +92,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
                                               compute_inf_params=compute_inf_params),
                          sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
                          verbose=True, generate_plot=True, show_plot=visualize, num_processes=num_processes,
-                         no_sba_baseline=False)
+                         no_sba_baseline=False, ntsba=ntsba)
 
         # If no sweep, then run basic optimization
         oconfig = OConfig(is_sba=sba == 0, weights=WEIGHTS_DICT[WeightSpecifier(weights)],
@@ -102,7 +103,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         opt_result = holistic_optimize(
             map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
             fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
-            gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None)
+            gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None, ntsba=ntsba)
         opt_results.append((opt_result, map_info))
         # Get rotational metrics
         pre_optimized_tags = opt_result.map_pre.tags

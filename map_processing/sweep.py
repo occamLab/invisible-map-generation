@@ -26,9 +26,10 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
-                 verbose: bool = False, num_processes: int = 1) -> Tuple[float, int, OResult]:
-    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=PrescalingOptEnum.USE_SBA\
-        if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV)
+                 verbose: bool = False, num_processes: int = 1, ntsba: bool = False) -> Tuple[float, int, OResult]:
+    graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices,
+                                  prescaling_opt=PrescalingOptEnum.USE_SBA if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV,
+                                  ntsba=ntsba)
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
 
     # Expand sweep_config if it contains callables and arguments to those callables
@@ -92,7 +93,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
-                 cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False, cms: CacheManagerSingleton = None) -> OSweepResults:
+                 cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False,
+                 cms: CacheManagerSingleton = None, ntsba: bool = False) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
@@ -100,13 +102,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         non_sba_base_oconfig = deepcopy(base_oconfig)
         non_sba_base_oconfig.is_sba = False
         print("Running SBA Sweep")
-        sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
-            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
+        sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
+            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,
+            verbose=verbose, num_processes=num_processes, ntsba=ntsba)
         print("Running No SBA Sweep")
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
+            verbose=verbose, num_processes=num_processes, ntsba=ntsba)
 
         min_sba_gt = sba_osweep_results.min_gt
         min_non_sba_gt = non_sba_osweep_results.min_gt
@@ -125,7 +127,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     else:
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
             sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
+            verbose=verbose, num_processes=num_processes, ntsba=ntsba)
         min_gt = sweep_results.min_gt
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
         print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")

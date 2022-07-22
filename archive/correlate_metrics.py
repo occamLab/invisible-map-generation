@@ -54,11 +54,11 @@ def make_parser() -> argparse.ArgumentParser:
     return p
 
 
-def do_sweeping(sweep: np.ndarray):
+def do_sweeping(sweep: np.ndarray, ntsba: bool=False):
     """
     Args:
         sweep: Array of odometry-to-tag weight ratio values to consider.
-
+        ntsba: Boolean representing if optimized graph is being passed in or not
     Returns:
 
     """
@@ -79,8 +79,8 @@ def do_sweeping(sweep: np.ndarray):
         print(f"Could not find ground truth data associated with {map_info.map_name}")
         exit(-1)
 
-    graph = Graph.as_graph(map_info.map_dct)
-    sg0, sg1 = gm.create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct)
+    graph = Graph.as_graph(map_info.map_dct, ntsba)
+    sg0, sg1 = gm.create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct, ntsba=ntsba)
 
     subgraph_pair_chi2_diff = OrderedDict()
     for key in SECOND_SUBGRAPH_WEIGHTS_KEY_ORDER:
@@ -104,7 +104,7 @@ def do_sweeping(sweep: np.ndarray):
         for second_subgraph_weights_key in subgraph_pair_chi2_diff.keys():
             print(second_subgraph_weights_key)
             subgraph_pair_chi2_diff[second_subgraph_weights_key].append(
-                gm.subgraph_pair_optimize(subgraphs=(sg0, sg1), oconfig_1=, oconfig_2=).chi2_diff)
+                gm.subgraph_pair_optimize(subgraphs=(sg0, sg1), oconfig_1=, oconfig_2=).chi2_diff, ntsba=ntsba)
 
         print(f"An Odom to Tag ratio of {sweep[run]:.6f} gives chi2s of:")
         for second_subgraph_weights_key in subgraph_pair_chi2_diff:
@@ -136,7 +136,7 @@ def main():
         single_graph_chi2 = dct["single_graph_chi2"]
     else:
         sweep = SWEEP
-        single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff = do_sweeping(SWEEP)
+        single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff = do_sweeping(SWEEP, ntsba)
 
     stacked_data = np.vstack(
         [

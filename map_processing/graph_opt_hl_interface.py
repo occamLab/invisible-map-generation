@@ -58,8 +58,8 @@ def holistic_optimize(
         map_info: MapInfo, pso: PrescalingOptEnum, oconfig: OConfig,
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         cms: Optional[CacheManagerSingleton] = None, gt_data: Optional[GTDataSet] = None, verbose: bool = False,
-        visualize: bool = True, compare: bool = False, upload: bool = False, generate_plot_titles: bool = True) \
-        -> Union[OResult, OSGPairResult]:
+        visualize: bool = True, compare: bool = False, upload: bool = False, generate_plot_titles: bool = True,
+        ntsba: bool = False) -> Union[OResult, OSGPairResult]:
     """Optimizes graph, caches the result, and if specified by the arguments: upload the processed graph, visualize
     the graph optimization, and/or compute the ground truth metric.
 
@@ -77,6 +77,7 @@ def holistic_optimize(
         compare: Invokes the subgraph graph comparison routine (see notes section for more information).
         upload: Value passed as the upload argument to the invocation of the _process_map method.
         generate_plot_titles: Generates a plot title from a template.
+        ntsba: Boolean representing if optimized graph is being passed in or not
 
     Notes:
         The subgraph comparison routine is as follows:
@@ -111,7 +112,7 @@ def holistic_optimize(
     if gt_data is not None:
         gt_data_as_dict_of_se3_arrays = gt_data.as_dict_of_se3_arrays
 
-    graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso)
+    graph = Graph.as_graph(map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso, ntsba=ntsba)
 
     # Get sba preprocessed tag corners and save to json
     # unprocessed_data_set = UGDataSet(**map_info.map_dct)
@@ -130,9 +131,9 @@ def holistic_optimize(
         oconfig.chi2_plot_title = "Odom. node incident edges chi2 values for map: {}".format(map_info.map_name)
 
     if compare:
-        g1sg, g2sg = create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct, pso=pso)
+        g1sg, g2sg = create_subgraphs_for_subgraph_chi2_comparison(map_info.map_dct, pso=pso, ntsba=ntsba)
         osg_pair_result = subgraph_pair_optimize(subgraphs=(g1sg, g2sg), oconfig_1=oconfig,
-                                                 oconfig_2=oconfig, pso=pso)
+                                                 oconfig_2=oconfig, pso=pso, ntsba=ntsba)
 
         # Find metrics for the two OResults to be compared
         for oresult in [osg_pair_result.sg1_oresult, osg_pair_result.sg2_oresult]:
@@ -193,21 +194,21 @@ def holistic_optimize(
 
 
 # noinspection PyUnreachableCode,PyUnusedLocal
-def optimize_weights(map_json_path: str, verbose: bool = True) -> np.ndarray:
+def optimize_weights(map_json_path: str, verbose: bool = True, ntsba: bool=False) -> np.ndarray:
     """
     Determines the best weights to optimize a graph with
 
     Args:
         map_json_path: the path to the json containing the unprocessed map information
         verbose (bool): whether to provide output for the chi2 calculation
-
+        ntsba (bool): whether optimized graph is being passed in or not
     Returns:
         A list of the best weights
     """
     raise NotImplementedError("This function has not been updated to work with the new way that ground truth data"
                               "is being handled")
     map_dct = self._cms.map_info_from_path(map_json_path).map_dct
-    graph = Graph.as_graph(map_dct)
+    graph = Graph.as_graph(map_dct, ntsba=ntsba)
 
     # Use a genetic algorithm
     model = ga(
@@ -230,7 +231,7 @@ def optimize_weights(map_json_path: str, verbose: bool = True) -> np.ndarray:
     return model.report
 
 
-def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOptEnum) -> Tuple[Graph, Graph]:
+def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOptEnum, ntsba: bool = False) -> Tuple[Graph, Graph]:
     """Creates then splits a graph in half, as required for weight comparison
 
     Specifically, this will create the graph based off the information in dct with the given prescaling option. It 
@@ -240,12 +241,13 @@ def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOp
     Args:
         graph: A dictionary containing the unprocessed data that can be parsed by the `Graph.as_graph` method.
         pso: Prescaling option to pass to the `Graph.as_graph` method.
+        ntsba: Boolean representing if optimized graph is being passed in or not
 
     Returns:
         A tuple of 2 graphs, an even split of graph, as described above.
     """
-    graph1 = Graph.as_graph(graph, prescaling_opt=pso)
-    graph2 = Graph.as_graph(graph, fixed_vertices={VertexType.TAG, VertexType.TAGPOINT}, prescaling_opt=pso)
+    graph1 = Graph.as_graph(graph, prescaling_opt=pso, ntsba=ntsba)
+    graph2 = Graph.as_graph(graph, fixed_vertices={VertexType.TAG, VertexType.TAGPOINT}, prescaling_opt=pso, ntsba=ntsba)
 
     ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
     start_uid = graph1.edges[ordered_odom_edges[0]].startuid
@@ -387,7 +389,7 @@ def ground_truth_metric_with_tag_id_intersection(optimized_tags: Dict[int, np.nd
 
 
 def subgraph_pair_optimize(subgraphs: Union[Tuple[Graph, Graph], Dict], oconfig_1: OConfig,
-                           oconfig_2: OConfig, pso: PrescalingOptEnum) -> OSGPairResult:
+                           oconfig_2: OConfig, pso: PrescalingOptEnum, ntsba: bool=False) -> OSGPairResult:
     """Perform the subgraph pair optimization routine and return the difference between the first subgraph's chi2
     metric value and the second subgraph's.
 
@@ -402,12 +404,13 @@ def subgraph_pair_optimize(subgraphs: Union[Tuple[Graph, Graph], Dict], oconfig_
          oconfig_1: Configures the optimization for the first subgraph
          oconfig_2: Configures the optimization for the second subgraph
          pso: TODO
+         ntsba: Boolean showing whether graph passed in is optimized or not
 
      Returns:
          Difference of the subgraph's chi2 metrics.
     """
     if isinstance(subgraphs, Dict):
-        subgraphs = create_subgraphs_for_subgraph_chi2_comparison(subgraphs, pso=pso)
+        subgraphs = create_subgraphs_for_subgraph_chi2_comparison(subgraphs, pso=pso, ntsba=ntsba)
     opt1_result = optimize_graph(graph=subgraphs[0], oconfig=oconfig_1)
     Graph.transfer_vertex_estimates(subgraphs[0], subgraphs[1], filter_by={VertexType.TAG, VertexType.TAGPOINT})
     opt2_result = optimize_graph(graph=subgraphs[1], oconfig=oconfig_2)
