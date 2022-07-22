@@ -17,8 +17,8 @@ from . import PrescalingOptEnum, VertexType, graph_opt_utils, graph_opt_plot_uti
 from .cache_manager import CacheManagerSingleton, MapInfo
 from .data_models import Weights, OConfig, GTDataSet, OResult, OSGPairResult, UGDataSet
 from .graph import Graph
-import json
-import datetime
+from g2o import SparseOptimizer
+import pdb
 
 
 class WeightSpecifier(Enum):
@@ -58,8 +58,8 @@ def holistic_optimize(
         map_info: MapInfo, pso: PrescalingOptEnum, oconfig: OConfig,
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         cms: Optional[CacheManagerSingleton] = None, gt_data: Optional[GTDataSet] = None, verbose: bool = False,
-        visualize: bool = True, compare: bool = False, upload: bool = False, generate_plot_titles: bool = True) \
-        -> List:
+        visualize: bool = True, compare: bool = False, upload: bool = False, generate_plot_titles: bool = True,
+        ntsba: bool = False, ograph: SparseOptimizer = None) -> List:
     """Optimizes graph, caches the result, and if specified by the arguments: upload the processed graph, visualize
     the graph optimization, and/or compute the ground truth metric.
 
@@ -77,6 +77,8 @@ def holistic_optimize(
         compare: Invokes the subgraph graph comparison routine (see notes section for more information).
         upload: Value passed as the upload argument to the invocation of the _process_map method.
         generate_plot_titles: Generates a plot title from a template.
+        ntsba: Boolean representing whether 'no sba then sba' is being run or not
+        ograph: SparseOptimizer representing already optimized graph to be used in case of 'no sba then sba'
 
     Notes:
         The subgraph comparison routine is as follows:
@@ -160,7 +162,8 @@ def holistic_optimize(
         return_value.append(opt_graph1)
 
     if not compare:
-        opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
+        opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data,
+                                               ntsba=ntsba, ograph=ograph)
         processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
 
         if verbose:
@@ -273,7 +276,8 @@ def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOp
 
 
 def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
-                   gt_data: Optional[GTDataSet] = None, max_gt_tag: float = None) -> Tuple[OResult, Graph]:
+                   gt_data: Optional[GTDataSet] = None, max_gt_tag: float = None, ntsba: bool = False,
+                   ograph: SparseOptimizer = None) -> Tuple[OResult, SparseOptimizer]:
     """Optimizes the input graph.
 
     Notes:
@@ -290,6 +294,8 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         visualize: A boolean for whether the `visualize` static method of this class is called.
         oconfig: Configures the optimization.
         gt_data: If provided, only used for the downstream optimization visualization.
+        ntsba: A Boolean representing whether 'no sba then sba' is being run or not
+        ograph: A SparseOptimizer representing the best graph result (from no sba) in the case of no sba then sba
 
     Returns:
     OResult:
@@ -314,7 +320,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         graph.optimize_graph()
 
     # Change vertex estimates based off the optimized graph
-    graph.update_vertices_estimates_from_optimized_graph()
+    graph.update_vertices_estimates_from_optimized_graph(ntsba=ntsba, ograph=ograph)
     opt_result_map = graph_opt_utils.optimizer_to_map_chi2(graph, graph.optimized_graph, is_sba=is_sba)
 
     if visualize:
@@ -331,15 +337,16 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
     return (OResult(oconfig=oconfig, map_pre=before_opt_map, map_opt=opt_result_map, fitness_metrics=fitness_metrics),
-            graph)
+            graph.optimized_graph)
 
 
 def optimize_and_get_ground_truth_error_metric(
         oconfig: OConfig, graph: Graph, ground_truth_tags: Dict[int, np.ndarray],
-        visualize: bool = False) -> OResult:
+        visualize: bool = False, ntsba: bool = False, ograph: SparseOptimizer = None) -> OResult:
     """Light wrapper for the optimize_graph instance method and ground_truth_metric_with_tag_id_intersection method.
     """
-    opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize)
+    opt_result, opt_graph = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, ntsba=ntsba,
+                                           ograph=ograph)
     gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
         ground_truth_tags=ground_truth_tags)

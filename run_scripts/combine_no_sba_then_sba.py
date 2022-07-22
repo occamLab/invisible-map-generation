@@ -221,7 +221,7 @@ if __name__ == "__main__":
         # Run with sba
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=0, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
-                              num_processes=args.np, ograph=ograph)
+                              num_processes=args.np, ograph=ograph, ntsba=True)
 
     else:
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,

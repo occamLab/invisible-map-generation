@@ -21,17 +21,23 @@ from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_m
 from map_processing.graph_vertex_edge_classes import VertexType
 from map_processing.graph_opt_utils import rotation_metric
 from . import PrescalingOptEnum
+from g2o import SparseOptimizer
 
+main_ntsba = False
+main_ograph = None
 
 def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                     sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
                                         Dict[OConfig.OConfigEnum, np.ndarray]],
                     ordered_sweep_config_keys: List[OConfig.OConfigEnum],
-                    fixed_vertices: Optional[Set[VertexType]] = None, verbose: bool = False, num_processes: int = 1) ->\
-        Tuple[float, int, OResult]:
+                    fixed_vertices: Optional[Set[VertexType]] = None, verbose: bool = False, num_processes: int = 1,
+                    ntsba: bool = False, old_ograph: SparseOptimizer = None) -> Tuple[float, int, OResult]:
     graph_to_opt = Graph.as_graph(mi.map_dct, fixed_vertices=fixed_vertices,
                                   prescaling_opt=PrescalingOptEnum.USE_SBA if base_oconfig.is_sba else PrescalingOptEnum.FULL_COV)
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
+
+    main_ntsba = ntsba
+    main_ograph = old_ograph
 
     # Expand sweep_config if it contains callables and arguments to those callables
     for key, value in sweep_config.items():
@@ -65,7 +71,7 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         if verbose:
             print("Starting single-process optimization parameter sweep...")
         for sweep_arg in sweep_args:
-            results_tuples = [_sweep_target(sweep_arg)]
+            results_tuples = [_sweep_target(sweep_arg, ntsba=ntsba, old_ograph=old_ograph)]
     else:
         if verbose:
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
@@ -99,7 +105,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
                  cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False,
-                 cms: CacheManagerSingleton = None) -> OSweepResults:
+                 cms: CacheManagerSingleton = None, ntsba: bool = main_ntsba, ograph: SparseOptimizer = main_ograph) \
+        -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
@@ -111,13 +118,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                              sweep_config=sweep_config,
                                              ordered_sweep_config_keys=ordered_sweep_config_keys,
                                              fixed_vertices=fixed_vertices, verbose=verbose,
-                                             num_processes=num_processes)
+                                             num_processes=num_processes, ntsba=ntsba, old_ograph=ograph)
         print("Running No SBA Sweep")
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data,
                                                  base_oconfig=non_sba_base_oconfig, sweep_config=sweep_config,
                                                  ordered_sweep_config_keys=ordered_sweep_config_keys,
                                                  fixed_vertices=fixed_vertices, verbose=verbose,
-                                                 num_processes=num_processes)
+                                                 num_processes=num_processes, ntsba=ntsba, old_ograph=ograph)
 
         min_sba_gt = sba_osweep_results.min_gt
         min_non_sba_gt = non_sba_osweep_results.min_gt
@@ -136,7 +143,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     else:
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
                                         sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys,
-                                        fixed_vertices=fixed_vertices, verbose=verbose, num_processes=num_processes)
+                                        fixed_vertices=fixed_vertices, verbose=verbose, num_processes=num_processes,
+                                        ntsba=ntsba, old_ograph=ograph)
         min_gt = sweep_results.min_gt
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
         print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
@@ -184,7 +192,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         # Visualize the worst anchor point from the best OResult (rotation)
         optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
                        oconfig=sweep_results.sweep_args[min_value_idx][1],
-                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data, ntsba=ntsba,
+                                                                                         ograph=ograph) \
                 if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
 
         fig = sweep_results.visualize_results_heatmap()
@@ -194,15 +203,14 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
 
-
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
 
     return sweep_results
 
 
-def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
-        -> Tuple[float, int, OResult, Graph]:
+def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool],
+                  ntsba: bool = False, old_ograph: SparseOptimizer = None) -> Tuple[float, int, OResult, SparseOptimizer]:
     """Target callable used in the sweep_params function.
     *****NOTE: This function is what individually optimizes each of the parameters provided through the sweep.
 
@@ -212,7 +220,8 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
             oresult: OResult representing the result of GraphManager.optimize_graph
     """
     # Same workflow as holistic_optimize from graph_opt_hl_interface
-    oresult, ograph = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
+    oresult, ograph = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False,
+                                     ntsba=ntsba, ograph=old_ograph)
     gt_result, max_diff, max_diff_idx, gt_per_anchor_tag = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])

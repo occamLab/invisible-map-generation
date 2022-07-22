@@ -7,9 +7,6 @@ import sys
 
 from collections import OrderedDict
 
-# Ensure that the map_processing module is imported
-sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
-
 import argparse
 from firebase_admin import credentials
 import json
@@ -22,6 +19,11 @@ from map_processing.graph_manager import GraphManager
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.data_models import Weights
 import typing
+from g2o import SparseOptimizer
+
+# Ensure that the map_processing module is imported
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+
 
 SpearmenrResult = typing.NamedTuple("SpearmenrResult", [("correlation", float), ("pvalue", float)])
 
@@ -54,7 +56,7 @@ def make_parser() -> argparse.ArgumentParser:
     return p
 
 
-def do_sweeping(sweep: np.ndarray):
+def do_sweeping(sweep: np.ndarray, ntsba: bool = False, old_ograph: SparseOptimizer = None):
     """
     Args:
         sweep: Array of odometry-to-tag weight ratio values to consider.
@@ -98,7 +100,8 @@ def do_sweeping(sweep: np.ndarray):
 
         print("standard optimization ground truth:")
         oresult, ograph = gm.optimize_and_get_ground_truth_error_metric(
-            weights=weights, graph=graph, ground_truth_tags=ground_truth_dict).gt_metric_opt
+            weights=weights, graph=graph, ground_truth_tags=ground_truth_dict, ntsba=ntsba,
+            ograph=old_ograph).gt_metric_opt
         single_graph_gt[run] = oresult
 
         print("subgraph pair optimization...")
@@ -137,7 +140,8 @@ def main():
         single_graph_chi2 = dct["single_graph_chi2"]
     else:
         sweep = SWEEP
-        single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff = do_sweeping(SWEEP)
+        single_graph_gt, single_graph_chi2, subgraph_pair_chi2_diff = do_sweeping(SWEEP, ntsba=ntsba,
+                                                                                  old_ograph=old_ograph)
 
     stacked_data = np.vstack(
         [

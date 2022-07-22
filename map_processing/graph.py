@@ -25,6 +25,7 @@ from .data_models import UGDataSet, OComputeInfParams, Weights, OResultFitnessMe
 from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, se3_quat_average, \
     transform_matrix_to_vector, make_sba_tag_arrays, pose_to_isometry
+import pdb
 
 
 class Graph:
@@ -408,17 +409,28 @@ class Graph:
                     prescaling_matrix = np.diag(prescaling_matrix)
                 self.edges[uid].information = np.matmul(prescaling_matrix, edge.information)
 
-    def update_vertices_estimates_from_optimized_graph(self) -> None:
+    def update_vertices_estimates_from_optimized_graph(self, ntsba: bool = False,
+                                                       ograph: SparseOptimizer = None) -> None:
         """Update the vertices' estimate attributes with the optimized graph values' estimates.
+        Args:
+            ntsba: A Boolean representing whether 'no sba then sba' is being run or not
+            ograph: A SparseOptimizer representing the best graph result (from no sba) in the case of no sba then sba
+
         """
-        for uid in self.optimized_graph.vertices():
+        # Allows optimized graph to be used if ntsba (no sba then sba) is being run
+        graph_to_use = self.optimized_graph
+        if ntsba:
+            graph_to_use = ograph
+
+        pdb.set_trace()
+        for uid in graph_to_use.vertices():
             if self.is_sba:
-                if type(self.optimized_graph.vertex(uid).estimate()) == np.ndarray:
-                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate()
+                if type(graph_to_use.vertex(uid).estimate()) == np.ndarray:
+                    self.vertices[uid].estimate = graph_to_use.vertex(uid).estimate()
                 else:
-                    self.vertices[uid].estimate = self.optimized_graph.vertex(uid).estimate().to_vector()
+                    self.vertices[uid].estimate = graph_to_use.vertex(uid).estimate().to_vector()
             else:
-                self.vertices[uid].estimate = isometry_to_pose(self.optimized_graph.vertices()[uid].estimate())
+                self.vertices[uid].estimate = isometry_to_pose(graph_to_use.vertices()[uid].estimate())
 
     def connected_components(self) -> List[Graph]:
         """Return a list of graphs representing connecting components of the input graph.

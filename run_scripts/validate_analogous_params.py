@@ -8,9 +8,6 @@ and the ratio of the optimal linear and angular velocity variance values for opt
 import os
 import sys
 
-repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-sys.path.append(repository_root)
-
 import numpy as np
 import datetime
 from typing import List, Dict, Callable, Iterable, Any, Tuple
@@ -20,7 +17,10 @@ from map_processing.data_models import GenerateParams, UGDataSet, OConfig, OSwee
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing.graph_generator import GraphGenerator
 from map_processing.sweep import sweep_params
+from g2o import SparseOptimizer
 
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
 
 NUM_PROCESSES = 10
 HOLD_RVERT_AT = 1e-5
@@ -49,7 +49,8 @@ def validate_analogous_params(
         alt_opt_config: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]],
         alt_gen_config: Dict[GenerateParams.AltGenerateParamsEnum, Tuple[Callable, Iterable[Any]]],
         hold_rvert_at: float, ratio_xz_to_y_lin_vel_var: float, base_generate_params: GenerateParams,
-        num_repeat_generate: int, verbose: bool = False) -> OMultiSweepResult:
+        num_repeat_generate: int, verbose: bool = False, ntsba: bool = False,
+        ograph: SparseOptimizer = None) -> OMultiSweepResult:
     # Evaluate the functions and their arguments stored as keys and values, respectively
     alt_param_multiplicands_for_generation: Dict[GenerateParams.AltGenerateParamsEnum, np.ndarray] = {}
     for generate_key, generate_value in alt_gen_config.items():
@@ -98,7 +99,9 @@ def validate_analogous_params(
                 ordered_sweep_config_keys=sorted(list(param_multiplicands_for_opt.keys())),
                 num_processes=NUM_PROCESSES,
                 verbose=True,
-                cache_results=False))
+                cache_results=False,
+                ntsba=ntsba,
+                ograph=ograph))
             if verbose:
                 print(f"Generated and swept optimizations for {'0' * num_zeros_to_prefix}{gen_param_idx + 1}/"
                       f"{num_to_generate}: {generate_param.dataset_name}")
@@ -125,7 +128,8 @@ if __name__ == "__main__":
     msr = validate_analogous_params(
         data_set_generate_from=data_set, alt_opt_config=ALT_OPT_CONFIG, alt_gen_config=ALT_GENERATE_CONFIG,
         hold_rvert_at=HOLD_RVERT_AT, ratio_xz_to_y_lin_vel_var=RATIO_XZ_TO_Y_LIN_VEL_VAR,
-        base_generate_params=BASE_GENERATE_PRAMS, num_repeat_generate=NUM_REPEAT_GENERATE, verbose=True)
+        base_generate_params=BASE_GENERATE_PRAMS, num_repeat_generate=NUM_REPEAT_GENERATE, verbose=True, ntsba=ntsba,
+        ograph=ograph)
     results_file_name = f"analogous_parameter_sweep_{datetime.datetime.now().strftime(TIME_FORMAT)}"
     CacheManagerSingleton.cache_sweep_results(msr, results_file_name)
 
