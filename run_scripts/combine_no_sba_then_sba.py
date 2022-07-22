@@ -214,6 +214,7 @@ if __name__ == "__main__":
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=False)
+        map_pattern = map_pattern + "_semi_process"
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=True)

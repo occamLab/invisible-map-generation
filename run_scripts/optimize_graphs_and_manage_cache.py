@@ -70,6 +70,9 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
 
     """
     matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
+    if ntsba:
+        matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=False)
+
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         return None
