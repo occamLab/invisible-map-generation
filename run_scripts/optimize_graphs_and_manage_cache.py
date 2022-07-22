@@ -104,7 +104,6 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         fixed_vertices = set()
         for tag_type in to_fix:
             fixed_vertices.add(VertexType(tag_type))
-        print(ograph)
         opt_results = holistic_optimize(
             map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
             fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,

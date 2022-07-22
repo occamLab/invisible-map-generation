@@ -315,6 +315,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
     graph.generate_unoptimized_graph()
     before_opt_map = graph_opt_utils.optimizer_to_map_chi2(graph, graph.unoptimized_graph, is_sba=is_sba)
     fitness_metrics = graph.optimize_graph()
+
     if oconfig.obs_chi2_filter > 0:
         graph.filter_out_high_chi2_observation_edges(oconfig.obs_chi2_filter)
         graph.optimize_graph()

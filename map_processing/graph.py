@@ -187,8 +187,11 @@ class Graph:
             Chi2 sum of optimized graph as returned by the call to `self.sum_optimizer_edges_chi2(self.optimized_graph)`
         """
         self.optimized_graph: SparseOptimizer = self.graph_to_optimizer()
+
         self.optimized_graph.initialize_optimization()
+
         run_status = self.optimized_graph.optimize(1024)
+
         self.g2o_status = run_status
 
         pre_opt_chi2, pre_opt_alpha = graph_opt_utils.sum_optimizer_edges_chi2(self.unoptimized_graph)
@@ -422,7 +425,6 @@ class Graph:
         if ntsba:
             graph_to_use = ograph
 
-        pdb.set_trace()
         for uid in graph_to_use.vertices():
             if self.is_sba:
                 if type(graph_to_use.vertex(uid).estimate()) == np.ndarray:
