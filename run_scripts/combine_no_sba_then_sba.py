@@ -242,7 +242,9 @@ if __name__ == "__main__":
                 new_odom_estimates_dcts.append(temp_odom_dct)
 
             # Write data to json
-            semi_processed_map_dct["tag_estimates"] = new_tag_estimates_dcts
+            pdb.set_trace()
+            
+            semi_processed_map_dct["tag_estimates"] = sorted(new_tag_estimates_dcts, key=lambda x: x["id"])
             semi_processed_map_dct["odom_estimates"] = new_odom_estimates_dcts
             with open(f".cache/SemiProcessedMap/{oresult[1].map_name}_semi_processed.json", 'w') as write_file:
                 json.dump(semi_processed_map_dct, write_file, indent=2, sort_keys=True)
