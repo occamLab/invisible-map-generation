@@ -1,6 +1,11 @@
 """
-Script to clean and manipulate the tag data that comes from RTABmap to see if it's functional
-as ground truth data.
+Script to clean and manipulate the tag data that comes from RTABmap and convert it to a ground truth
+dataset that is useable to benchmark maps. Look in the ground truth folder to see the configuration
+file that you can use to create a new ground truth dataset.
+
+Ground truth is really just a fancy way of saying the *actual* location of the tags. In order to test
+if IM is doing a good job mapping out its surroundings, we need to compare it to reality. We're using
+RTABmap to create a LIDAR map of a location.
 
 NOTE: there are a few terms used interchangeably in this code
 
@@ -11,7 +16,6 @@ im = invisible map tag locations --> whenever "im" is used in this code, it's re
 received from invisible maps. Comes from the "processed_graph" data file.
 """
 
-import re
 import argparse
 import json
 import numpy as np
@@ -143,6 +147,11 @@ def process_IM_GT_data(file_path, tag_poses):
 def plot_IM_GT_data(im_pos, gt_pos, im_quat, gt_quat):
     """
     Visualize the positions of the IM tag data and the RTABmap tag data.
+    Largely deprecated, but useful to quickly show the positions and orientations 
+    of all recorded tags.
+    
+    NOTE: in order to do this, we'll need to have the processed map from
+    IM's optimize_graphs_and_manage_cache workflow.
 
     Args:
         im (list): a list of tag poses from invisible map
@@ -187,7 +196,7 @@ def plot_IM_GT_data(im_pos, gt_pos, im_quat, gt_quat):
 
 def run(rtabmap_data_path, outputted_json_path, processed_graph_path, visualize):
     """
-    Run the script's main pipeline
+    Run the script's main pipeline: converting data coming in from RTABmap into useable 
 
     Args:
         rtabmap_data_path (string): a string corresponding to the json file of tag data from rtabmap
@@ -201,7 +210,7 @@ def run(rtabmap_data_path, outputted_json_path, processed_graph_path, visualize)
     with open(rtabmap_data_path, "r") as f:
         for line in f.readlines():
             new_data_entry = line.split()
-            print(new_data_entry)
+            # print(new_data_entry)
 
             # XYZ and quaternion data
             if interpret_data_type(new_data_entry) == "quat":
@@ -254,7 +263,7 @@ if __name__ == "__main__":
     # Take in the name of the test for configuration purposes
     NAME_OF_TEST = args.n.lower()
 
-    with open("../rtabmap/gt_analysis_config.json") as config_file:
+    with open("gt_analysis_config.json") as config_file:
         config = json.load(config_file)[NAME_OF_TEST]
         print(f"your configuration: {config}")
 
