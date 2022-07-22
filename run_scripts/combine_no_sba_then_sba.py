@@ -1,7 +1,10 @@
 """
 Script that first finds a map without applying sba, and then applies sba on that.
 """
+from copy import deepcopy
+import json
 import os
+import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -18,6 +21,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
+from map_processing.transform_utils import transform_vector_to_matrix
 import optimize_graphs_and_manage_cache as ogmc
 
 def make_parser() -> argparse.ArgumentParser:
@@ -211,15 +215,47 @@ if __name__ == "__main__":
                                            ang_vel_var=args.avv)
 
     if args.ntsba:
-        ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
+        ntsba_oresults = ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=False)
+
+        # Edit json to match pre-processed estimate pattern
+        for oresult in ntsba_oresults:
+            semi_processed_map_dct = deepcopy(oresult[1].map_dct)
+            new_tag_estimates = oresult[0].map_opt.tags
+            new_odom_estimates = oresult[0].map_opt.locations
+
+            # Edit tag estimates
+            new_tag_estimates_dcts = []
+            for tag_estimate in new_tag_estimates:
+                temp_tag_dct = {}
+                temp_tag_dct["id"] = int(tag_estimate[-1])
+                temp_tag_dct["pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten())
+                new_tag_estimates_dcts.append(temp_tag_dct)
+
+            # Edit odom estimates
+            new_odom_estimates_dcts = []
+            for odom_estimate in new_odom_estimates:
+                temp_odom_dct = {}
+                temp_odom_dct["id"] = int(odom_estimate[8])
+                temp_odom_dct["pose"] = list(transform_vector_to_matrix(odom_estimate[:-2]).flatten())
+                new_odom_estimates_dcts.append(temp_odom_dct)
+
+            # Write data to json
+            semi_processed_map_dct["tag_estimates"] = new_tag_estimates_dcts
+            semi_processed_map_dct["odom_estimates"] = new_odom_estimates_dcts
+            with open(f".cache/SemiProcessedMap/{oresult[1].map_name}_semi_processed.json", 'w') as write_file:
+                json.dump(semi_processed_map_dct, write_file, indent=2, sort_keys=True)
+
         map_pattern = map_pattern + "_semi_process"
+
+        # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=True)
 
     else:
+        # Run basic version - without needing to run twice
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=args.sba, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=False)

@@ -17,6 +17,7 @@ Notes:
 """
 
 import os
+import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -82,6 +83,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
         sba.throw_out_bad_tags(this_path[0])
 
+    opt_results = []
     # Run optimizer
     for map_info in matching_maps:
         gt_data = cms.find_ground_truth_data_from_map_info(map_info)
@@ -105,14 +107,15 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
             map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
             fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
             gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None, ntsba=ntsba)
-
+        opt_results.append((opt_result, map_info))
         # Get rotational metrics
         pre_optimized_tags = opt_result.map_pre.tags
         optimized_tags = opt_result.map_opt.tags
-        rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+
+        rot_metric, max_rot_diff, _, max_rot_diff_idx= rotation_metric(pre_optimized_tags, optimized_tags)
         print(f"Rotation metric: {rot_metric}")
         print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
-
+    return opt_results
 
 
 
