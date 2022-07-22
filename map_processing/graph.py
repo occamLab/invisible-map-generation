@@ -652,7 +652,7 @@ class Graph:
 
     @staticmethod
     def as_graph(data_set: Union[Dict, UGDataSet], fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
-                 prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA) -> Graph:
+                 prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA, ntsba: bool = False) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
         Args:
@@ -663,6 +663,7 @@ class Graph:
              sparse bundle adjustment is used; otherwise, the outcome only differs between the remaining enum values by
              how the tag edge prescaling matrix is selected. Read the PrescalingOptEnum class documentation for more
              information.
+             ntsba: Boolean representing whether ntsba is to be used or not (if an optimized graph is being passed in)
 
         Returns:
             A graph derived from the input dictionary.
@@ -719,6 +720,9 @@ class Graph:
 
         frame_ids_to_timestamps = data_set.frame_ids_to_timestamps
         pose_matrices = data_set.pose_matrices
+        if ntsba:
+            pose_matrices = data_set.pose_estimate_matrices
+
         odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
         # Commented out: a potential filter to apply to the tag detections (simply uncommenting would not do
@@ -738,6 +742,8 @@ class Graph:
             tag_orientation_variances = data_set.tag_orientation_variances
 
         tag_edge_measurements_matrix = data_set.tag_edge_measurements_matrix
+        if ntsba:
+            tag_edge_measurements_matrix = data_set.tag_edge_measurements_estimate_matrix
         tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 

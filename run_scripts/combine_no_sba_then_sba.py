@@ -212,10 +212,13 @@ if __name__ == "__main__":
 
     if args.ntsba:
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=args.sba, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
-                              num_processes=args.np)
+                              sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              num_processes=args.np, ntsba=False)
+        ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
+                              sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              num_processes=args.np, ntsba=True)
 
     else:
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=args.sba, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
-                              num_processes=args.np)
+                              num_processes=args.np, ntsba=False)

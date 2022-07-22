@@ -81,7 +81,7 @@ def make_parser() -> argparse.ArgumentParser:
 
 
 # noinspection DuplicatedCode
-def validate_pseudo_gt_metric():
+def validate_pseudo_gt_metric(ntsba: bool = False):
     
     # Acquire the data set from which the generated maps are parsed
     matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
@@ -133,7 +133,8 @@ def validate_pseudo_gt_metric():
     for oconfig in oconfig_list:
         for mi, gt_data_set in mi_and_gt_data_set_list:
             generate_idx += 1
-            oresult = optimize_graph(graph=Graph.as_graph(data_set=UGDataSet.parse_obj(mi.map_dct)), oconfig=oconfig)
+            oresult = optimize_graph(graph=Graph.as_graph(data_set=UGDataSet.parse_obj(mi.map_dct), ntsba=ntsba),
+                                     oconfig=oconfig)
             gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
                 optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
                 ground_truth_tags=gt_data_set)
@@ -143,7 +144,7 @@ def validate_pseudo_gt_metric():
             oresult.gt_per_anchor_tag_opt = gt_per_anchor
 
             osg_pair_result: OSGPairResult = holistic_optimize(
-                map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
+                map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True, ntsba=ntsba)
             results.append((oconfig, oresult, osg_pair_result))
             print(f"results are: {results}")
             print(f"Completed optimization {generate_idx + 1}/{total_num_optimizations}")
