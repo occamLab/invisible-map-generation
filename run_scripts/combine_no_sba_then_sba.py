@@ -237,7 +237,7 @@ if __name__ == "__main__":
             for tag_estimate in new_tag_estimates:
                 temp_tag_dct = {}
                 temp_tag_dct["tag_id"] = int(tag_estimate[-1])
-                temp_tag_dct["tag_pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten())
+                temp_tag_dct["tag_pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten('F'))
                 new_tag_estimates_dcts.append([temp_tag_dct])
 
             # Edit odom estimates
@@ -245,7 +245,7 @@ if __name__ == "__main__":
             for odom_estimate in new_odom_estimates:
                 temp_odom_dct = {}
                 temp_odom_dct["id"] = int(odom_estimate[8])
-                temp_odom_dct["pose"] = list(transform_vector_to_matrix(odom_estimate[:-2]).flatten())
+                temp_odom_dct["pose"] = list(transform_vector_to_matrix(odom_estimate[:-2]).flatten('F'))
                 new_odom_estimates_dcts.append([temp_odom_dct])
 
             # Check if the SemiProcessedMap directory exists and create it if it doesn't
