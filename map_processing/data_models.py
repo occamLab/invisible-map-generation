@@ -592,17 +592,34 @@ class GenerateParams(BaseModel):
         # TODO: there are more efficient ways to do this, but this works for now
         return self.json().__hash__()
 
+
 class UGEstTagDatum(BaseModel):
     """
     """
     tag_id: int
     tag_pose: list
 
+
 class UGEstPoseDatum(BaseModel):
     """
     """
+    pose: conlist(Union[float, int], min_items=16, max_items=16)
+    """
+    """
+    timestamp: Optional[float]
+    planes: Optional[List] = []
     id: int
-    pose: list
+
+    @property
+    def pose_as_matrix(self) -> np.ndarray:
+        return np.reshape(np.array(self.pose), (4, 4), order="F")
+
+    @property
+    def position(self) -> np.ndarray:
+        return self.pose_as_matrix[:3, 3]
+
+    def __repr__(self):
+        return f"<{UGPoseDatum.__name__} id={self.id}> position(x,y,z)={tuple(self.position)}"
 
 
 class UGDataSet(BaseModel):
@@ -621,7 +638,7 @@ class UGDataSet(BaseModel):
 
     # # For times where optimized map is passed in again
     tag_estimates: Optional[List[List[UGEstTagDatum]]] = []
-    odom_estimates: Optional[List[List[UGEstPoseDatum]]] = None
+    odom_estimates: Optional[List[List[UGPoseDatum]]] = None
 
     # TODO: Add documentation for the following properties
 
@@ -654,7 +671,7 @@ class UGDataSet(BaseModel):
 
     @property
     def frame_ids_to_timestamps_estimate(self) -> Dict[int, float]:
-        return {pose.id: pose.timestamp for pose in self.odom_estimates}
+        return {pose.id: pose.timestamp for pose in self.odom_estimates[0]}
 
     @property
     def pose_matrices(self) -> np.ndarray:
