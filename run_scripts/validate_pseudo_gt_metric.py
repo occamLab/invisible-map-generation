@@ -84,7 +84,7 @@ def make_parser() -> argparse.ArgumentParser:
 def validate_pseudo_gt_metric(ntsba: bool = False):
     
     # Acquire the data set from which the generated maps are parsed
-    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
+    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_directory=1)
     pdb.set_trace()
     # Making sure there's exactly one map with that name
     if len(matching_maps) == 0:

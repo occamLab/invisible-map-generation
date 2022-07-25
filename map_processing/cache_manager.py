@@ -80,6 +80,7 @@ class CacheManagerSingleton:
     }
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
+    SEMI_PROCESSED_MAPS_PARENT: str = "SemiProcessedMap"
     PROCESSED_UPLOAD_TO: str = "TestProcessed"
     SWEEP_PROCESSED_UPLOAD_TO: str = "SweepProcessed"
     GROUND_TRUTH_PARENT: str = "ground_truth"
@@ -262,12 +263,13 @@ class CacheManagerSingleton:
         map_name = CacheManagerSingleton._read_cache_directory(os.path.basename(map_json_blob_name))
 
         last_folder = map_json_path.split('/')[-2]
+
         if last_folder == CacheManagerSingleton.UNPROCESSED_MAPS_PARENT:
             return MapInfo(map_name, map_json_blob_name, map_dct)
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
 
     @staticmethod
-    def find_maps(pattern: str, search_only_unprocessed: bool = True, paths: bool = False) -> Set[MapInfo]:
+    def find_maps(pattern: str, search_directory: int = 0, paths: bool = False) -> Set[MapInfo]:
         """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
         directory.
 
@@ -276,7 +278,8 @@ class CacheManagerSingleton:
 
         Args:
             pattern: Pattern to match map file paths in any subdirectory of the cache to.
-            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
+            search_only_unprocessed: 0: search only unprocessed, 1 search only SemiProcessedMap, 2 search all
+            Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
              class attribute.
 
         Returns:
@@ -287,7 +290,7 @@ class CacheManagerSingleton:
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH, os.path.join(
-                    CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_only_unprocessed else "", "**", pattern
+                    CacheManagerSingleton.UNPROCESSED_MAPS_PARENT if search_directory == 0 else CacheManagerSingleton.SEMI_PROCESSED_MAPS_PARENT if search_directory == 1 else "", "**", pattern
                 )
             ),
             recursive=recursive

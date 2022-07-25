@@ -221,7 +221,7 @@ if __name__ == "__main__":
 
         gg.export_to_map_processing_cache()
     elif args.p == "d":  # d specifies a data set-based path, so get a CacheManagerSingleton instance ready
-        matching_maps = CacheManagerSingleton.find_maps(args.d_p, search_only_unprocessed=True)
+        matching_maps = CacheManagerSingleton.find_maps(args.d_p, search_directory=0)
         if len(matching_maps) == 0:
             print(f"No matches for {args.d_p} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
             exit(0)

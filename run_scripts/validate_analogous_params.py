@@ -110,7 +110,7 @@ def validate_analogous_params(
 # noinspection DuplicatedCode
 if __name__ == "__main__":
     # Acquire the data set from which the generated maps are parsed
-    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
+    matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_directory=1)
     if len(matching_maps) == 0:
         print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
         exit(0)

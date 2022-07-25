@@ -70,9 +70,9 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
     Returns:
 
     """
-    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
+    matching_maps = cms.find_maps(map_pattern, search_directory=0)
     if ntsba:
-        matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=False)
+        matching_maps = cms.find_maps(map_pattern, search_directory=1)
 
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
@@ -80,7 +80,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
 
     # Remove tag observations that are bad
     if remove_bad_tag:
-        this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
+        this_path = cms.find_maps(map_pattern, search_directory=0, paths=True)
         sba.throw_out_bad_tags(this_path[0])
 
     opt_results = []
@@ -103,6 +103,7 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
         fixed_vertices = set()
         for tag_type in to_fix:
             fixed_vertices.add(VertexType(tag_type))
+
         opt_result = holistic_optimize(
             map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
             fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
