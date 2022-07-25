@@ -187,6 +187,7 @@ def make_parser() -> argparse.ArgumentParser:
     )
     return p
 
+
 if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
@@ -199,6 +200,7 @@ if __name__ == "__main__":
         print("No SBA Baseline must be run with SBA (pso 0) and a parameter sweep.")
         exit(-1)
 
+    # Set up CacheManagerSingleton
     env_variable = os.environ.get('GOOGLE_APPLICATION_CREDENTIALS')
     if env_variable is None:
         cms = CacheManagerSingleton(firebase_creds=None, max_listen_wait=0)
@@ -210,14 +212,19 @@ if __name__ == "__main__":
         cms.download_all_maps()
         exit(0)
 
+    # Configure to pass into find optimal map
     map_pattern = args.p if args.p else ""
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
 
     if args.ntsba:
-        ntsba_oresults = ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
-                              num_processes=args.np, ntsba=False)
+        """ 
+        NTSBA (No SBA then SBA) is a way to run the optimizing first on a normal 
+        """
+        #TODO: ADD THIS DESCRIPTION
+        ntsba_oresults = ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t,
+                                               sweep=args.s, sba=1, visualize=False, map_pattern=map_pattern,
+                                               sbea=args.sbea, compare=args.F, num_processes=args.np, ntsba=False)
 
         # Edit json to match pre-processed estimate pattern
         for oresult in ntsba_oresults:
@@ -251,7 +258,7 @@ if __name__ == "__main__":
 
         # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=1, visualize=False, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              sba=1, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=True)
 
     else:
