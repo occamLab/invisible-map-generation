@@ -620,8 +620,8 @@ class UGDataSet(BaseModel):
     generated_from: Optional[GenerateParams] = None
 
     # # For times where optimized map is passed in again
-    # tag_estimates: Optional[List[List[UGEstTagDatum]]] = []
-    # odom_estimates: Optional[List[UGEstPoseDatum]] = None
+    tag_estimates: Optional[List[List[UGEstTagDatum]]] = []
+    odom_estimates: Optional[List[List[UGEstPoseDatum]]] = None
 
     # TODO: Add documentation for the following properties
 
@@ -658,7 +658,7 @@ class UGDataSet(BaseModel):
 
     @property
     def pose_estimate_matrices(self) -> np.ndarray:
-        return np.array([pose_datum.pose for pose_datum in self.pose_estimates]).reshape((-1, 4, 4), order="F")
+        return np.array([pose_datum[0].pose for pose_datum in self.odom_estimates]).reshape((-1, 4, 4), order="F")
 
     @property
     def poses_by_pose_ids(self) -> Dict[int, np.ndarray]:

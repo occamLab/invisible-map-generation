@@ -248,6 +248,10 @@ if __name__ == "__main__":
                 temp_odom_dct["pose"] = list(transform_vector_to_matrix(odom_estimate[:-2]).flatten())
                 new_odom_estimates_dcts.append([temp_odom_dct])
 
+            # Check if the SemiProcessedMap directory exists and create it if it doesn't
+            if not os.path.exists(".cache/SemiProcessedMap"):
+                os.mkdir(".cache/SemiProcessedMap")
+
             # Write data to json            
             semi_processed_map_dct["tag_estimates"] = sorted(new_tag_estimates_dcts, key=lambda x: x[0]["tag_id"])
             semi_processed_map_dct["odom_estimates"] = new_odom_estimates_dcts
@@ -255,7 +259,7 @@ if __name__ == "__main__":
                 json.dump(semi_processed_map_dct, write_file, indent=2, sort_keys=True)
 
         map_pattern = "semi_processed_" + map_pattern.split("*")[0] + "*"
-
+        
         # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
                               sba=1, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
