@@ -237,7 +237,7 @@ if __name__ == "__main__":
             for tag_estimate in new_tag_estimates:
                 temp_tag_dct = {}
                 temp_tag_dct["tag_id"] = int(tag_estimate[-1])
-                temp_tag_dct["tag_pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten('F'))
+                temp_tag_dct["tag_pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten())
                 new_tag_estimates_dcts.append([temp_tag_dct])
 
             # Edit odom estimates
