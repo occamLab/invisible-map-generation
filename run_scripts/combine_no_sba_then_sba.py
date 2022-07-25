@@ -229,9 +229,9 @@ if __name__ == "__main__":
             new_tag_estimates_dcts = []
             for tag_estimate in new_tag_estimates:
                 temp_tag_dct = {}
-                temp_tag_dct["id"] = int(tag_estimate[-1])
-                temp_tag_dct["pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten())
-                new_tag_estimates_dcts.append(temp_tag_dct)
+                temp_tag_dct["tag_id"] = int(tag_estimate[-1])
+                temp_tag_dct["tag_pose"] = list(transform_vector_to_matrix(tag_estimate[:-1]).flatten())
+                new_tag_estimates_dcts.append([temp_tag_dct])
 
             # Edit odom estimates
             new_odom_estimates_dcts = []
@@ -239,15 +239,15 @@ if __name__ == "__main__":
                 temp_odom_dct = {}
                 temp_odom_dct["id"] = int(odom_estimate[8])
                 temp_odom_dct["pose"] = list(transform_vector_to_matrix(odom_estimate[:-2]).flatten())
-                new_odom_estimates_dcts.append(temp_odom_dct)
+                new_odom_estimates_dcts.append([temp_odom_dct])
 
-            # Write data to json
-            semi_processed_map_dct["tag_estimates"] = new_tag_estimates_dcts
+            # Write data to json            
+            semi_processed_map_dct["tag_estimates"] = sorted(new_tag_estimates_dcts, key=lambda x: x[0]["tag_id"])
             semi_processed_map_dct["odom_estimates"] = new_odom_estimates_dcts
-            with open(f".cache/SemiProcessedMap/{oresult[1].map_name}_semi_processed.json", 'w') as write_file:
+            with open(f".cache/SemiProcessedMap/semi_processed_{oresult[1].map_name}.json", 'w') as write_file:
                 json.dump(semi_processed_map_dct, write_file, indent=2, sort_keys=True)
 
-        map_pattern = map_pattern + "_semi_process"
+        map_pattern = "semi_processed_" + map_pattern.split("*")[0] + "*"
 
         # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,

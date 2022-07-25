@@ -21,6 +21,7 @@ Notes:
 
 import itertools
 from enum import Enum
+import pdb
 from typing import Union, Optional, Dict, List, Tuple, Any
 
 import numpy as np
@@ -249,8 +250,8 @@ class UGPoseDatum(BaseModel):
     matrix. For more information on Fortran-like indexing from the numpy documentation: "...means to read / write the 
     elements using Fortran-like index order, with the first index changing fastest, and the last index changing slowest. 
     """
-    timestamp: float
-    planes: List = []
+    timestamp: Optional[float]
+    planes: Optional[List] = []
     id: int
 
     @property
@@ -275,16 +276,16 @@ class UGTagDatum(BaseModel):
     left, top left, top right.
     """
     tag_id: int
-    pose_id: int
-    camera_intrinsics: conlist(Union[float, int], min_items=4, max_items=4)
+    pose_id: Optional[int]
+    camera_intrinsics: Optional[conlist(Union[float, int], min_items=4, max_items=4)]
     """
     Camera intrinsics in the order of: fx, fy, cx, cy
     """
-    timestamp: float
+    timestamp: Optional[float]
     tag_pose: conlist(Union[float, int], min_items=16, max_items=16)
-    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [0, ] * 3
-    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [0, ] * 4
-    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = list(np.eye(7).flatten())
+    tag_position_variance: Optional[conlist(Union[float, int], min_items=3, max_items=3)] = [0, ] * 3
+    tag_orientation_variance: Optional[conlist(Union[float, int], min_items=4, max_items=4)] = [0, ] * 4
+    joint_covar: Optional[conlist(Union[float, int], min_items=49, max_items=49)] = list(np.eye(7).flatten())
 
     @property
     def tag_pose_as_matrix(self) -> np.ndarray:
@@ -591,6 +592,18 @@ class GenerateParams(BaseModel):
         # TODO: there are more efficient ways to do this, but this works for now
         return self.json().__hash__()
 
+class UGEstTagDatum(BaseModel):
+    """
+    """
+    tag_id: int
+    tag_pose: list
+
+class UGEstPoseDatum(BaseModel):
+    """
+    """
+    id: int
+    pose: list
+
 
 class UGDataSet(BaseModel):
     """Represents an unprocessed graph dataset.
@@ -606,9 +619,9 @@ class UGDataSet(BaseModel):
     tag_data: List[List[UGTagDatum]] = []
     generated_from: Optional[GenerateParams] = None
 
-    # For times where optimized map is passed in again
-    tag_estimates: Optional[List[List[UGTagDatum]]] = []
-    pose_estimates: Optional[List[UGPoseDatum]] = None
+    # # For times where optimized map is passed in again
+    # tag_estimates: Optional[List[List[UGEstTagDatum]]] = []
+    # odom_estimates: Optional[List[UGEstPoseDatum]] = None
 
     # TODO: Add documentation for the following properties
 
