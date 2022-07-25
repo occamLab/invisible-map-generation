@@ -723,6 +723,7 @@ class Graph:
         pose_matrices = data_set.pose_matrices
         if ntsba:
             pose_matrices = data_set.pose_estimate_matrices
+            frame_ids_to_timestamps = data_set.frame_ids_to_timestamps_estimate
 
         odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
@@ -743,8 +744,10 @@ class Graph:
             tag_orientation_variances = data_set.tag_orientation_variances
 
         tag_edge_measurements_matrix = data_set.tag_edge_measurements_matrix
+        print(tag_edge_measurements_matrix.shape)
         if ntsba:
             tag_edge_measurements_matrix = data_set.tag_edge_measurements_estimate_matrix
+            print(tag_edge_measurements_matrix.shape)
         tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 

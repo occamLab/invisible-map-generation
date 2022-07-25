@@ -653,6 +653,10 @@ class UGDataSet(BaseModel):
         return {pose.id: pose.timestamp for pose in self.pose_data}
 
     @property
+    def frame_ids_to_timestamps_estimate(self) -> Dict[int, float]:
+        return {pose.id: pose.timestamp for pose in self.odom_estimates}
+
+    @property
     def pose_matrices(self) -> np.ndarray:
         return np.array([pose_datum.pose for pose_datum in self.pose_data]).reshape((-1, 4, 4), order="F")
 
