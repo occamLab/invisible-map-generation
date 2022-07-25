@@ -723,8 +723,8 @@ class Graph:
         pose_matrices = data_set.pose_matrices
         if ntsba:
             pose_matrices = data_set.pose_estimate_matrices
-            frame_ids_to_timestamps = data_set.frame_ids_to_timestamps_estimate
-
+            # frame_ids_to_timestamps = data_set.frame_ids_to_timestamps_estimate
+        print("I am Here")
         odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
         # Commented out: a potential filter to apply to the tag detections (simply uncommenting would not do
@@ -837,7 +837,7 @@ class Graph:
             tag_transform_estimates = defaultdict(lambda: [])
         else:
             vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
-
+        pdb.set_trace()
         for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
             vertices[current_odom_vertex_uid] = Vertex(
@@ -913,6 +913,7 @@ class Graph:
                 num_tag_edges += 1
                 edge_counter += 1
 
+
             # Connect odom to waypoint vertex
             for waypoint_vertex_id, waypoint_index in waypoint_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
                 if waypoint_vertex_id not in counted_waypoint_vertex_ids:
@@ -941,6 +942,7 @@ class Graph:
                     start_end=(vertices[current_odom_vertex_uid], vertices[waypoint_vertex_id]))
                 edge_counter += 1
 
+
             # Connect odometry nodes
             if previous_vertex_uid:
                 if use_sba:
@@ -956,6 +958,7 @@ class Graph:
                                            measurement=measurement_arg, start_end=(vertices[previous_vertex_uid],
                                                                                    vertices[current_odom_vertex_uid]))
                 edge_counter += 1
+
 
             # Connect gravity edge to odometry vertex
             # (use the second column of the inverted rotation matrix)
@@ -981,6 +984,7 @@ class Graph:
         resulting_graph = Graph(edges, is_sba=use_sba, use_huber=False, huber_delta=None)
 
         # Create file with sba optimized pixel corners per tag
+
         return resulting_graph
 
     @staticmethod

@@ -262,7 +262,7 @@ if __name__ == "__main__":
         
         # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
-                              sba=1, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
+                              sba=0, visualize=args.v, map_pattern=map_pattern, sbea=args.sbea, compare=args.F,
                               num_processes=args.np, ntsba=True)
 
     else:
