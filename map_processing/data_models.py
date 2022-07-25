@@ -23,6 +23,7 @@ import itertools
 from enum import Enum
 import pdb
 from typing import Union, Optional, Dict, List, Tuple, Any
+from xml.sax.handler import property_declaration_handler
 
 import numpy as np
 from g2o import SE3Quat
@@ -643,6 +644,22 @@ class UGDataSet(BaseModel):
     # TODO: Add documentation for the following properties
 
     @property
+    def tag_detection_list(self):
+        tag_odom_id_pairs = sorted([(tag_detection[0].pose_id, tag_detection[0].tag_id) for tag_detection in self.tag_data], key=lambda x: x[0])
+        return [tag_odom_pair[1] for tag_odom_pair in tag_odom_id_pairs]
+
+    @property
+    def repeat_tag_data_by_odom_node(self):
+        repeat_tag_pose = []
+        for tag_id in self.tag_detection_list:
+            repeat_tag_pose.append(self.tag_estimates[self.tag_estimate_index_map[tag_id]])
+        return repeat_tag_pose
+
+    @property
+    def tag_estimate_index_map(self):
+        return {tag_estimate[0].tag_id:index for index, tag_estimate in enumerate(self.tag_estimates)}
+
+    @property
     def num_tags(self) -> int:
         return len(np.unique(self.tag_ids))
 
@@ -701,7 +718,7 @@ class UGDataSet(BaseModel):
     def tag_edge_measurements_estimate_matrix(self) -> np.ndarray:
         return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
             np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
-                                                      self.tag_estimates]).reshape([-1, 4, 4], order="C"))
+                                                      self.repeat_tag_data_by_odom_node]).reshape([-1, 4, 4], order="C"))
 
     @property
     def timestamps(self) -> np.ndarray:

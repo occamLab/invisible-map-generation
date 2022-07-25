@@ -16,6 +16,7 @@ Notes:
   for further processing.
 """
 
+import json
 import os
 import pdb
 import sys
@@ -73,6 +74,14 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
     matching_maps = cms.find_maps(map_pattern, search_directory=0)
     if ntsba:
         matching_maps = cms.find_maps(map_pattern, search_directory=1)
+        paths = cms.find_maps(map_pattern, search_directory=1, paths=True)[0].split('/')[-1]
+        with open('.cache/ground_truth/ground_truth_mapping.json') as json_file:
+            gt_map = json.load(json_file)
+            if paths[:-5] not in gt_map["mac_1_2"]:
+                gt_map["mac_1_2"].append(paths[:-5])
+                os.remove('.cache/ground_truth/ground_truth_mapping.json')
+                with open('.cache/ground_truth/ground_truth_mapping.json', 'w') as json_file:
+                    json.dump(gt_map, json_file, indent=2)
 
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
