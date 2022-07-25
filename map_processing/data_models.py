@@ -644,6 +644,10 @@ class UGDataSet(BaseModel):
     # TODO: Add documentation for the following properties
 
     @property
+    def camera_pose_by_odom_node(self):
+        return {odom_pose.id:np.reshape(odom_pose.pose, [4,4]).T for odom_pose in self.pose_data}
+
+    @property
     def tag_detection_list(self):
         tag_odom_id_pairs = sorted([(tag_detection[0].pose_id, tag_detection[0].tag_id) for tag_detection in self.tag_data], key=lambda x: x[0])
         return [tag_odom_pair[1] for tag_odom_pair in tag_odom_id_pairs]
