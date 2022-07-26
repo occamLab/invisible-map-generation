@@ -137,13 +137,13 @@ def holistic_optimize(
         # Find metrics for the two OResults to be compared
         for oresult in [osg_pair_result.sg1_oresult, osg_pair_result.sg2_oresult]:
             if gt_data_as_dict_of_se3_arrays is not None:
-                gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = ground_truth_metric_with_tag_id_intersection(
+                gt_metric_pre, max_diff_pre, max_diff_idx_pre, min_diff_pre, min_diff_idx_pre, gt_per_anchor_pre = ground_truth_metric_with_tag_id_intersection(
                     optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
                     ground_truth_tags=gt_data_as_dict_of_se3_arrays)
                 oresult.gt_metric_pre = gt_metric_pre
                 oresult.max_pre = max_diff_pre
                 oresult.max_idx_pre = max_diff_idx_pre
-                gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
+                gt_metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
                     optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
                     ground_truth_tags=gt_data_as_dict_of_se3_arrays)
                 oresult.gt_metric_opt = gt_metric
@@ -165,12 +165,12 @@ def holistic_optimize(
         intersection = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays)
-        gt_metric_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_pre = intersection
+        gt_metric_pre, max_diff_pre, max_diff_idx_pre, min_diff_pre, min_diff_idx_pre, gt_per_anchor_pre = intersection
         opt_result.gt_metric_pre = gt_metric_pre
         opt_result.max_pre = max_diff_pre
         opt_result.max_idx_pre = max_diff_idx_pre
 
-        gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
+        gt_metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays)
         opt_result.gt_metric_opt = gt_metric
@@ -332,7 +332,7 @@ def optimize_and_get_ground_truth_error_metric(
     """Light wrapper for the optimize_graph instance method and ground_truth_metric_with_tag_id_intersection method.
     """
     opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize)
-    gt_metric, max_diff, max_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
+    gt_metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
         ground_truth_tags=ground_truth_tags)
     opt_result.gt_metric_opt = gt_metric
@@ -359,7 +359,8 @@ def tag_pose_array_with_metadata_to_map(tag_array_with_metadata: np.ndarray) -> 
 
 
 def ground_truth_metric_with_tag_id_intersection(optimized_tags: Dict[int, np.ndarray],
-                                                 ground_truth_tags: Dict[int, np.ndarray]) -> Tuple[float, float, int, Dict[int, float]]:
+                                                 ground_truth_tags: Dict[int, np.ndarray]) \
+        -> Tuple[float, float, int, float, int, Dict[int, float]]:
     """Use the intersection of the two provided tag dictionaries as input to the `graph_opt_utils.ground_truth_metric`
     function. Includes handling of the SBA case in which the optimized tags' estimates need to be translated and
     then inverted.
@@ -381,9 +382,10 @@ def ground_truth_metric_with_tag_id_intersection(optimized_tags: Dict[int, np.nd
         gt_tags_poses_intersection[i] = ground_truth_tags[tag_id]
         tag_ids.append(tag_id)
 
-    metric, max_diff, max_diff_idx, gt_per_anchor_tag = graph_opt_utils.ground_truth_metric(
+    metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor_tag = graph_opt_utils.ground_truth_metric(
         tag_ids, optimized_tag_verts=optimized_tags_poses_intersection, ground_truth_tags=gt_tags_poses_intersection)
-    return metric, max_diff, max_diff_idx, gt_per_anchor_tag
+
+    return metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor_tag
 
 
 def subgraph_pair_optimize(subgraphs: Union[Tuple[Graph, Graph], Dict], oconfig_1: OConfig,
