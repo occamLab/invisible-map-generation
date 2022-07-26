@@ -3,6 +3,8 @@ Utility functions for graph optimization.
 """
 
 import math
+import pdb
+
 from typing import Union, List, Optional, Set, Type, Tuple
 
 import g2o
@@ -207,6 +209,7 @@ def sum_optimizer_edges_chi2(
 
     total_chi2 = 0.0
     total_alpha = 0.0
+
     for edge in optimizer.edges():
         if len(edge_type_filter) == 0 or type(edge) in edge_type_filter:
             fitness_metrics = get_chi2_of_edge(edge, edge.vertices()[0])

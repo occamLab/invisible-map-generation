@@ -17,7 +17,6 @@ VISUALIZE = False
 FIX_IT = False
 
 
-
 def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     """
     Camera intrisics allow us to convert 3D information into a 2D space

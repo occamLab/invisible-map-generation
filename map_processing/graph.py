@@ -27,6 +27,7 @@ from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, se3_quat_average, \
     transform_matrix_to_vector, make_sba_tag_arrays, pose_to_isometry
 
+CAMERA_POSE_FLIPPER = np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
 class Graph:
     """A class for the graph encoding a map with class methods to optimize it.
@@ -744,10 +745,15 @@ class Graph:
             tag_orientation_variances = data_set.tag_orientation_variances
 
         tag_edge_measurements_matrix = data_set.tag_edge_measurements_matrix
-        print(tag_edge_measurements_matrix.shape)
         if ntsba:
             tag_edge_measurements_matrix = data_set.tag_edge_measurements_estimate_matrix
-            print(tag_edge_measurements_matrix.shape)
+            for i in range(len(tag_edge_measurements_matrix)):
+                tag_edge_array = tag_edge_measurements_matrix[i]
+                tag_edge_array_odom_node = pose_ids[i][0]
+                c_pose = np.linalg.inv(data_set.camera_pose_by_odom_node[tag_edge_array_odom_node])
+                tag_edge_measurements_in_camera = (CAMERA_POSE_FLIPPER@c_pose)@tag_edge_array
+                tag_edge_measurements_matrix[i] = tag_edge_measurements_in_camera
+
         tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 
@@ -837,7 +843,7 @@ class Graph:
             tag_transform_estimates = defaultdict(lambda: [])
         else:
             vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
-        pdb.set_trace()
+
         for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
             vertices[current_odom_vertex_uid] = Vertex(
@@ -847,7 +853,6 @@ class Graph:
                 meta_data={'pose_id': odom_frame, 'timestamp': frame_ids_to_timestamps[odom_frame]})
             first_odom_processed = True
             vertex_counter += 1
-
             # Connect odom to tag vertex
             for tag_vertex_id, tag_index in tag_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
                 if use_sba:
