@@ -1,0 +1,17 @@
+{
+    "209_to_occam":
+    {
+        "OBLIQUE_DATA_PATH" : "datasets/oblique_209_occam.json",
+        "STRAIGHT_ON_DATA_PATH": "datasets/straight_209_occam.json"
+    },
+    "floor_2_left":
+    {
+        "OBLIQUE_DATA_PATH" : "datasets/floor_2_obleft_cleaned.json",
+        "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
+    },
+    "floor_2_right":
+    {
+        "OBLIQUE_DATA_PATH" : "datasets/floor_2_obright_cleaned.json",
+        "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
+    }
+}

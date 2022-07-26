@@ -34,7 +34,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-import sba_evaluator as sba
+from map_processing import sba_evaluator as sba
 
 SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),

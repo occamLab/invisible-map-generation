@@ -1,0 +1,165 @@
+TAG_ID: 300
+NUMBER OF TIMES OBSERVED: 2 at [6, 54]
+
+RMS ERROR:
+error for observation 54 is 2095.128746262457 pixels
+
+TAG_ID: 301
+NUMBER OF TIMES OBSERVED: 4 at [5, 7, 53, 55]
+
+RMS ERROR:
+error for observation 7 is 47.15716641213561 pixels
+error for observation 53 is 4742.775350418633 pixels
+error for observation 55 is 3392.1195780779076 pixels
+
+
+TAG_ID: 302
+NUMBER OF TIMES OBSERVED: 4 at [4, 8, 51, 56]
+
+RMS ERROR:
+error for observation 8 is 108.76408949471991 pixels
+error for observation 51 is 1359.131706543437 pixels
+error for observation 56 is 4124.012988058126 pixels
+
+
+TAG_ID: 303
+NUMBER OF TIMES OBSERVED: 3 at [3, 9, 52]
+
+RMS ERROR:
+error for observation 9 is 127.46905617910002 pixels
+error for observation 52 is 3087.072209204061 pixels
+
+
+TAG_ID: 304
+NUMBER OF TIMES OBSERVED: 4 at [2, 10, 11, 50]
+
+RMS ERROR:
+error for observation 10 is 712.1968951853081 pixels
+error for observation 11 is 733.7021343240642 pixels
+error for observation 50 is 1490.1789148504 pixels
+
+
+TAG_ID: 305
+NUMBER OF TIMES OBSERVED: 4 at [1, 12, 49, 57]
+
+RMS ERROR:
+error for observation 12 is 129.4149279966383 pixels
+error for observation 49 is 46171.10928698133 pixels
+error for observation 57 is 1932.9310871620523 pixels
+
+
+TAG_ID: 306
+NUMBER OF TIMES OBSERVED: 4 at [0, 13, 48, 58]
+
+RMS ERROR:
+error for observation 13 is 124.94853022948972 pixels
+error for observation 48 is 10669.339843996633 pixels
+error for observation 58 is 2515.631881252295 pixels
+
+
+TAG_ID: 307
+NUMBER OF TIMES OBSERVED: 2 at [14, 47]
+
+RMS ERROR:
+error for observation 47 is 666.0918800281534 pixels
+
+
+TAG_ID: 308
+NUMBER OF TIMES OBSERVED: 2 at [15, 46]
+
+RMS ERROR:
+error for observation 46 is 139.39563926027685 pixels
+
+
+TAG_ID: 309
+NUMBER OF TIMES OBSERVED: 2 at [16, 45]
+
+RMS ERROR:
+error for observation 45 is 484.82884511095517 pixels
+
+
+TAG_ID: 310
+NUMBER OF TIMES OBSERVED: 3 at [17, 18, 44]
+
+RMS ERROR:
+error for observation 18 is 18.727958988157667 pixels
+error for observation 44 is 293.6834922321656 pixels
+
+
+TAG_ID: 311
+NUMBER OF TIMES OBSERVED: 2 at [19, 43]
+
+RMS ERROR:
+error for observation 43 is 1037.6821782382813 pixels
+
+
+TAG_ID: 312
+NUMBER OF TIMES OBSERVED: 2 at [21, 41]
+
+RMS ERROR:
+error for observation 41 is 170.56338163294473 pixels
+
+
+TAG_ID: 314
+NUMBER OF TIMES OBSERVED: 2 at [22, 40]
+
+RMS ERROR:
+error for observation 40 is 864.0058428525135 pixels
+
+
+TAG_ID: 315
+NUMBER OF TIMES OBSERVED: 2 at [24, 39]
+
+RMS ERROR:
+error for observation 39 is 465.50742850598556 pixels
+
+
+TAG_ID: 316
+NUMBER OF TIMES OBSERVED: 2 at [20, 42]
+
+RMS ERROR:
+error for observation 42 is 807.3304438046648 pixels
+
+
+TAG_ID: 317
+NUMBER OF TIMES OBSERVED: 2 at [25, 38]
+
+RMS ERROR:
+error for observation 38 is 15997.146191615571 pixels
+
+
+TAG_ID: 318
+NUMBER OF TIMES OBSERVED: 2 at [26, 37]
+
+RMS ERROR:
+error for observation 37 is 1216.6812538844279 pixels
+
+
+TAG_ID: 319
+NUMBER OF TIMES OBSERVED: 2 at [27, 36]
+
+RMS ERROR:
+error for observation 36 is 836.4640756769845 pixels
+
+
+TAG_ID: 321
+NUMBER OF TIMES OBSERVED: 2 at [28, 35]
+
+RMS ERROR:
+error for observation 35 is 182.544216286868 pixels
+
+
+TAG_ID: 322
+NUMBER OF TIMES OBSERVED: 2 at [30, 34]
+
+RMS ERROR:
+error for observation 34 is 1280.9983522447594 pixels
+
+
+TAG_ID: 323
+NUMBER OF TIMES OBSERVED: 2 at [31, 33]
+
+RMS ERROR:
+error for observation 33 is 64.42084694833363 pixels
+
+mean error is 3179.092835880583
