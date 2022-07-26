@@ -159,7 +159,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     
-    processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt)
+    processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt, calculate_intersections=upload_best)
 
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)

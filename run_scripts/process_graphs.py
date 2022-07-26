@@ -35,7 +35,7 @@ def for_each_map_info(map_info: MapInfo) -> None:
     optimization_config = OConfig(
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP])
     opt_chi2, opt_result, _ = optimize_graph(graph=graph, oconfig=optimization_config)
-    json_str = make_processed_map_json(opt_result)
+    json_str = make_processed_map_json(opt_result, calculate_intersections=True)
     cms.upload(map_info, json_str)
 
 

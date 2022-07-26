@@ -154,7 +154,7 @@ def holistic_optimize(
         return osg_pair_result
 
     opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data)
-    processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
+    processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt, calculate_intersections=upload)
 
     if verbose:
         print(f"Optimized {map_info.map_name}.\nResulting chi2 metrics:")
