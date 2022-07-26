@@ -258,7 +258,7 @@ if __name__ == "__main__":
             with open(f".cache/SemiProcessedMap/semi_processed_{oresult[1].map_name}.json", 'w') as write_file:
                 json.dump(semi_processed_map_dct, write_file, indent=2, sort_keys=True)
 
-        map_pattern = "semi_processed_" + map_pattern.split("*")[0] + "*"
+        map_pattern = "semi_processed_" + ' '.join(map_pattern.split("*")).split()[0] + "*"
         
         # Run on processed map
         ogmc.find_optimal_map(cms, args.fix, compute_inf_params, weights=args.w, remove_bad_tag=args.t, sweep=args.s,
