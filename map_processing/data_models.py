@@ -719,6 +719,18 @@ class UGDataSet(BaseModel):
                                                       self.tag_data]).reshape([-1, 4, 4], order="C"))
 
     @property
+    def tag_estimates_matrix(self):
+        return np.array([np.reshape(tag_estimate[0].tag_pose, [4,4]) for tag_estimate in self.tag_estimates])
+
+    @property
+    def extended_tag_estimates_matrix(self):
+        return np.array([np.reshape(tag_estimate[0].tag_pose, [4,4]) for tag_estimate in self.repeat_tag_data_by_odom_node])
+
+    @property
+    def camera_frame_extended_tag_estimates_matrix(self):
+        return np.array([NEGATE_Y_AND_Z_AXES@(self.camera_pose_by_odom_node[self.pose_ids[index][0]])@tag_matrix for index, tag_matrix in enumerate(self.extended_tag_estimates_matrix)])
+
+    @property
     def tag_edge_measurements_estimate_matrix(self) -> np.ndarray:
         return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
             np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in

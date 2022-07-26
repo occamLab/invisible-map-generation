@@ -745,15 +745,6 @@ class Graph:
             tag_orientation_variances = data_set.tag_orientation_variances
 
         tag_edge_measurements_matrix = data_set.tag_edge_measurements_matrix
-        if ntsba:
-            tag_edge_measurements_matrix = data_set.tag_edge_measurements_estimate_matrix
-            for i in range(len(tag_edge_measurements_matrix)):
-                tag_edge_array = tag_edge_measurements_matrix[i]
-                tag_edge_array_odom_node = pose_ids[i][0]
-                c_pose = np.linalg.inv(data_set.camera_pose_by_odom_node[tag_edge_array_odom_node])
-                tag_edge_measurements_in_camera = (CAMERA_POSE_FLIPPER@c_pose)@tag_edge_array
-                tag_edge_measurements_matrix[i] = tag_edge_measurements_in_camera
-
         tag_edge_measurements = transform_matrix_to_vector(tag_edge_measurements_matrix)
         n_pose_ids = pose_ids.shape[0]
 
