@@ -4,6 +4,7 @@
 import datetime
 import json
 import multiprocessing as mp
+import tqdm
 import os
 from copy import deepcopy
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
@@ -69,6 +70,10 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         if verbose:
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
         with mp.Pool(processes=num_processes) as pool:
+            total_task_num = len(sweep_args)
+            results_tuples = []
+            for result_tuple in tqdm.tqdm(pool.imap_unordered(_sweep_target, sweep_args), total=total_task_num):
+                results_tuples.append(result_tuple)
             results_tuples = pool.map(_sweep_target, sweep_args)
 
     results_oresults = [result[2] for result in results_tuples]
@@ -218,7 +223,7 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     oresult.max_idx_pre = max_diff_idx_pre
     oresult.max_idx_opt = max_diff_idx
 
-    if sweep_args_tuple[4]:
-        print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
+    # if sweep_args_tuple[4]:
+    #     print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
 
     return gt_result, sweep_args_tuple[3][0], oresult
