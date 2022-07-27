@@ -1,0 +1,70 @@
+{
+  "floor_2_obleft 83183896790958": {
+    "Min_GT_Param_Index": 94.0,
+    "Min_Alpha_Param_Index": 99.0,
+    "GT_Param": "{\"lin_vel_var\": 0.01778279410038923, \"ang_vel_var\": 0.01778279410038923, \"tag_sba_var\": 10.0}",
+    "Alpha_Param": "{\"lin_vel_var\": 0.01778279410038923, \"ang_vel_var\": 10.0, \"tag_sba_var\": 10.0}",
+    "GT_GT": 7.4799728916093775,
+    "GT_GT_Delta": 5.238243296573275,
+    "Alpha_GT": 31.5734642718234,
+    "Alpha_GT_Delta": 29.3317346767873,
+    "GT_Fitness": ">        chi2_all_before: 1.7e+08\n>       alpha_all_before: 8.6e+07\n> se3_not_gravity_before: 3.2e-21\n>          psi2uv_before: 1.7e+08\n>         gravity_before: 5.7e-13\n---------------------------------\n>         chi2_all_after: 9.9e+05\n>        alpha_all_after: 4.8e+05\n>  se3_not_gravity_after: 5.7e+05\n>           psi2uv_after: 4.2e+05\n>          gravity_after: 38",
+    "Alpha_Fitness": ">        chi2_all_before: 1.7e+08\n>       alpha_all_before: 8.6e+07\n> se3_not_gravity_before: 5.7e-24\n>          psi2uv_before: 1.7e+08\n>         gravity_before: 5.7e-13\n---------------------------------\n>         chi2_all_after: 2.3e+04\n>        alpha_all_after: 6.2e+03\n>  se3_not_gravity_after: 1.9e+04\n>           psi2uv_after: 4.2e+03\n>          gravity_after: 6.3e+02",
+    "GT_Rotation": [
+      2.4090172434326877,
+      11.625485495508226,
+      2.631637258986696
+    ],
+    "Alpha_Rotation": [
+      56.77240170313476,
+      25.224343673621675,
+      62.54395191483293
+    ],
+    "GT_Max_Rotation": [
+      14.924347889762243,
+      57.82225249826887,
+      21.956348997703365
+    ],
+    "GT_Max_Rotation_Tag_ID": 316.0,
+    "Alpha_Max_Rotation": [
+      166.58792410276803,
+      60.225282173272234,
+      166.7464129603952
+    ],
+    "Alpha_Max_Rotation_Tag_ID": 303.0
+  },
+  "floor_2_obright 83932076089666": {
+    "Min_GT_Param_Index": 17.0,
+    "Min_Alpha_Param_Index": 26.0,
+    "GT_Param": "{\"lin_vel_var\": 3.1622776601683795e-05, \"ang_vel_var\": 10.0, \"tag_sba_var\": 10.0}",
+    "Alpha_Param": "{\"lin_vel_var\": 10.0, \"ang_vel_var\": 10.0, \"tag_sba_var\": 10.0}",
+    "GT_GT": 4.557427761700151,
+    "GT_GT_Delta": 2.552438509538325,
+    "Alpha_GT": 5.813303165440604,
+    "Alpha_GT_Delta": 3.808313913278778,
+    "GT_Fitness": ">        chi2_all_before: 1.4e+09\n>       alpha_all_before: 6.9e+08\n> se3_not_gravity_before: 1.9e-20\n>          psi2uv_before: 1.4e+09\n>         gravity_before: 5.3e-13\n---------------------------------\n>         chi2_all_after: 3.3e+06\n>        alpha_all_after: 1.6e+06\n>  se3_not_gravity_after: 2.8e+03\n>           psi2uv_after: 3.3e+06\n>          gravity_after: 0.00021",
+    "Alpha_Fitness": ">        chi2_all_before: 1.4e+09\n>       alpha_all_before: 6.9e+08\n> se3_not_gravity_before: 2.8e-24\n>          psi2uv_before: 1.4e+09\n>         gravity_before: 5.3e-13\n---------------------------------\n>         chi2_all_after: 2.2e+06\n>        alpha_all_after: 1.1e+06\n>  se3_not_gravity_after: 8.7e+03\n>           psi2uv_after: 2.2e+06\n>          gravity_after: 9",
+    "GT_Rotation": [
+      0.4656053419747059,
+      5.521283946922469,
+      1.1449880915606547
+    ],
+    "Alpha_Rotation": [
+      2.1544084386519784,
+      4.454368208583562,
+      5.361859532639336
+    ],
+    "GT_Max_Rotation": [
+      1.8504246325810934,
+      46.87822827771455,
+      4.911490546782374
+    ],
+    "GT_Max_Rotation_Tag_ID": 317.0,
+    "Alpha_Max_Rotation": [
+      25.015122994538526,
+      30.17888456284291,
+      60.01818807916913
+    ],
+    "Alpha_Max_Rotation_Tag_ID": 301.0
+  }
+}
