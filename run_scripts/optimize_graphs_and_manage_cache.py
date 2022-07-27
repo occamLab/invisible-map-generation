@@ -71,7 +71,6 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
     Returns:
 
     """
-    matching_maps = cms.find_maps(map_pattern, search_directory=0)
     if ntsba:
         matching_maps = cms.find_maps(map_pattern, search_directory=1)
         paths = cms.find_maps(map_pattern, search_directory=1, paths=True)[0].split('/')[-1]
@@ -82,6 +81,8 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
                 os.remove('.cache/ground_truth/ground_truth_mapping.json')
                 with open('.cache/ground_truth/ground_truth_mapping.json', 'w') as json_file:
                     json.dump(gt_map, json_file, indent=2)
+    else:
+        matching_maps = cms.find_maps(map_pattern, search_directory=0)
 
     if len(matching_maps) == 0:
         print(f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
@@ -99,32 +100,33 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
 
         # Run sweep if specified
         if sweep:
-            sweep_params(mi=map_info, ground_truth_data=gt_data,
+            sweep_result = sweep_params(mi=map_info, ground_truth_data=gt_data,
                          base_oconfig=OConfig(is_sba=sba == PrescalingOptEnum.USE_SBA.value,
                                               compute_inf_params=compute_inf_params),
                          sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
                          verbose=True, generate_plot=True, show_plot=visualize, num_processes=num_processes,
                          no_sba_baseline=False, ntsba=ntsba)
+            opt_results.append((sweep_result.min_oresult, map_info))
+        else:
+            # If no sweep, then run basic optimization
+            oconfig = OConfig(is_sba=sba == 0, weights=WEIGHTS_DICT[WeightSpecifier(weights)],
+                            scale_by_edge_amount=sbea, compute_inf_params=compute_inf_params)
+            fixed_vertices = set()
+            for tag_type in to_fix:
+                fixed_vertices.add(VertexType(tag_type))
 
-        # If no sweep, then run basic optimization
-        oconfig = OConfig(is_sba=sba == 0, weights=WEIGHTS_DICT[WeightSpecifier(weights)],
-                          scale_by_edge_amount=sbea, compute_inf_params=compute_inf_params)
-        fixed_vertices = set()
-        for tag_type in to_fix:
-            fixed_vertices.add(VertexType(tag_type))
+            opt_result = holistic_optimize(
+                map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
+                fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
+                gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None, ntsba=ntsba)
+            opt_results.append((opt_result, map_info))
+            # Get rotational metrics
+            pre_optimized_tags = opt_result.map_pre.tags
+            optimized_tags = opt_result.map_opt.tags
 
-        opt_result = holistic_optimize(
-            map_info=map_info, pso=PrescalingOptEnum(sba), oconfig=oconfig,
-            fixed_vertices=fixed_vertices, verbose=True, visualize=visualize, compare=compare, upload=upload,
-            gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data) if gt_data is not None else None, ntsba=ntsba)
-        opt_results.append((opt_result, map_info))
-        # Get rotational metrics
-        pre_optimized_tags = opt_result.map_pre.tags
-        optimized_tags = opt_result.map_opt.tags
-
-        rot_metric, max_rot_diff, _, max_rot_diff_idx= rotation_metric(pre_optimized_tags, optimized_tags)
-        print(f"Rotation metric: {rot_metric}")
-        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
+            rot_metric, max_rot_diff, _, max_rot_diff_idx= rotation_metric(pre_optimized_tags, optimized_tags)
+            print(f"Rotation metric: {rot_metric}")
+            print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
     return opt_results
 
 

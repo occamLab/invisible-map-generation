@@ -725,7 +725,6 @@ class Graph:
         if ntsba:
             pose_matrices = data_set.pose_estimate_matrices
             # frame_ids_to_timestamps = data_set.frame_ids_to_timestamps_estimate
-        print("I am Here")
         odom_vertex_estimates = transform_matrix_to_vector(pose_matrices, invert=use_sba)
 
         # Commented out: a potential filter to apply to the tag detections (simply uncommenting would not do
@@ -847,10 +846,17 @@ class Graph:
             # Connect odom to tag vertex
             for tag_vertex_id, tag_index in tag_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
                 if use_sba:
-                    current_tag_transform_estimate = \
-                        SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * \
-                        SE3Quat(tag_edge_measurements[tag_index]).inverse() * \
-                        SE3Quat(vertices[current_odom_vertex_uid].estimate)
+                    if ntsba:
+                        tag_id = list(tag_vertex_id_by_tag_id.keys())[list(tag_vertex_id_by_tag_id.values()).index(tag_vertex_id)]
+                        tag_pose = data_set.get_tag_pose_for_tag_id(tag_id)
+                        current_tag_transform_estimate = \
+                            SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * \
+                            tag_pose.inverse()
+                    else:
+                        current_tag_transform_estimate = \
+                            SE3Quat(np.hstack((true_3d_tag_center, [0, 0, 0, 1]))) * \
+                            SE3Quat(tag_edge_measurements[tag_index]).inverse() * \
+                            SE3Quat(vertices[current_odom_vertex_uid].estimate)
 
                     # keep track of estimates in case we want to average them to initialize the graph
                     tag_transform_estimates[tag_vertex_id].append(current_tag_transform_estimate)
@@ -980,7 +986,6 @@ class Graph:
         resulting_graph = Graph(edges, is_sba=use_sba, use_huber=False, huber_delta=None)
 
         # Create file with sba optimized pixel corners per tag
-
         return resulting_graph
 
     @staticmethod

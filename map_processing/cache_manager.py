@@ -261,7 +261,7 @@ class CacheManagerSingleton:
         )
         map_dct = json.loads(json_string)
         map_name = CacheManagerSingleton._read_cache_directory(os.path.basename(map_json_blob_name))
-        map_name = map_name if map_name != 'None' else map_json_blob_name.split('.')[0]
+        map_name = map_name if map_name != 'None' and map_name is not None else map_json_blob_name.split('.')[0]
         last_folder = map_json_path.split('/')[-2]
 
         if last_folder == CacheManagerSingleton.UNPROCESSED_MAPS_PARENT:

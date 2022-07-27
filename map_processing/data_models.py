@@ -600,6 +600,14 @@ class UGEstTagDatum(BaseModel):
     tag_id: int
     tag_pose: list
 
+    @property
+    def pose_vector(self):
+        return transform_matrix_to_vector(np.reshape(np.array(self.tag_pose), [4,4]))
+
+    @property
+    def se3quat(self):
+        return SE3Quat(self.pose_vector)
+
 
 class UGEstPoseDatum(BaseModel):
     """
@@ -824,6 +832,8 @@ class UGDataSet(BaseModel):
     def waypoint_frame_ids(self) -> List[int]:
         return [location_data.pose_id for location_data in self.location_data]
 
+    def get_tag_pose_for_tag_id(self, tag_id):
+        return self.tag_estimates[self.tag_estimate_index_map[tag_id]][0].se3quat
 
 class GTTagPose(BaseModel):
     tag_id: int
