@@ -32,7 +32,10 @@ def make_parser():
     """
     p = argparse.ArgumentParser(
         description="Visualize and analyze error from oblique/straight tag observations")
-
+    
+    p.add_argument(
+        "-n", help="name of the test in the config file")
+    
     p.add_argument(
         "-t", help="throw out bad tags", action = "store_true")
     
@@ -139,12 +142,10 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
         print("\nRMS ERROR:")
         for i, set_of_pixels in enumerate(all_pixels[1:]):
             errors.append(B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0])
-            print(
-                f"error for observation {tag_idxs[i+1]} is {B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0]} pixels")
+            print(f"error for observation {tag_idxs[i+1]} is {B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0]} pixels")
             # print(
             #     f"that's roughly {B.compute_RMS_error(first_detection_pose, subsequent_detection_poses[i])[0]} meters")
-        # print(
-        #     f" \n tag_pose for tag {tag_idxs[i]} is \n {first_detection_pose} \n \n tag {tag_idxs[i+1]} is \n {subsequent_detection_poses[0]}")
+        # print(f" \n tag_pose for tag {tag_idxs[i]} is \n {first_detection_pose} \n \n tag {tag_idxs[i+1]} is \n {subsequent_detection_poses[0]}")
         
     if visualize:
         B.visualizing_corner_pixel_differences(all_pixels, tag_id, "LCD")
@@ -178,8 +179,8 @@ def create_matching_tags_dict(path, visualize = False, print_info = False):
 
         seen_tags.append(tags[i][0]["tag_id"])
     # To check and make sure data looks good
-    # with open("loop_closure_comparison.json", "w") as write_file:
-    #     json.dump(matching_tags_data, write_file, indent=4, sort_keys=True, )
+    with open("loop_closure_comparison.json", "w") as write_file:
+        json.dump(matching_tags_data, write_file, indent=4, sort_keys=True, )
 
     for key in matching_tags_data:
         errors.extend(overlay_tags(matching_tags_data[key], unprocessed_map_data, key, visualize, print_info))
@@ -196,8 +197,14 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
     
+    NAME_OF_TEST = args.n.lower()
+    
+    with open("benchmarking_config.json") as config_file:
+        config = json.load(config_file)["overlay_tags"][NAME_OF_TEST]
+        print(f"your configuration: {config}")
+    
     if args.t:
-        sba.throw_out_bad_tags("../benchmarking/datasets/floor_2_obright_cleaned.json")
+        sba.throw_out_bad_tags(config["UNPROCESSED_PATH"])
 
     VISUALIZE = False
     if args.v:
@@ -206,4 +213,4 @@ if __name__ == "__main__":
     PRINT_INFO = False
     if args.i:
         PRINT_INFO = True
-    create_matching_tags_dict("../benchmarking/datasets/floor_2_obright_cleaned.json", visualize = VISUALIZE, print_info= PRINT_INFO)
+    create_matching_tags_dict(config["UNPROCESSED_PATH"], visualize = VISUALIZE, print_info= PRINT_INFO)

@@ -9,22 +9,32 @@ import sys
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
+import argparse
 import json
 import pdb
 import numpy as np
 import repeat_detection_evaluator as rde
 
-import map_processing
 from map_processing import benchmarking_utils as B
 import pprint
 
-UP_PATH = "datasets/floor_2_obright_cleaned.json"
-P_PATH = "datasets/sweeped/floor_2_obright_processed.json"
-SHOW_INDIVIDUAL_COORDS = False
-VISUALIZE = False
 
+def make_parser():
+    """
+    Creates a ArgumentParser object for CLI.
+    """
+    p = argparse.ArgumentParser(
+        description="visualize the optimized tag against the tag's actual location")
 
-def overlay_tags(up_path,p_path):
+    p.add_argument(
+        "-n", help="name of the test you'd like to run in the configuration file")
+    
+    p.add_argument(
+        "-v", help="visualize data", action = "store_true")
+
+    return p
+    
+def overlay_tags(p_path,up_path,visualize):
     """
     Overlay an optimized tag with other occurences of that tag.
 
@@ -60,7 +70,7 @@ def overlay_tags(up_path,p_path):
         tag_quat = list(tag["rotation"].values())
         opt_tag_pose = B.create_simd_4x4_from_se3_quat(tag_trans,tag_quat)
         
-        print(f"tag {tag['id']}")
+        # print(f"tag {tag['id']}")
         
         # for every observation of the next tag id
         for observation in next_tag_id:
@@ -79,29 +89,41 @@ def overlay_tags(up_path,p_path):
             unopt_pixels = B.compute_corner_pixels(observation,up_map_data)
             opt_tag_in_unopt_frame_pixels = B.compute_corner_pixels(observation,up_map_data,opt_tag_in_cam_frame)
             
-            if VISUALIZE:
+            if visualize:
                 B.visualizing_corner_pixel_differences([unopt_pixels,opt_tag_in_unopt_frame_pixels], tag["id"], "OT")
             
             # A few print statements to gain insight on the data
-            print(f"observation {observation}")
-            print(f"we see an error of {B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0]}")
+            # print(f"observation {observation}")
+            # print(f"we see an error of {B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0]}")
 
             # errors.append(B.compute_RMS_error(next_tag_id[observation]["tag_pose"],opt_tag_in_cam_frame))
             errors.append(B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0])
             
-        print("\n")
+        # print("\n")
         ids.append(tag["id"])
         tag_simd_dict[tag["id"]] = opt_tag_pose.tolist()
         
-    print(f"average error: {np.array(errors).mean()}")
-    print(f"tags seen: {ids}")
+    print(f"mean error: {np.array(errors).mean()}")
+    # print(f"tags seen: {ids}")
     # pprint.pprint(tag_simd_dict)
     return tag_simd_dict
     
 if __name__ == "__main__":
+    parser = make_parser()
+    args = parser.parse_args()
+    
     np.set_printoptions(suppress=True)
-    overlay_tags(UP_PATH,P_PATH)
+    NAME_OF_TEST = args.n.lower()
+    
+    with open("benchmarking_config.json") as config_file:
+        config = json.load(config_file)["overlay_tags"][NAME_OF_TEST]
+        print(f"your configuration: {config}")
 
+    P_PATH = config["PROCESSED_PATH"]
+    UP_PATH = config["UNPROCESSED_PATH"]
+    VISUALIZE = args.v
+    
+    overlay_tags(P_PATH,UP_PATH,VISUALIZE)
  
 
 
