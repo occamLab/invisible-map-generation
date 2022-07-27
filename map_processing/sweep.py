@@ -75,7 +75,6 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             results_tuples = []
             for result_tuple in tqdm.tqdm(pool.imap_unordered(_sweep_target, sweep_args), total=total_task_num):
                 results_tuples.append(result_tuple)
-            results_tuples = pool.map(_sweep_target, sweep_args)
 
     # OResults
     results_oresults = [result[2] for result in results_tuples]
