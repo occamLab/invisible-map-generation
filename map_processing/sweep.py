@@ -5,6 +5,7 @@ import datetime
 import json
 import multiprocessing as mp
 import os
+import pdb
 from copy import deepcopy
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
@@ -112,12 +113,14 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                              ordered_sweep_config_keys=ordered_sweep_config_keys,
                                              fixed_vertices=fixed_vertices, verbose=verbose,
                                              num_processes=num_processes)
+        sba_osweep_results.populate_alpha_result_list
         print("Running No SBA Sweep")
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data,
                                                  base_oconfig=non_sba_base_oconfig, sweep_config=sweep_config,
                                                  ordered_sweep_config_keys=ordered_sweep_config_keys,
                                                  fixed_vertices=fixed_vertices, verbose=verbose,
                                                  num_processes=num_processes)
+        non_sba_osweep_results.populate_alpha_result_list
 
         # Compare minimum gt metric for best parameter across sba and no sba
         min_sba_gt = sba_osweep_results.min_gt_result
@@ -149,6 +152,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
                                         sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys,
                                         fixed_vertices=fixed_vertices, verbose=verbose, num_processes=num_processes)
+        sweep_results.populate_alpha_result_list
 
         # Find min metrics from all the parameters
         min_gt = sweep_results.min_gt_result
@@ -158,6 +162,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
         print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
         print(f"Best Alpha: {min_alpha}")
+
+    pdb.set_trace()
 
     # Get best parameter based on ground truth
     min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
