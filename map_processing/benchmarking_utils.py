@@ -253,6 +253,8 @@ def compute_RMS_error(pixels1, pixels2):
     
     if RMS_error >= ERROR_THRESHOLD:
         throw = True
+    
+    # RMS_error = distance_between_points
 
     return RMS_error, throw
 

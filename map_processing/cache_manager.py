@@ -248,6 +248,7 @@ class CacheManagerSingleton:
             map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
 
         if not os.path.exists(map_json_path):
+            print(f"the specific instance {map_json_path} doesn't exist")
             return None
 
         map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
@@ -260,12 +261,13 @@ class CacheManagerSingleton:
         )
         map_dct = json.loads(json_string)
         map_name = CacheManagerSingleton._read_cache_directory(os.path.basename(map_json_blob_name))
-
+        map_name = map_name if map_name != 'None' and map_name is not None else map_json_blob_name.split('.')[0]
         last_folder = map_json_path.split('/')[-2]
+
         if last_folder == CacheManagerSingleton.UNPROCESSED_MAPS_PARENT:
             return MapInfo(map_name, map_json_blob_name, map_dct)
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
-
+    
     @staticmethod
     def find_maps(pattern: str, search_only_unprocessed: bool = True, paths: bool = False) -> Set[MapInfo]:
         """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
@@ -407,8 +409,14 @@ class CacheManagerSingleton:
 
         for item in gt_mapping_dict.items():
             for map_name in item[1]:
-                if map_info.map_name == map_name:
-                    matching_datasets.append(item[0])
+                try:
+                    if map_info.map_name == map_name:
+                        matching_datasets.append(item[0])
+                        
+                except Exception as e:
+                    print(e)
+                    print(map_name)
+                    continue
         if len(matching_datasets) != 1:
             return None
         else:

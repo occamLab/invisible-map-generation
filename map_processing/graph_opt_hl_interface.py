@@ -247,6 +247,8 @@ def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOp
     graph1 = Graph.as_graph(graph, prescaling_opt=pso)
     graph2 = Graph.as_graph(graph, fixed_vertices={VertexType.TAG, VertexType.TAGPOINT}, prescaling_opt=pso)
 
+    
+    # Split by anchors instead of odom nodes.
     ordered_odom_edges = graph1.get_ordered_odometry_edges()[0]
     start_uid = graph1.edges[ordered_odom_edges[0]].startuid
     middle_uid_lower = graph1.edges[ordered_odom_edges[len(ordered_odom_edges) // 2]].startuid

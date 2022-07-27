@@ -157,8 +157,14 @@ class Graph:
 
         odom_edge_uids = []
         num_tags_visible = 0
+        # print(f"self._verts_to_edges: {self._verts_to_edges[vertex_uid]}")
         for e in self._verts_to_edges[vertex_uid]:
-            edge = self.edges[e]
+            try:
+                edge = self.edges[e]
+            except:
+                print(f"{e} not found")
+                continue
+                
             end_vertex = self.vertices[edge.enduid] if edge.enduid is not None else None
             if end_vertex is None:  # Continue if the edge is a gravity edge
                 continue

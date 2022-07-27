@@ -3,6 +3,7 @@ Script for generating the data to (in)validate the pseudo ground truth metric.
 """
 
 import os
+import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -10,6 +11,7 @@ sys.path.append(repository_root)
 
 import argparse
 import numpy as np
+import json
 import datetime
 from typing import List, Tuple, Callable, Iterable, Any, Dict
 import matplotlib.pyplot as plt
@@ -23,11 +25,12 @@ from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_m
     tag_pose_array_with_metadata_to_map, holistic_optimize
 from map_processing.graph import Graph
 
+
 GENERATE_FROM_PATH = True
 """
 If true, then a graph is generated from an existing data set. Otherwise, an elliptical parameterized path is used.
 """
-PATH_FROM = "MAC_2_3_711.json"
+PATH_FROM = "pgt_tester3 15208801502125.json"
 NUM_REPEAT_GENERATE = 1
 
 if GENERATE_FROM_PATH:
@@ -62,7 +65,7 @@ ALT_OPT_CONFIG: Dict[OConfig.AltOConfigEnum, Tuple[Callable, Iterable[Any]]] = {
 }
 
 # Spare bundle adjustment // an algorithm for optimization
-BASE_OCONFIG = OConfig(is_sba=True)
+BASE_OCONFIG = OConfig(is_sba=False)
 
 # the type of the function's output is argparse.ArgumentParser
 def make_parser() -> argparse.ArgumentParser:
@@ -85,7 +88,8 @@ def validate_pseudo_gt_metric():
     
     # Acquire the data set from which the generated maps are parsed
     matching_maps = CacheManagerSingleton.find_maps(PATH_FROM, search_only_unprocessed=True)
-    pdb.set_trace()
+    
+        
     # Making sure there's exactly one map with that name
     if len(matching_maps) == 0:
         print(f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}")
@@ -121,11 +125,14 @@ def validate_pseudo_gt_metric():
     print(f"Generating {NUM_REPEAT_GENERATE} data set{'s' if NUM_REPEAT_GENERATE > 1 else ''}...")
     for i in range(NUM_REPEAT_GENERATE):
         if GENERATE_FROM_PATH:
-            gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
+            # gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
+            print("gonna use real dataset instead of the generation here")
         else:
             gg = GraphGenerator(path_from=GraphGenerator.xz_path_ellipsis_four_by_two, gen_params=GENERATE_FROM,
                                 tag_poses_for_parameterized=GT_TAG_DATASETS["3line"])
-        mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
+        # mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
+        
+        mi = CacheManagerSingleton.find_maps(pattern = f"*{PATH_FROM}").pop()
         gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
         mi_and_gt_data_set_list.append((mi, gt_data_set))
 
@@ -141,15 +148,15 @@ def validate_pseudo_gt_metric():
             oresult.max_opt = max_diff
             oresult.max_idx_opt = max_diff_idx
             oresult.gt_per_anchor_tag_opt = gt_per_anchor
-
             osg_pair_result: OSGPairResult = holistic_optimize(
                 map_info=mi, pso=PrescalingOptEnum.USE_SBA, oconfig=oconfig, compare=True)
             results.append((oconfig, oresult, osg_pair_result))
-            print(f"results are: {results}")
+            # print(f"results are: {results}")
             print(f"Completed optimization {generate_idx + 1}/{total_num_optimizations}")
 
     all_results_obj = OResultPseudoGTMetricValidation(results_list=results, generate_params=GENERATE_FROM)
-    results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
+    # results_file_name = f"pgt_validation_{datetime.datetime.now().strftime(TIME_FORMAT)}"
+    results_file_name = f"{PATH_FROM} o-o"
     CacheManagerSingleton.cache_pgt_validation_results(results=all_results_obj, file_name=results_file_name)
     fig_1 = all_results_obj.plot_scatter(
         fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
@@ -168,7 +175,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.lfc:
-        with open("../.cache/pgt_validation_results/pgt_validation_22-06-27-19-07-50.json", "r") as f:
+        with open("../.cache/pgt_validation_results/pgt_validation_22-06-29-15-38-36.json", "r") as f:
             s = f.read()
         pgt = OResultPseudoGTMetricValidation.parse_raw(s)
         pgt.plot_scatter(fitness_metric=OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2,
