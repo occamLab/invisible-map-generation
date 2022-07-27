@@ -264,7 +264,7 @@ def create_subgraphs_for_subgraph_chi2_comparison(graph: Dict, pso: PrescalingOp
 
 
 def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
-                   gt_data: Optional[GTDataSet] = None, max_gt_tag: float = None) -> OResult:
+                   gt_data: Optional[GTDataSet] = None, anchor_tag_id: float = None) -> OResult:
     """Optimizes the input graph.
 
     Notes:
@@ -281,6 +281,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
         visualize: A boolean for whether the `visualize` static method of this class is called.
         oconfig: Configures the optimization.
         gt_data: If provided, only used for the downstream optimization visualization.
+        anchor_tag_id: Tag to anchor off of
 
     Returns:
         A tuple containing in the following order: (1) The total chi2 value of the optimized graph as returned by
@@ -315,7 +316,7 @@ def optimize_graph(graph: Graph, oconfig: OConfig, visualize: bool = False,
             orig_tag_verts=before_opt_map.tags,
             ground_truth_tags=gt_data if gt_data is not None else None,
             plot_title=oconfig.graph_plot_title,
-            anchor_tag_id=max_gt_tag
+            anchor_tag_id=anchor_tag_id
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
     return OResult(

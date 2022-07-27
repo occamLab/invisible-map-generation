@@ -164,11 +164,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         min_alpha = sweep_results.min_alpha_result
 
         # Represent results
-        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
-        print(f"Best Alpha: {min_alpha}")
-
-    pdb.set_trace()
+        # print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+        # print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+        # print(f"Best Alpha: {min_alpha}")
 
     # Get best parameter based on ground truth
     min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
@@ -180,31 +178,46 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     min_value_idx_alpha = sweep_results.min_alpha_result_idx
     min_oresult_alpha = sweep_results.min_oresult_alpha
     pre_optimized_tags_alpha = min_oresult_alpha.map_pre.tags
-    optimized_tags = min_oresult_alpha.map_opt.tags
+    optimized_tags_alpha = min_oresult_alpha.map_opt.tags
 
-    # Currently metrics are based on best gt
+    # Currently metrics are based on best gt and alpha
     rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
-    print(f"Rotation metric: {rot_metric}")
-    print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
+    rot_metric_alpha, max_rot_diff_alpha, max_rot_diff_tag_id_alpha, max_rot_diff_idx_alpha = \
+        rotation_metric(pre_optimized_tags_alpha, optimized_tags_alpha)
 
     # Get max ground truth from above dict for the best parameter config
-    max_gt = min_oresult.find_max_gt
-    max_gt_tag = min_oresult.find_max_gt_tag
-    max_rot_tag = optimized_tags[max_rot_diff_idx][7]
+    # max_gt = min_oresult.find_max_gt
+    # max_gt_tag = min_oresult.find_max_gt_tag
+    # max_rot_tag = optimized_tags[max_rot_diff_idx][7]
 
     # Print results
     if verbose:
         # Max difference is the maximum distance between a tag and when it is optimized for the best parameter
-        print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
-        print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
-        print(f"Fitness metrics: \n"
-            f"{min_oresult.fitness_metrics.repr_as_list()}")
-        print("\nParameters:\n" + json.dumps(sweep_results.args_producing_min, indent=2))
-        print(f"Rotation metric: {rot_metric}")
-        print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
-        print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
-        print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
-        print(f"\n \n COMPARISION: index for gt: {min_value_idx} vs index for alpha: {min_value_idx_alpha}")
+        # print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
+        # print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
+
+        print(f"\n \nCOMPARISION: index for min gt ({min_value_idx}) vs index for min alpha: ({min_value_idx_alpha})")
+        print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+        print("Parameters (Alpha):\n" + json.dumps(sweep_results.args_producing_min_alpha, indent=2))
+
+        # Print fitness metrics
+        print(f"\n \nFor map based on min alpha, \n     GT: {min_oresult_alpha.gt_metric_opt} "
+              f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
+        print(f"For map based on min gt, \n    GT: {min_oresult.gt_metric_opt} "
+              f"(delta = {min_oresult.gt_metric_opt - min_oresult.gt_metric_pre})")
+        print(f"\n \nFitness metrics (GT): \n"
+              f"{min_oresult.fitness_metrics.repr_as_list()}")
+        print(f"\nFitness metrics (Alpha): \n"
+              f"{min_oresult_alpha.fitness_metrics.repr_as_list()}")
+        # print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+        # print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+
+        # Print rotation metrics
+        print(f"\n \nRotation metric (GT): {rot_metric}")
+        print(f"Maximum rotation (GT): {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
+        print(f"Rotation metric (Alpha): {rot_metric_alpha}")
+        print(f"Maximum rotation (Alpha): {max_rot_diff_alpha} (tag id: {max_rot_diff_tag_id_alpha})")
+
 
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
@@ -221,11 +234,17 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
         #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
 
-        # Visualize the best anchor point from the best OResult
-        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
-                       oconfig=sweep_results.sweep_args[min_value_idx][1],
+        # Visualize the best anchor point from the best OResult (GT)
+        # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
+        #                oconfig=sweep_results.sweep_args[min_value_idx][1],
+        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+        #         if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+
+        # Visualize the best anchor point from the best OResult (Alpha)
+        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx_alpha][0]),
+                       oconfig=sweep_results.sweep_args[min_value_idx_alpha][1],
                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-                if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+                if ground_truth_data is not None else None)
 
         fig = sweep_results.visualize_results_heatmap()
         if show_plot:
@@ -237,7 +256,39 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
 
+    results_dict = {
+        mi.map_name: {
+            "Min_GT_Param_Index": float(min_value_idx),
+            "Min_Alpha_Param_Index": float(min_value_idx_alpha),
+            "GT_Param": json.dumps(sweep_results.args_producing_min),
+            "Alpha_Param": json.dumps(sweep_results.args_producing_min_alpha),
+            "GT_GT": float(min_oresult.gt_metric_opt),
+            "GT_GT_Delta": float(min_oresult.gt_metric_opt - min_oresult.gt_metric_pre),
+            "Alpha_GT": float(min_oresult_alpha.gt_metric_opt),
+            "Alpha_GT_Delta": float(min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre),
+            "GT_Fitness": min_oresult.fitness_metrics.repr_as_list(),
+            "Alpha_Fitness": min_oresult_alpha.fitness_metrics.repr_as_list(),
+            "GT_Rotation": list(rot_metric),
+            "Alpha_Rotation": list(rot_metric_alpha),
+            "GT_Max_Rotation": list(max_rot_diff),
+            "GT_Max_Rotation_Tag_ID": float(max_rot_diff_tag_id),
+            "Alpha_Max_Rotation": list(max_rot_diff_alpha),
+            "Alpha_Max_Rotation_Tag_ID": float(max_rot_diff_tag_id_alpha)
+            }
+        }
+    with open("results_of_sweep.json", "r+") as f:
+        try:
+            json_obj = json.load(f)
+        except json.decoder.JSONDecodeError:
+            print("HAD TO EXCEPT")
+            pass
+
+    json_obj.update(results_dict)
+    with open("results_of_sweep.json", "w") as f:
+        json.dump(json_obj, f, indent=2)
+
     return sweep_results
+
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
         -> Tuple[float, int]:
