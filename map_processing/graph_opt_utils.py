@@ -216,7 +216,7 @@ def sum_optimizer_edges_chi2(
 
 
 def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_tags: np.ndarray) \
-        -> Tuple[float, float, int, dict]:
+        -> Tuple[float, float, int, float, int, dict]:
     """Error metric for tag pose accuracy.
 
     Calculates the transforms from the anchor tag to each other tag for the optimized and the ground truth tags,
@@ -229,13 +229,15 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
 
     Returns:
         A float representing the average difference in tag positions (translation only) in meters as well as the maximum
-        difference in tag positions and an int representing the tag id of the tag with the maximum difference.
+        difference in tag positions and an int representing the tag id of the tag with the maximum difference. A float
+        representing the min difference and an int representing the tag id of the tag with the min difference
         The last dictionary maps ground truth values to anchor tag ids
     """
     num_tags = optimized_tag_verts.shape[0]
     sum_trans_diffs = np.zeros((num_tags,))
     ground_truth_as_se3 = [SE3Quat(tag_pose) for tag_pose in ground_truth_tags]
     ground_truth_by_tag = {}
+
     # Turn each tag into anchor tag for map and find difference in distances between real and optimized tags (error)
     for anchor_tag in range(num_tags):
         anchor_tag_se3quat = SE3Quat(optimized_tag_verts[anchor_tag])
@@ -254,7 +256,11 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
     max_diff = max(avg_trans_diffs)
     max_diff_idx = tag_ids[np.argmax(avg_trans_diffs)]
 
-    return avg, max_diff, max_diff_idx, ground_truth_by_tag
+    # Find the tag with minimum distance across all anchor tags
+    min_diff = min(avg_trans_diffs)
+    min_diff_idx = tag_ids[np.argmin(avg_trans_diffs)]
+
+    return avg, max_diff, max_diff_idx, min_diff, min_diff_idx, ground_truth_by_tag
 
 def rotation_metric(first_tag_vert: np.ndarray, second_tag_vert: np.ndarray) -> Tuple[np.ndarray, float, int, int]:
     """ Error metric for rotational tag pose accuracy between the two arrays

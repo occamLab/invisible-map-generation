@@ -6,6 +6,7 @@ import json
 import multiprocessing as mp
 import tqdm
 import os
+import pdb
 from copy import deepcopy
 from typing import Dict, List, Tuple, Callable, Iterable, Any, Union, Optional, Set
 
@@ -22,6 +23,7 @@ from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_m
 from map_processing.graph_vertex_edge_classes import VertexType
 from map_processing.graph_opt_utils import rotation_metric
 from . import PrescalingOptEnum
+
 
 def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
@@ -75,9 +77,13 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                 results_tuples.append(result_tuple)
             results_tuples = pool.map(_sweep_target, sweep_args)
 
+    # OResults
     results_oresults = [result[2] for result in results_tuples]
+
+    # Ground truth results
     results_arr_dims = [len(sweep_arrs[key]) for key in ordered_sweep_config_keys]
     results_arr = np.ones(results_arr_dims) * -1
+
     for result, result_idx, _ in results_tuples:
         result_arr_idx = []
         for key_idx, key in enumerate(ordered_sweep_config_keys):
@@ -90,7 +96,9 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
-        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults, sweep_args=sweep_args)
+        generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults,
+        sweep_args=sweep_args)
+
 
 def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  sweep_config: Union[Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]],
@@ -105,53 +113,88 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         non_sba_base_oconfig = deepcopy(base_oconfig)
         non_sba_base_oconfig.is_sba = False
         print("Running SBA Sweep")
-        sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
-            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
+        sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
+                                             sweep_config=sweep_config,
+                                             ordered_sweep_config_keys=ordered_sweep_config_keys,
+                                             fixed_vertices=fixed_vertices, verbose=verbose,
+                                             num_processes=num_processes)
+        sba_osweep_results.populate_alpha_result_list
         print("Running No SBA Sweep")
-        non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=non_sba_base_oconfig,\
-            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
+        non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data,
+                                                 base_oconfig=non_sba_base_oconfig, sweep_config=sweep_config,
+                                                 ordered_sweep_config_keys=ordered_sweep_config_keys,
+                                                 fixed_vertices=fixed_vertices, verbose=verbose,
+                                                 num_processes=num_processes)
+        non_sba_osweep_results.populate_alpha_result_list
 
-        min_sba_gt = sba_osweep_results.min_gt
-        min_non_sba_gt = non_sba_osweep_results.min_gt
+        # Compare minimum gt metric for best parameter across sba and no sba
+        min_sba_gt = sba_osweep_results.min_gt_result
+        min_non_sba_gt = non_sba_osweep_results.min_gt_result
 
+        # Compare minimum alpha metric for best parameter across sba and non sba
+        min_sba_alpha = sba_osweep_results.min_alpha_result
+        min_non_sba_alpha = non_sba_osweep_results.min_alpha_result
+
+        # Currently best is based on ground truth metric
         if min_sba_gt < min_non_sba_gt:
             if verbose:
-                print("SBA performed better than No SBA")
+                print("SBA performed better than No SBA for ground truth")
             sweep_results = sba_osweep_results
         else:
             if verbose:
-                print("No SBA performed better than SBA")
+                print("No SBA performed better than SBA for ground truth")
             sweep_results = non_sba_osweep_results
+
+        # Represent results
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
         print(f"Best SBA GT: {min_sba_gt} (delta: {min_sba_gt-sweep_results.pre_opt_gt})")
         print(f"Best No SBA GT: {min_non_sba_gt} (delta: {min_non_sba_gt-sweep_results.pre_opt_gt})")
+
+        print(f"Best SBA Alpha: {min_sba_alpha}")
+        print(f"Best No SBA Alpha: {min_non_sba_alpha}")
+
     else:
-        sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,\
-            sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys, fixed_vertices=fixed_vertices,\
-            verbose=verbose, num_processes=num_processes)
-        min_gt = sweep_results.min_gt
+        sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
+                                        sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys,
+                                        fixed_vertices=fixed_vertices, verbose=verbose, num_processes=num_processes)
+        sweep_results.populate_alpha_result_list
+
+        # Find min metrics from all the parameters
+        min_gt = sweep_results.min_gt_result
+        min_alpha = sweep_results.min_alpha_result
+
+        # Represent results
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
         print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+        print(f"Best Alpha: {min_alpha}")
 
-    min_value_idx = sweep_results.min_gt_result_idx
-    min_oresult = sweep_results.min_oresult
-    pre_optimized_tags = min_oresult.map_pre.tags
-    optimized_tags = min_oresult.map_opt.tags
+    pdb.set_trace()
 
+    # Get best parameter based on ground truth
+    min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
+    min_oresult = sweep_results.min_oresult # OResult at that index
+    pre_optimized_tags = min_oresult.map_pre.tags # Pre-optimized tags for the best config
+    optimized_tags = min_oresult.map_opt.tags # Optimized tags for the best config
+
+    # Get best parameter based on alpha metric
+    min_value_idx_alpha = sweep_results.min_alpha_result_idx
+    min_oresult_alpha = sweep_results.min_oresult_alpha
+    pre_optimized_tags_alpha = min_oresult_alpha.map_pre.tags
+    optimized_tags = min_oresult_alpha.map_opt.tags
+
+    # Currently metrics are based on best gt
     rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
     print(f"Rotation metric: {rot_metric}")
     print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
 
-
-    # Get max ground truth from above dict
+    # Get max ground truth from above dict for the best parameter config
     max_gt = min_oresult.find_max_gt
     max_gt_tag = min_oresult.find_max_gt_tag
     max_rot_tag = optimized_tags[max_rot_diff_idx][7]
 
     # Print results
     if verbose:
+        # Max difference is the maximum distance between a tag and when it is optimized for the best parameter
         print(f"Maximum difference metric (pre-optimized): {min_oresult.max_pre:.3f} (tag id: {min_oresult.max_idx_pre})")
         print(f"Maximum difference metric (optimized): {min_oresult.max_opt:.3f} (tag id: {min_oresult.max_idx_opt})")
         print(f"Fitness metrics: \n"
@@ -161,10 +204,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
         print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
         print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+        print(f"\n \n COMPARISION: index for gt: {min_value_idx} vs index for alpha: {min_value_idx_alpha}")
+
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     
-    processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt, calculate_intersections=upload_best)
+    processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt,
+                                                                 calculate_intersections=upload_best)
 
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
@@ -175,8 +221,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
         #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
 
-        # Visualize the worst anchor point from the best OResult (rotation)
-        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.sweep_args[min_value_idx][1],
+        # Visualize the best anchor point from the best OResult
+        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
+                       oconfig=sweep_results.sweep_args[min_value_idx][1],
                        visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
                 if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
 
@@ -186,7 +233,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         if cache_results:
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
-
 
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
@@ -205,11 +251,11 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     """
     # Same workflow as holistic_optimize from graph_opt_hl_interface
     oresult = optimize_graph(graph=deepcopy(sweep_args_tuple[0]), oconfig=sweep_args_tuple[1], visualize=False)
-    gt_result, max_diff, max_diff_idx, gt_per_anchor_tag = ground_truth_metric_with_tag_id_intersection(
+    gt_result, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor_tag = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
         ground_truth_tags=sweep_args_tuple[2])
     oresult.gt_per_anchor_tag_opt = gt_per_anchor_tag
-    gt_result_pre, max_diff_pre, max_diff_idx_pre, gt_per_anchor_tag_pre = ground_truth_metric_with_tag_id_intersection(
+    gt_result_pre, max_diff_pre, max_diff_idx_pre, min_diff_pre, min_diff_idx_pre, gt_per_anchor_tag_pre = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
         ground_truth_tags=sweep_args_tuple[2])
 
@@ -218,8 +264,12 @@ def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray],
     oresult.gt_metric_opt = gt_result
     oresult.max_pre = max_diff_pre
     oresult.max_opt = max_diff
+    oresult.min_pre = min_diff_pre
+    oresult.min_opt = min_diff
     oresult.max_idx_pre = max_diff_idx_pre
     oresult.max_idx_opt = max_diff_idx
+    oresult.min_idx_pre = min_diff_idx_pre
+    oresult.min_idx_opt = min_diff_idx
 
     # if sweep_args_tuple[4]:
     #     print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")

@@ -1102,8 +1102,12 @@ class OResult(BaseModel):
         gt_metric_opt: Ground truth metric of the optimized map
         max_pre: Maximum distance between two nodes of pre-optimized map
         max_opt: Maximum distance between two nodes of optimized map
+        min_pre: Minimum ground truth metric between 2 nodes of unoptimized map
+        min_opt: Minimum ground truth metric between 2 nodes of optimized map
         max_idx_pre: Index of node with maximum distance of pre-optimized map
         max_idx_opt: Index of node with maximum distance of optimized map
+        min_idx_pre: Index of node with minimum distance of pre-optimized map
+        min_idx_opt: Index of node with minimum distance of optimized map
         gt_per_anchor_tag_opt: Dictionary mapping id tag to ground truth value when it is made anchor
     """
     oconfig: OConfig
@@ -1114,8 +1118,12 @@ class OResult(BaseModel):
     gt_metric_opt: Optional[float] = None
     max_pre: Optional[float] = None
     max_opt: Optional[float] = None
+    min_pre: Optional[float] = None
+    min_opt: Optional[float] = None
     max_idx_pre: Optional[float] = None
     max_idx_opt: Optional[float] = None
+    min_idx_pre: Optional[float] = None
+    min_idx_opt: Optional[float] = None
     gt_per_anchor_tag_opt: Optional[Dict[int, float]] = [None, None]
 
     @property
@@ -1157,7 +1165,7 @@ class OSGPairResult(BaseModel):
         return self.chi2_diff / self.sg1_oresult.fitness_metrics.chi2_all_after
 
 
-class OSweepResults(BaseModel):
+class  OSweepResults(BaseModel):
     """Used to store the results of a parameter sweep.
 
     Notes:
@@ -1173,6 +1181,7 @@ class OSweepResults(BaseModel):
     The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
     """
     gt_results_list: List[float]
+    alpha_results_list: List[float] = []
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
     map_name: str
@@ -1229,6 +1238,11 @@ class OSweepResults(BaseModel):
         return np.array(self.gt_results_list).reshape(self.gt_results_arr_shape, order="C")
 
     @property
+    def alpha_results_arr(self) -> np.ndarray:
+        return np.array(self.alpha_results_list).reshape(self.gt_results_arr_shape)
+
+    @property
+    # This finds the minimum gt_metric from a list of gt_metrics corresponding to each parameter config in the sweep
     def min_gt_result(self) -> float:
         return np.min(self.gt_results_list)
 
@@ -1241,10 +1255,31 @@ class OSweepResults(BaseModel):
         return np.argmin(self.gt_results_list)
 
     @property
+    # OResult with min gt metric
     def min_oresult(self) -> OResult:
         return self.oresults_list[self.min_gt_result_idx]
 
     @property
+    def populate_alpha_result_list(self):
+        self.alpha_results_list = []
+        for oresult in self.oresults_list:
+            self.alpha_results_list.append(oresult.fitness_metrics.alpha_all_after)
+
+    @property
+    def min_alpha_result(self) -> float:
+        return np.min(self.alpha_results_list)
+
+    @property
+    def min_alpha_result_idx(self) -> float:
+        return np.argmin(self.alpha_results_list)
+
+    @property
+    def min_oresult_alpha(self) -> OResult:
+        return self.oresults_list[self.min_alpha_result_idx]
+
+    @property
+    # This finds the maximum distance a tag has to move from pre-optimized to optimized for the best OResult (best
+    # parameters)
     def min_gt(self) -> float:
         return self.min_oresult.gt_metric_opt
 
@@ -1254,15 +1289,32 @@ class OSweepResults(BaseModel):
 
     @property
     def where_min(self) -> Tuple[int, ...]:
+    # Where minimum gt_metric
         # noinspection PyTypeChecker
         where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(self.gt_results_arr == self.min_gt_result)
         return tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
 
     @property
+    def where_min_alpha(self) -> Tuple[int, ...]:
+    # Where minimum alpha metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = \
+            np.where(self.alpha_results_arr == self.min_alpha_result)
+        return tuple([arr[0] for arr in where_min_pre])
+
+    @property
+    # Parameters to produce min gt_metric
     def args_producing_min(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
+        return args_producing_min
+
+    @property
+    # Parameters to produce min alpha metric
+    def args_producing_min_alpha(self) -> Dict[str, float]:
+        args_producing_min: Dict[str, float] = {}
+        for i, key in enumerate(self.sweep_config_keys_order):
+            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
         return args_producing_min
 
     def query_at(self, parameter_query: Dict[str, float]):
