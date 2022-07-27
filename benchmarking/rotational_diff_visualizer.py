@@ -161,7 +161,7 @@ if __name__ == "__main__":
     NAME_OF_TEST = args.n.lower()
 
     with open("benchmarking_config.json") as config_file:
-        config = json.load(config_file)[NAME_OF_TEST]
+        config = json.load(config_file)["OB_VS_STR"][NAME_OF_TEST]
         print(f"your configuration: {config}")
         
     OBLQ_PATH = config["OBLIQUE_DATA_PATH"]

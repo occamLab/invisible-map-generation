@@ -1,17 +1,46 @@
 {
-    "209_to_occam":
-    {
-        "OBLIQUE_DATA_PATH" : "datasets/oblique_209_occam.json",
-        "STRAIGHT_ON_DATA_PATH": "datasets/straight_209_occam.json"
+    "ob_vs_str":{
+        "209_to_occam":
+        {
+            "OBLIQUE_DATA_PATH" : "datasets/oblique_209_occam.json",
+            "STRAIGHT_ON_DATA_PATH": "datasets/straight_209_occam.json"
+        },
+        "floor_2_left":
+        {
+            "OBLIQUE_DATA_PATH" : "datasets/floor_2_obleft_cleaned.json",
+            "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
+        },
+        "floor_2_right":
+        {
+            "OBLIQUE_DATA_PATH" : "datasets/floor_2_obright_cleaned.json",
+            "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
+        }
     },
-    "floor_2_left":
-    {
-        "OBLIQUE_DATA_PATH" : "datasets/floor_2_obleft_cleaned.json",
-        "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
-    },
-    "floor_2_right":
-    {
-        "OBLIQUE_DATA_PATH" : "datasets/floor_2_obright_cleaned.json",
-        "STRAIGHT_ON_DATA_PATH": "datasets/floor_2_straight.json"
+    "overlay_tags":{
+        "floor_2_left":
+        {
+            "UNPROCESSED_PATH": "datasets/floor_2_obleft_cleaned.json",
+            "PROCESSED_PATH": "datasets/sweeped/floor_2_obleft_swept.json"
+        },
+        "floor_2_right":
+        {
+            "UNPROCESSED_PATH": "datasets/floor_2_obright_cleaned.json",
+            "PROCESSED_PATH": "datasets/sweeped/floor_2_obright_processed.json"
+        },
+        "floor_2_straight":
+        {
+            "UNPROCESSED_PATH": "datasets/floor_2_straight_cleaned.json",
+            "PROCESSED_PATH": "datasets/sweeped/floor_2_straight.json"
+        },
+        "725overlay":
+        {
+            "UNPROCESSED_PATH": "datasets/725overlay.json",
+            "PROCESSED_PATH": "datasets/sweeped/725overlay_swept.json"
+        },
+        "pgt":
+        {
+            "UNPROCESSED_PATH": "datasets/pgt_tester.json",
+            "PROCESSED_PATH": ""
+        }
     }
 }
