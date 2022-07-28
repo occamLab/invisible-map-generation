@@ -7,6 +7,7 @@ Author: Allison Li, Duncan Mazza
 
 import os
 import sys
+from datetime import datetime
 
 # Ensure that the map_processing module is imported
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
@@ -25,17 +26,17 @@ cms = CacheManagerSingleton(cred)
 
 
 def on_event(event):
-    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=True)
-
+    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=True, override_all = False)
 
 def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
+    map_info.map_json_blob_name = f'{map_info.map_json_blob_name[:-5]} {datetime.now().strftime("%Y%m%d%H%M%S")}.json'
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
         is_sba=False, weights=GraphManager.weights_dict[GraphManager.WeightSpecifier.BEST_SWEEP])
-    opt_chi2, opt_result, _ = GraphManager.optimize_graph(graph=graph, optimization_config=optimization_config)
-    json_str = make_processed_map_json(opt_result)
+    _, opt_result, _ = GraphManager.optimize_graph(graph=graph, optimization_config=optimization_config)
+    json_str = make_processed_map_json(opt_result, calculate_intersections=True)
     cms.upload(map_info, json_str)
 
 

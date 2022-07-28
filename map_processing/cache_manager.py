@@ -10,8 +10,7 @@ from typing import Dict, Union, List, Optional, Set, Callable
 
 import firebase_admin
 import numpy as np
-from firebase_admin import db
-from firebase_admin import storage
+from firebase_admin import db, storage
 from varname import nameof
 
 from map_processing.data_models import GTDataSet
@@ -276,16 +275,16 @@ class CacheManagerSingleton:
         with self.__synch_mutex:
             processed_map_filename = os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.json"
             processed_map_full_path = f'{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}'
-            print("Attempting to upload {} to the __bucket blob {}".format(map_info.map_name, processed_map_full_path))
+            print("Attempting to upload {} to the __bucket blob {}".format(map_info.map_json_blob_name, processed_map_full_path))
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(json_string)
-            print("Successfully uploaded map data for {}".format(map_info.map_name))
+            print("Successfully uploaded map data for {}".format(map_info.map_json_blob_name))
             ref = db.reference("maps")
             if map_info.uid is not None:
                 ref = ref.child(map_info.uid)
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
             print("Successfully uploaded database reference maps/{}/map_file to contain the blob path".format(
-                map_info.map_name))
+                map_info.map_json_blob_name))
             self.cache_map(self.PROCESSED_UPLOAD_TO, map_info, json_string)
 
     def download_all_maps(self):
@@ -296,7 +295,7 @@ class CacheManagerSingleton:
     def get_map_from_unprocessed_map_event(
             self, event: firebase_admin.db.Event,
             map_info_callback: Union[Callable[[MapInfo], None], None] = None,
-            ignore_dict: bool = False
+            ignore_dict: bool = False, override_all: bool = False
     ) -> None:
         """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
 
@@ -306,10 +305,14 @@ class CacheManagerSingleton:
             map_info_callback: For every MapInfo object created, invoke this callback and pass the MapInfo object as the
              argument.
             ignore_dict: If true, no action is taken if `event.data` is a dictionary.
+            override_all: If true, reprocess every map in firebase.
         """
+        firebase_reference = db.reference("maps")
         if type(event.data) == str:
             # A single new map just got added
             map_info = self._firebase_get_and_cache_unprocessed_map(event.path.lstrip("/"), event.data)
+            if 'map_file' in firebase_reference.child(map_info.map_name).get().keys() and not override_all:
+                return
             if map_info_callback is not None and map_info is not None:
                 map_info_callback(map_info)
         elif type(event.data) == dict:
@@ -319,12 +322,20 @@ class CacheManagerSingleton:
             for map_name, map_json in event.data.items():
                 if isinstance(map_json, str):
                     map_info = self._firebase_get_and_cache_unprocessed_map(map_name, map_json)
-                    if map_info_callback is not None and map_info is not None:
+                    if firebase_reference.child(map_info.map_name).get() is not None and 'map_file'\
+                        in firebase_reference.child(map_info.map_name).get().keys() and not override_all:
+                        continue
+                    if map_info_callback is not None:
                         map_info_callback(map_info)
                 elif isinstance(map_json, dict):
                     for nested_name, nested_json in map_json.items():
                         map_info = self._firebase_get_and_cache_unprocessed_map(nested_name, nested_json, uid=map_name)
-                        if map_info_callback is not None and map_info is not None:
+                        if map_info is None:
+                            continue
+                        if firebase_reference.child(map_name).child(map_info.map_name).get() is not None and 'map_file'\
+                            in firebase_reference.child(map_name).child(map_info.map_name).get().keys() and not override_all:
+                            continue
+                        if map_info_callback is not None:
                             map_info_callback(map_info)
 
     def cache_map(self, parent_folder: str, map_info: MapInfo, json_string: str, file_suffix: Union[
