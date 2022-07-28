@@ -65,12 +65,13 @@ def overlay_tags(up_path,p_path):
         # for every observation of the next tag id
         for observation in next_tag_id:
             
+            if tag['id'] == 323:
+                print("YO")
+                
+        
             associated_camera_id = up_map_data["tag_data"][observation][0]["pose_id"]
             opt_cam_trans_component = list(p_map_data["odometry_vertices"][associated_camera_id]["translation"].values())
             opt_cam_rot_component = list(p_map_data["odometry_vertices"][associated_camera_id]["rotation"].values())
-            
-            # TODO: not sure if this is actually correct
-            # correct_quat_order = opt_cam_rot_component[1:] + [opt_cam_rot_component[0]]
             
             opt_cam_pose = B.create_simd_4x4_from_se3_quat(opt_cam_trans_component, opt_cam_rot_component)
             
@@ -82,12 +83,23 @@ def overlay_tags(up_path,p_path):
             if VISUALIZE:
                 B.visualizing_corner_pixel_differences([unopt_pixels,opt_tag_in_unopt_frame_pixels], tag["id"], "OT")
             
+            error_this_observation = B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0]
+            
+   
+                
             # A few print statements to gain insight on the data
             print(f"observation {observation}")
-            print(f"we see an error of {B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0]}")
-
-            # errors.append(B.compute_RMS_error(next_tag_id[observation]["tag_pose"],opt_tag_in_cam_frame))
-            errors.append(B.compute_RMS_error(unopt_pixels,opt_tag_in_unopt_frame_pixels)[0])
+            print(f"we see an error of {error_this_observation}")
+            
+            pprint.pprint(unopt_pixels)
+            pprint.pprint(opt_tag_in_unopt_frame_pixels)
+                
+            if error_this_observation > 200:
+                B.visualizing_corner_pixel_differences([unopt_pixels,opt_tag_in_unopt_frame_pixels], tag["id"], "OT")
+                pprint.pprint(unopt_pixels)
+                pprint.pprint(opt_tag_in_unopt_frame_pixels)
+                
+            errors.append(error_this_observation)
             
         print("\n")
         ids.append(tag["id"])
