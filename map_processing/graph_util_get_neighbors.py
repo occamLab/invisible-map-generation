@@ -9,6 +9,7 @@ import numpy as np
 import shapely.geometry
 from g2o import SE3Quat
 from shapely.geometry import LineString
+import scipy.spatial
 
 from map_processing.transform_utils import se3_quat_average
 
@@ -22,14 +23,11 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
                   neighbor_type: _NeighborType = _NeighborType.INTERSECTION)\
         -> Tuple[List[List[int]], List[Dict[str, Any]]]:
     """TODO: documentation
-
     Args:
         vertices:
         vertex_ids:
         neighbor_type:
-
     Returns:
-
     """
     nvertices = vertices.shape[0]
     if vertex_ids is None:
@@ -39,8 +37,13 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
     curr_id = max(vertex_ids) + 1
     intersections = []
 
-    for id1 in range(1, nvertices):
-        for id2 in range(1, id1):
+    intersection_detector = scipy.spatial.KDTree(vertices[:,0:3])
+    intersections_detected = intersection_detector.query_ball_point(vertices[:,0:3], 1, workers=-1, return_sorted=True)
+
+    for id1, close_detections_list in enumerate(intersections_detected):
+        for id2 in close_detections_list:
+            if id1 == 0 or id1 == id2 or id2 < id1:
+                continue
             if neighbor_type == _NeighborType.INTERSECTION:
                 intersection = _get_intersection(vertices, id1, id2, curr_id)
                 if intersection is None:
@@ -61,21 +64,13 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
 
 def _get_intersection(vertices, id1, id2, curr_id):
     """TODO: Documentation
-
     Args:
         vertices:
         id1:
         id2:
         curr_id:
-
     Returns:
-
     """
-    line1_yval = (vertices[id1 - 1][1] + vertices[id1][1]) / 2
-    line2_yval = (vertices[id2 - 1][1] + vertices[id2][1]) / 2
-    if abs(line1_yval - line2_yval) > 1:
-        return None
-
     line1 = LineString([(vertices[id1 - 1][0], vertices[id1 - 1][2]),
                         (vertices[id1][0], vertices[id1][2])])
     line2 = LineString([(vertices[id2 - 1][0], vertices[id2 - 1][2]),
@@ -107,14 +102,11 @@ def _get_intersection(vertices, id1, id2, curr_id):
 
 def _is_close_enough(vertices, id1, id2):
     """TODO: Documentation
-
     Args:
         vertices:
         id1:
         id2:
-
     Returns:
-
     """
     v1 = vertices[id1]
     v2 = vertices[id2]
