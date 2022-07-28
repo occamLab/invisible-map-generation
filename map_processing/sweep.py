@@ -161,11 +161,11 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         # Find min metrics from all the parameters
         min_gt = sweep_results.min_gt_result
         min_alpha = sweep_results.min_alpha_result
-
+        print(min_gt)
         # Represent results
-        # print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        # print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
-        # print(f"Best Alpha: {min_alpha}")
+        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+        print(f"Best Alpha: {min_alpha}")
 
     # Get best parameter based on ground truth
     min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
@@ -202,8 +202,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         # Print fitness metrics
         print(f"\n \nFor map based on min alpha, \n     GT: {min_oresult_alpha.gt_metric_opt} "
               f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
-        print(f"For map based on min gt, \n    GT: {min_oresult.gt_metric_opt} "
-              f"(delta = {min_oresult.gt_metric_opt - min_oresult.gt_metric_pre})")
+        print(f"For map based on min gt, \n    GT: {min_gt} "
+              f"(delta = {min_gt - min_oresult.gt_metric_pre})")
         print(f"\n \nFitness metrics (GT): \n"
               f"{min_oresult.fitness_metrics.repr_as_list()}")
         print(f"\nFitness metrics (Alpha): \n"

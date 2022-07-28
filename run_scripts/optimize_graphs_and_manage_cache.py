@@ -268,7 +268,7 @@ if __name__ == "__main__":
             # Get rotational metrics
             pre_optimized_tags = opt_result.map_pre.tags
             optimized_tags = opt_result.map_opt.tags
-            rot_metric, max_rot_diff, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
+            rot_metric, max_rot_diff, max_rot_diff_tag_id, max_rot_diff_idx = rotation_metric(pre_optimized_tags, optimized_tags)
             print(f"Rotation metric: {rot_metric}")
             print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
 
