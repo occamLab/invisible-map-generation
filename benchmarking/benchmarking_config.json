@@ -39,8 +39,8 @@
         },
         "pgt":
         {
-            "UNPROCESSED_PATH": "datasets/pgt_tester.json",
-            "PROCESSED_PATH": ""
+            "UNPROCESSED_PATH": "datasets/pgt_tester3.json",
+            "PROCESSED_PATH": "datasets/sweeped/pgt_tester3_swept.json"
         }
     }
 }
