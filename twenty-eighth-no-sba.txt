@@ -1,0 +1,585 @@
+*desnat_straight_once*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+*desnat_straight_once*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+0.4693017305863726
+Pre-Optimization GT: 0.6075216052332706
+Best GT: 0.4693017305863726 (delta: -0.138219874646898
+Best Alpha: -65209.923207971646
+
+ 
+COMPARISION: index for min gt (880) vs index for min alpha: (9)
+Parameters (GT):
+{
+  "lin_vel_var": 0.5994842503189421,
+  "ang_vel_var": 0.5994842503189421,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 1e-10,
+  "tag_sba_var": 10.0
+}
+
+ 
+For map based on min alpha, 
+     GT: 3.597106735269945 (delta = 2.9895851300366747)
+For map based on min gt, 
+    GT: 0.4693017305863726 (delta = -0.138219874646898)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 2.4e+04
+>       alpha_all_before: 3.3e+03
+> se3_not_gravity_before: 2.4e+04
+>          psi2uv_before: 0
+>         gravity_before: 9.7e-13
+----------------------------------
+>         chi2_all_after: 9.6
+>        alpha_all_after: -8.4e+03
+>  se3_not_gravity_after: 9.6
+>           psi2uv_after: 0
+>          gravity_after: 0.0017
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 1.1e+12
+>       alpha_all_before: 5.3e+11
+> se3_not_gravity_before: 1.1e+12
+>          psi2uv_before: 0
+>         gravity_before: 9.7e-13
+----------------------------------
+>         chi2_all_after: 3.5e+03
+>        alpha_all_after: -6.5e+04
+>  se3_not_gravity_after: 3.5e+03
+>           psi2uv_after: 0
+>          gravity_after: 2.2e-10
+
+ 
+Rotation metric (GT): [0.05024175 2.9276441  0.8030943 ]
+Maximum rotation (GT): [0.1465274  4.68256635 3.23054477] (tag id: 307.0)
+Rotation metric (Alpha): [ 1.02418985  1.7991901  15.80153185]
+Maximum rotation (Alpha): [ 3.41936675  5.36973017 61.30164963] (tag id: 301.0)
+
+*floor_2_obright*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+1.0949620346049764
+Pre-Optimization GT: 2.00499045094081
+Best GT: 1.0949620346049764 (delta: -0.9100284163358334
+Best Alpha: -55237.05842577785
+
+ 
+COMPARISION: index for min gt (990) vs index for min alpha: (359)
+Parameters (GT):
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 10.0,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 4.641588833612782e-07,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 10.0
+}
+
+ 
+For map based on min alpha, 
+     GT: 10.84936043529909 (delta = 8.84436998435828)
+For map based on min gt, 
+    GT: 1.0949620346049764 (delta = -0.9100284163358334)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 2.3e+08
+>       alpha_all_before: 1.1e+08
+> se3_not_gravity_before: 2.3e+08
+>          psi2uv_before: 0
+>         gravity_before: 5.3e-13
+---------------------------------
+>         chi2_all_after: 0.0017
+>        alpha_all_after: 1.2e+04
+>  se3_not_gravity_after: 0.0017
+>           psi2uv_after: 0
+>          gravity_after: 1e-05
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 2.3e+08
+>       alpha_all_before: 1.1e+08
+> se3_not_gravity_before: 2.3e+08
+>          psi2uv_before: 0
+>         gravity_before: 5.3e-13
+----------------------------------
+>         chi2_all_after: 8.6e+03
+>        alpha_all_after: -5.5e+04
+>  se3_not_gravity_after: 8.6e+03
+>           psi2uv_after: 0
+>          gravity_after: 0.25
+
+ 
+Rotation metric (GT): [3.52155600e-03 4.49216645e+00 4.58669291e-03]
+Maximum rotation (GT): [0.02583524 7.83801309 0.02185154] (tag id: 319.0)
+Rotation metric (Alpha): [ 5.27445172  5.89805617 18.42986527]
+Maximum rotation (Alpha): [ 24.33910236  45.80411292 157.64690206] (tag id: 304.0)
+
+*desnat_straight_three*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+0.38145472591695706
+Pre-Optimization GT: 0.42573874806102135
+Best GT: 0.38145472591695706 (delta: -0.044284022144064294
+Best Alpha: -84581.50059941076
+
+ 
+COMPARISION: index for min gt (870) vs index for min alpha: (256)
+Parameters (GT):
+{
+  "lin_vel_var": 0.5994842503189421,
+  "ang_vel_var": 0.0359381366380464,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 2.782559402207126e-08,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 0.002154434690031887
+}
+
+ 
+For map based on min alpha, 
+     GT: 3.4262794582283584 (delta = 3.000540710167337)
+For map based on min gt, 
+    GT: 0.38145472591695706 (delta = -0.044284022144064294)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 3.9e+07
+>       alpha_all_before: 1.9e+07
+> se3_not_gravity_before: 3.9e+07
+>          psi2uv_before: 0
+>         gravity_before: 1.6e-12
+----------------------------------
+>         chi2_all_after: 3.8
+>        alpha_all_after: -1.6e+04
+>  se3_not_gravity_after: 3.8
+>           psi2uv_after: 0
+>          gravity_after: 0.0015
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 5.6e+07
+>       alpha_all_before: 2.8e+07
+> se3_not_gravity_before: 5.6e+07
+>          psi2uv_before: 0
+>         gravity_before: 1.6e-12
+----------------------------------
+>         chi2_all_after: 1.3e+04
+>        alpha_all_after: -8.5e+04
+>  se3_not_gravity_after: 1.3e+04
+>           psi2uv_after: 0
+>          gravity_after: 0.22
+
+ 
+Rotation metric (GT): [0.042588   1.5794746  0.36510231]
+Maximum rotation (GT): [0.13822799 2.79091755 1.56369112] (tag id: 300.0)
+Rotation metric (Alpha): [ 0.74826679  3.12229644 19.85229141]
+Maximum rotation (Alpha): [ 1.46527838 13.6689842  71.73515741] (tag id: 303.0)
+
+*209-to-occam*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+0.7468231835444697
+Pre-Optimization GT: 0.7521039401770699
+Best GT: 0.7468231835444697 (delta: -0.005280756632600192
+Best Alpha: -64656.699794806125
+
+ 
+COMPARISION: index for min gt (40) vs index for min alpha: (50)
+Parameters (GT):
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 7.742636826811277e-06,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 1e-10
+}
+
+ 
+For map based on min alpha, 
+     GT: 0.7503525402429059 (delta = -0.0017513999341640663)
+For map based on min gt, 
+    GT: 0.7468231835444697 (delta = -0.005280756632600192)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 1.5e+11
+>       alpha_all_before: 7.7e+10
+> se3_not_gravity_before: 1.5e+11
+>          psi2uv_before: 0
+>         gravity_before: 2.2e-12
+----------------------------------
+>         chi2_all_after: 4.5e+04
+>        alpha_all_after: -5.1e+04
+>  se3_not_gravity_after: 4.5e+04
+>           psi2uv_after: 0
+>          gravity_after: 0.017
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 1.5e+11
+>       alpha_all_before: 7.7e+10
+> se3_not_gravity_before: 1.5e+11
+>          psi2uv_before: 0
+>         gravity_before: 2.2e-12
+----------------------------------
+>         chi2_all_after: 1e+04
+>        alpha_all_after: -6.5e+04
+>  se3_not_gravity_after: 1e+04
+>           psi2uv_after: 0
+>          gravity_after: 0.014
+
+ 
+Rotation metric (GT): [0.05187917 0.05040871 0.01250025]
+Maximum rotation (GT): [0.21131897 0.29837905 0.09964033] (tag id: 328.0)
+Rotation metric (Alpha): [0.09650302 0.08958778 0.02242255]
+Maximum rotation (Alpha): [0.4337574  0.53570213 0.15916166] (tag id: 328.0)
+
+*robolab_straight_on*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+0.8664202399348512
+Pre-Optimization GT: 1.0459650158242964
+Best GT: 0.8664202399348512 (delta: -0.17954477588944517
+Best Alpha: -140308.10706031971
+
+ 
+COMPARISION: index for min gt (980) vs index for min alpha: (250)
+Parameters (GT):
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 0.5994842503189421,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 2.782559402207126e-08,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 1e-10
+}
+
+ 
+For map based on min alpha, 
+     GT: 2.5079394237087946 (delta = 1.4619744078844983)
+For map based on min gt, 
+    GT: 0.8664202399348512 (delta = -0.17954477588944517)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 5.3e+07
+>       alpha_all_before: 2.6e+07
+> se3_not_gravity_before: 5.3e+07
+>          psi2uv_before: 0
+>         gravity_before: 2.6e-12
+----------------------------------
+>         chi2_all_after: 11
+>        alpha_all_after: -1.7e+03
+>  se3_not_gravity_after: 11
+>           psi2uv_after: 0
+>          gravity_after: 0.024
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 1.2e+08
+>       alpha_all_before: 6.1e+07
+> se3_not_gravity_before: 1.2e+08
+>          psi2uv_before: 0
+>         gravity_before: 2.6e-12
+----------------------------------
+>         chi2_all_after: 6.4e+03
+>        alpha_all_after: -1.4e+05
+>  se3_not_gravity_after: 6.4e+03
+>           psi2uv_after: 0
+>          gravity_after: 0.61
+
+ 
+Rotation metric (GT): [0.23460357 2.96294082 1.4810613 ]
+Maximum rotation (GT): [1.60736598 7.97213321 6.84313793] (tag id: 320.0)
+Rotation metric (Alpha): [ 1.08651882  1.8282472  11.07016601]
+Maximum rotation (Alpha): [ 4.98776558  5.5653246  30.73919885] (tag id: 317.0)
+
+*floor_2_obleft*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+1.5685393088650483
+Pre-Optimization GT: 2.2417323715841735
+Best GT: 1.5685393088650483 (delta: -0.6731930627191252
+Best Alpha: -37666.277199117634
+
+ 
+COMPARISION: index for min gt (870) vs index for min alpha: (636)
+Parameters (GT):
+{
+  "lin_vel_var": 0.5994842503189421,
+  "ang_vel_var": 0.0359381366380464,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 0.002154434690031887,
+  "ang_vel_var": 4.641588833612782e-07,
+  "tag_sba_var": 0.002154434690031887
+}
+
+ 
+For map based on min alpha, 
+     GT: 8.750724311547673 (delta = 6.508991939963499)
+For map based on min gt, 
+    GT: 1.5685393088650483 (delta = -0.6731930627191252)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 3.2e+10
+>       alpha_all_before: 1.6e+10
+> se3_not_gravity_before: 3.2e+10
+>          psi2uv_before: 0
+>         gravity_before: 5.7e-13
+----------------------------------
+>         chi2_all_after: 0.5
+>        alpha_all_after: -6.3e+03
+>  se3_not_gravity_after: 0.5
+>           psi2uv_after: 0
+>          gravity_after: 0.0006
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 3.2e+10
+>       alpha_all_before: 1.6e+10
+> se3_not_gravity_before: 3.2e+10
+>          psi2uv_before: 0
+>         gravity_before: 5.7e-13
+----------------------------------
+>         chi2_all_after: 1.3e+04
+>        alpha_all_after: -3.8e+04
+>  se3_not_gravity_after: 1.3e+04
+>           psi2uv_after: 0
+>          gravity_after: 0.014
+
+ 
+Rotation metric (GT): [0.05945572 4.37268617 0.09247306]
+Maximum rotation (GT): [ 0.34007759 12.32630522  0.49722263] (tag id: 324.0)
+Rotation metric (Alpha): [ 8.06998808  9.34007075 20.70887737]
+Maximum rotation (Alpha): [ 49.07868957  69.77190876 177.72755504] (tag id: 322.0)
+
+*floor_2_right_once*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+2.7621308965933076
+Pre-Optimization GT: 3.14570687516519
+Best GT: 2.7621308965933076 (delta: -0.38357597857188264
+Best Alpha: -51839.53843779564
+
+ 
+COMPARISION: index for min gt (550) vs index for min alpha: (133)
+Parameters (GT):
+{
+  "lin_vel_var": 0.00012915496650148855,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 1.6681005372000556e-09,
+  "ang_vel_var": 4.641588833612782e-07,
+  "tag_sba_var": 4.641588833612782e-07
+}
+
+ 
+For map based on min alpha, 
+     GT: 3.3033897296799384 (delta = 0.15768285451474817)
+For map based on min gt, 
+    GT: 2.7621308965933076 (delta = -0.38357597857188264)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 7.1e+05
+>       alpha_all_before: 3.3e+05
+> se3_not_gravity_before: 7.1e+05
+>          psi2uv_before: 0
+>         gravity_before: 5e-13
+----------------------------------
+>         chi2_all_after: 6.4
+>        alpha_all_after: -2.5e+04
+>  se3_not_gravity_after: 6.4
+>           psi2uv_after: 0
+>          gravity_after: 0.00067
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 3.6e+09
+>       alpha_all_before: 1.8e+09
+> se3_not_gravity_before: 3.6e+09
+>          psi2uv_before: 0
+>         gravity_before: 5e-13
+----------------------------------
+>         chi2_all_after: 1.5e+03
+>        alpha_all_after: -5.2e+04
+>  se3_not_gravity_after: 1.5e+03
+>           psi2uv_after: 0
+>          gravity_after: 0.00099
+
+ 
+Rotation metric (GT): [0.05059783 0.83966769 0.05199175]
+Maximum rotation (GT): [0.28214829 5.4920364  0.34793034] (tag id: 303.0)
+Rotation metric (Alpha): [0.05868723 0.25651994 0.03104929]
+Maximum rotation (Alpha): [0.26780427 4.9275319  0.3265864 ] (tag id: 302.0)
+
+straight_209_occam
+/home/rdave/invisible-map-generation/benchmarking/..
+No matches for straight_209_occam in recursive search of /home/rdave/invisible-map-generation/map_processing/../.cache
+
+*209_occam_obleft_once*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+0.8564900733897481
+Pre-Optimization GT: 0.8624122718958711
+Best GT: 0.8564900733897481 (delta: -0.0059221985061229665
+Best Alpha: -122026.60184429427
+
+ 
+COMPARISION: index for min gt (40) vs index for min alpha: (1)
+Parameters (GT):
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 7.742636826811277e-06,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 1e-10,
+  "ang_vel_var": 1e-10,
+  "tag_sba_var": 1.6681005372000556e-09
+}
+
+ 
+For map based on min alpha, 
+     GT: 3.211554203853354 (delta = 2.349141931957483)
+For map based on min gt, 
+    GT: 0.8564900733897481 (delta = -0.0059221985061229665)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 2e+12
+>       alpha_all_before: 9.8e+11
+> se3_not_gravity_before: 2e+12
+>          psi2uv_before: 0
+>         gravity_before: 2.5e-12
+----------------------------------
+>         chi2_all_after: 1.2e+04
+>        alpha_all_after: -1.1e+05
+>  se3_not_gravity_after: 1.2e+04
+>           psi2uv_after: 0
+>          gravity_after: 0.00075
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 2e+12
+>       alpha_all_before: 9.8e+11
+> se3_not_gravity_before: 2e+12
+>          psi2uv_before: 0
+>         gravity_before: 2.5e-12
+----------------------------------
+>         chi2_all_after: 3.9e+04
+>        alpha_all_after: -1.2e+05
+>  se3_not_gravity_after: 3.9e+04
+>           psi2uv_after: 0
+>          gravity_after: 1.4e-09
+
+ 
+Rotation metric (GT): [0.02938135 0.09741402 0.04355495]
+Maximum rotation (GT): [0.17022076 0.42909862 0.13358069] (tag id: 306.0)
+Rotation metric (Alpha): [1.85753981 4.71378374 8.33402102]
+Maximum rotation (Alpha): [ 7.30294306 22.3634472  35.83872419] (tag id: 1.0)
+
+*mac-1-2-official*
+/home/rdave/invisible-map-generation/benchmarking/..
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+1.0060093991233812
+Pre-Optimization GT: 1.3877280569221058
+Best GT: 1.0060093991233812 (delta: -0.3817186577987246
+Best Alpha: -179139.9762721634
+
+ 
+COMPARISION: index for min gt (980) vs index for min alpha: (351)
+Parameters (GT):
+{
+  "lin_vel_var": 10.0,
+  "ang_vel_var": 0.5994842503189421,
+  "tag_sba_var": 1e-10
+}
+Parameters (Alpha):
+{
+  "lin_vel_var": 4.641588833612782e-07,
+  "ang_vel_var": 0.00012915496650148855,
+  "tag_sba_var": 1.6681005372000556e-09
+}
+
+ 
+For map based on min alpha, 
+     GT: 4.536009530216895 (delta = 3.1482814732947895)
+For map based on min gt, 
+    GT: 1.0060093991233812 (delta = -0.3817186577987246)
+
+ 
+Fitness metrics (GT): 
+>        chi2_all_before: 1.7e+09
+>       alpha_all_before: 8.4e+08
+> se3_not_gravity_before: 1.7e+09
+>          psi2uv_before: 0
+>         gravity_before: 5.2e-12
+---------------------------------
+>         chi2_all_after: 0.33
+>        alpha_all_after: 2.2e+04
+>  se3_not_gravity_after: 0.32
+>           psi2uv_after: 0
+>          gravity_after: 0.0049
+
+Fitness metrics (Alpha): 
+>        chi2_all_before: 1.7e+09
+>       alpha_all_before: 8.4e+08
+> se3_not_gravity_before: 1.7e+09
+>          psi2uv_before: 0
+>         gravity_before: 5.2e-12
+----------------------------------
+>         chi2_all_after: 3.8e+04
+>        alpha_all_after: -1.8e+05
+>  se3_not_gravity_after: 3.8e+04
+>           psi2uv_after: 0
+>          gravity_after: 5.3
+
+ 
+Rotation metric (GT): [0.05460058 2.62668923 0.16281661]
+Maximum rotation (GT): [0.23669233 6.93174955 1.39796686] (tag id: 5.0)
+Rotation metric (Alpha): [3.72977552 3.63475603 5.86217354]
+Maximum rotation (Alpha): [38.92169816 20.67897407 61.14069163] (tag id: 306.0)
+
