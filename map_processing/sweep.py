@@ -161,11 +161,11 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         # Find min metrics from all the parameters
         min_gt = sweep_results.min_gt_result
         min_alpha = sweep_results.min_alpha_result
-
+        print(min_gt)
         # Represent results
-        # print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        # print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
-        # print(f"Best Alpha: {min_alpha}")
+        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+        print(f"Best Alpha: {min_alpha}")
 
     # Get best parameter based on ground truth
     min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
@@ -202,8 +202,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         # Print fitness metrics
         print(f"\n \nFor map based on min alpha, \n     GT: {min_oresult_alpha.gt_metric_opt} "
               f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
-        print(f"For map based on min gt, \n    GT: {min_oresult.gt_metric_opt} "
-              f"(delta = {min_oresult.gt_metric_opt - min_oresult.gt_metric_pre})")
+        print(f"For map based on min gt, \n    GT: {min_gt} "
+              f"(delta = {min_gt - min_oresult.gt_metric_pre})")
         print(f"\n \nFitness metrics (GT): \n"
               f"{min_oresult.fitness_metrics.repr_as_list()}")
         print(f"\nFitness metrics (Alpha): \n"
@@ -227,30 +227,30 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
         CacheManagerSingleton.cache_map(CacheManagerSingleton.SWEEP_PROCESSED_UPLOAD_TO, mi, processed_map_json)
-    if generate_plot:
-        # Visualize the worst anchor point from the best OResult (gt)
-        # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
-        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-        #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
-
-        # Visualize the best anchor point from the best OResult (GT)
-        # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
-        #                oconfig=sweep_results.sweep_args[min_value_idx][1],
-        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-        #         if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
-
-        # Visualize the best anchor point from the best OResult (Alpha)
-        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx_alpha][0]),
-                       oconfig=sweep_results.sweep_args[min_value_idx_alpha][1],
-                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-                if ground_truth_data is not None else None)
-
-        fig = sweep_results.visualize_results_heatmap()
-        if show_plot:
-            plt.show()
-        if cache_results:
-            fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
-                        dpi=500)
+    # if generate_plot:
+    #     # Visualize the worst anchor point from the best OResult (gt)
+    #     # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
+    #     #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+    #     #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+    #
+    #     # Visualize the best anchor point from the best OResult (GT)
+    #     # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
+    #     #                oconfig=sweep_results.sweep_args[min_value_idx][1],
+    #     #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+    #     #         if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+    #
+    #     # Visualize the best anchor point from the best OResult (Alpha)
+    #     optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx_alpha][0]),
+    #                    oconfig=sweep_results.sweep_args[min_value_idx_alpha][1],
+    #                    visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+    #             if ground_truth_data is not None else None)
+    #
+    #     fig = sweep_results.visualize_results_heatmap()
+    #     if show_plot:
+    #         plt.show()
+    #     if cache_results:
+    #         fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+    #                     dpi=500)
 
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
