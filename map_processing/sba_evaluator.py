@@ -10,7 +10,7 @@ import json
 import numpy as np
 import argparse
 
-import benchmarking_utils as B
+import benchmarking as B
 
 # import map_processing
 # from map_processing import benchmarking_utils as B
