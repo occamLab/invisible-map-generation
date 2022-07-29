@@ -4,6 +4,7 @@
 import datetime
 import json
 import multiprocessing as mp
+import pdb
 import tqdm
 import os
 import pdb
@@ -92,7 +93,7 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         raise Exception("Array of sweep results was not completely populated")
 
     return OSweepResults(
-        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
+        gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults,
@@ -185,9 +186,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         rotation_metric(pre_optimized_tags_alpha, optimized_tags_alpha)
 
     # Get max ground truth from above dict for the best parameter config
-    # max_gt = min_oresult.find_max_gt
-    # max_gt_tag = min_oresult.find_max_gt_tag
-    # max_rot_tag = optimized_tags[max_rot_diff_idx][7]
+    max_gt = min_oresult.find_max_gt
+    max_gt_tag = min_oresult.find_max_gt_tag
+    max_rot_tag = optimized_tags[max_rot_diff_idx][7]
 
     # Print results
     if verbose:
@@ -227,17 +228,17 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
         CacheManagerSingleton.cache_map(CacheManagerSingleton.SWEEP_PROCESSED_UPLOAD_TO, mi, processed_map_json)
-    # if generate_plot:
-    #     # Visualize the worst anchor point from the best OResult (gt)
-    #     # optimize_graph(graph=deepcopy(sweep_args[min_value_idx][0]), oconfig=sweep_args[min_value_idx][1],
-    #     #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-    #     #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
-    #
+    if generate_plot:
+        # Visualize the worst anchor point from the best OResult (gt)
+        # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]), oconfig=sweep_results.weep_args[min_value_idx][1],
+        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+        #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
+    
     #     # Visualize the best anchor point from the best OResult (GT)
-    #     # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
-    #     #                oconfig=sweep_results.sweep_args[min_value_idx][1],
-    #     #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-    #     #         if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
+                       oconfig=sweep_results.sweep_args[min_value_idx][1],
+                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+                if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
     #
     #     # Visualize the best anchor point from the best OResult (Alpha)
     #     optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx_alpha][0]),
@@ -245,12 +246,12 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     #                    visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
     #             if ground_truth_data is not None else None)
     #
-    #     fig = sweep_results.visualize_results_heatmap()
-    #     if show_plot:
-    #         plt.show()
-    #     if cache_results:
-    #         fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
-    #                     dpi=500)
+        fig = sweep_results.visualize_results_heatmap()
+        if show_plot:
+            plt.show()
+        if cache_results:
+            fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
+                        dpi=500)
 
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
