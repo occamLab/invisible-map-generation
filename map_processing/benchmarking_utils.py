@@ -182,7 +182,7 @@ def set_corner_pixels_tag_frame():
     assume that the corners are directly in line with the tag itself. 
 
     Returns:
-        pixels: A 4x4 array where the columns are the coordinates of the corners of a
+        pixels: A 4sba_pixel_cornersx4 array where the columns are the coordinates of the corners of a
         tag
     """
     top_left_pixel = np.array([[-TAG_SIZE/2],[TAG_SIZE/2],[0],[1]])
@@ -256,6 +256,54 @@ def compute_RMS_error(pixels1, pixels2):
 
     return RMS_error, throw
 
+def create_rotvec_from_simd_4x4(simd_4x4_matrix):
+    """
+    create the corresponding se3quat from a SIMD 4x4 matrix
+
+    Args:
+        simd_4x4_matrix (_type_): _description_
+    """
+    
+    simd_as_R = R.from_matrix(simd_4x4_matrix)
+    se3_quat = simd_as_R.as_rotvec()
+    
+    return se3_quat
+    
+def check_straight_on_detection(cam_pose, tag_pose):
+    """
+    Because we have the tag pose in the camera's coordinate frame,
+    we literally just have to compute if the rotation vector describing
+    the tag's orientation is 180 degrees (facing the camera)
+    
+    ... 
+    
+    i think
+    
+    TODO: verify this math.
+
+    Args:
+        pixels (list): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    throw = False
+    
+    evaluation_matrix = np.transpose(np.array([0,0,-1,0]))
+    
+    # print(np.linalg.norm(tag_rot))
+    # theta = np.pi - np.linalg.norm(tag_rot)
+    
+    
+    theta = np.arccos(np.dot(tag_pose[:,2],evaluation_matrix))
+    # lol
+    richard = 10 # threshold (in degrees)
+    
+    if np.degrees(theta) > richard:
+        print(f"not a straight-on detection, angle was {np.degrees(theta)} degrees off")
+        throw = True
+
+    return throw
 
 # loop_closure_evaluator.py
 def compute_camera_pose(tag_idx, unprocessed_map_data):
@@ -328,6 +376,7 @@ def create_simd_4x4_from_se3_quat(translation, quaternion):
     final_simd_4x4[3,3] = 1
     
     return final_simd_4x4
+
 
 def create_dict_of_observations_and_poses(up_path):
     

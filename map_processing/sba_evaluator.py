@@ -9,7 +9,11 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 import argparse
-import map_processing.benchmarking_utils as B
+
+import benchmarking_utils as B
+
+# import map_processing
+# from map_processing import benchmarking_utils as B
 
 def make_parser():
     """
@@ -49,12 +53,16 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize = False, show_coords =
         relevant tag : the tag corresponding to the current index.
         
     """  
+    THROW_OUT_OBLIQUE_TAGS = True
+    
     
     camera_intrinsics = B.compute_camera_intrinsics(tag_idx,unprocessed_map_data)
     observed_pixels = np.reshape(unprocessed_map_data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
+    camera_pose = B.compute_camera_pose(tag_idx,unprocessed_map_data)
     tag_pose = B.compute_tag_pose(tag_idx,unprocessed_map_data)
     corner_pixel_poses = B.set_corner_pixels_tag_frame()
     
+    relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"] 
     # This equation, whiteboarded out, to convert from the tag frame's corner pixels to the
     # corner pixels we see on the phone. 
     sba_pixel_corners = camera_intrinsics@B.MATRIX_SIZE_CONVERTER@tag_pose@corner_pixel_poses
@@ -82,13 +90,16 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize = False, show_coords =
         
         print("\n")
     
-    relevant_tag = unprocessed_map_data["tag_data"][tag_idx][0]["tag_id"]   
+      
     RMS_error, throw = B.compute_RMS_error(sba_pixel_corners, observed_pixels)
     # print(f"tag {relevant_tag} RMS error: {RMS_error}")
     
     if visualize and not throw: 
         B.visualizing_corner_pixel_differences([sba_pixel_corners, observed_pixels],relevant_tag , "CO")
     
+    if throw is not True and THROW_OUT_OBLIQUE_TAGS is True:
+        # print("todo")
+        throw = B.check_straight_on_detection(camera_pose, tag_pose)
     
     return RMS_error, throw, relevant_tag, sba_pixel_corners
 
@@ -114,16 +125,13 @@ def throw_out_bad_tags(data_path, visualize = False, show_coords= False, fix_it 
     
     for i in range(len(unprocessed_map_data["tag_data"])):
         sba_rms_error, throw,relevant_tag, corner_pixels = sba_evaluate(i, unprocessed_map_data, visualize, show_coords)
-
+        errors.append(sba_rms_error)
         unprocessed_map_data["tag_data"][i][0]["tag_corners_pixel_coordinates"] = np.ndarray.flatten(corner_pixels, order = "F").tolist()
         
         if throw: 
             throws.append(relevant_tag)
             throws_indeces.append(i)
             continue
-        
-        errors.append(sba_rms_error)
-   
 
     unprocessed_map_data["tag_data"] = [i for j, i in enumerate(unprocessed_map_data["tag_data"]) if j not in throws_indeces]
     if fix_it:  
@@ -142,7 +150,7 @@ if __name__ == "__main__":
     parser = make_parser()
     args = parser.parse_args()
     
-    PATH = "../benchmarking/datasets/floor_2_obright_cleaned.json"
+    PATH = "../benchmarking/datasets/floor_2_obleft_cleaned.json"
     
     FIX_IT = True
     if args.f:
