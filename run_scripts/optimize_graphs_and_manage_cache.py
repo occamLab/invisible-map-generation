@@ -35,12 +35,18 @@ from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
 import sba_evaluator as sba
 
-SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
+}
+
+NON_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 1]),
 }
 
 # def processed_to_
@@ -100,13 +106,14 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
 
         # Run sweep if specified
         if sweep:
-            sweep_result = sweep_params(mi=map_info, ground_truth_data=gt_data,
+            sweep_config = SBA_SWEEP_CONFIG if sba == 0 else NON_SBA_SWEEP_CONFIG
+            sweep_results = sweep_params(mi=map_info, ground_truth_data=gt_data,
                          base_oconfig=OConfig(is_sba=sba == PrescalingOptEnum.USE_SBA.value,
                                               compute_inf_params=compute_inf_params),
-                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
+                         sweep_config=sweep_config, ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                          verbose=True, generate_plot=True, show_plot=visualize, num_processes=num_processes,
-                         no_sba_baseline=False, ntsba=ntsba)
-            opt_results.append((sweep_result.min_oresult, map_info))
+                         no_sba_baseline=False, ntsba=ntsba, cache_results=True)
+            opt_results.append((sweep_results.min_oresult, map_info))
         else:
             # If no sweep, then run basic optimization
             oconfig = OConfig(is_sba=sba == 0, weights=WEIGHTS_DICT[WeightSpecifier(weights)],
@@ -128,13 +135,3 @@ def find_optimal_map(cms: CacheManagerSingleton, to_fix: List[int], compute_inf_
             print(f"Rotation metric: {rot_metric}")
             print(f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
     return opt_results
-
-
-
-
-
-
-
-
-
-
