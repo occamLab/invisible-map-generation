@@ -4,6 +4,7 @@
 import datetime
 import json
 import multiprocessing as mp
+import pdb
 import tqdm
 import os
 from copy import deepcopy
@@ -87,7 +88,7 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         raise Exception("Array of sweep results was not completely populated")
 
     return OSweepResults(
-        gt_results_list=list(results_arr.flatten(order="C")), gt_results_arr_shape=list(results_arr.shape),
+        gt_results_arr_shape=list(results_arr.shape),
         sweep_config={item[0]: list(item[1]) for item in sweep_arrs.items()},
         sweep_config_keys_order=ordered_sweep_config_keys, base_oconfig=base_oconfig, map_name=mi.map_name,
         generated_params=UGDataSet.parse_obj(mi.map_dct).generated_from, oresults_list=results_oresults, sweep_args=sweep_args)
@@ -188,10 +189,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             fig.savefig(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, results_cache_file_name_no_ext + ".png"),
                         dpi=500)
 
-
     if upload_best:
         cms.upload(mi, processed_map_json, verbose=verbose)
-
     return sweep_results
 
 def _sweep_target(sweep_args_tuple: Tuple[Graph, OConfig, Dict[int, np.ndarray], Tuple[int, int], bool]) \
