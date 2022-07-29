@@ -1180,7 +1180,6 @@ class  OSweepResults(BaseModel):
     """
     The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
     """
-    gt_results_list: List[float]
     alpha_results_list: List[float] = []
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
@@ -1215,15 +1214,9 @@ class  OSweepResults(BaseModel):
                              "items in the sweep_config_keys_order list")
         return v
 
-    # noinspection PyMethodParameters
-    @validator("gt_results_list")
-    def validate_length_of_gt_results_list(cls, v, values):
-        gt_results_arr_shape = values["gt_results_arr_shape"]
-        expected_length = np.product(gt_results_arr_shape)
-        if len(v) != expected_length:
-            raise ValueError(f"gt_results_list cannot be of length {len(v)} if gt_results_arr_shape is "
-                             f"{gt_results_arr_shape} (expected length is {expected_length})")
-        return v
+    @property
+    def gt_results_list(self):
+        return np.array([oresult.gt_metric_opt for oresult in self.oresults_list])
 
     @property
     def sweep_config_dict(self) -> Dict[str, List[float]]:
