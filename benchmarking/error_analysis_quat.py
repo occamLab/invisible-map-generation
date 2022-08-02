@@ -13,7 +13,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import argparse
 import map_processing.benchmarking_utils as B
-import map_processing.sba_evaluator as sba
+import map_processing.throw_out_bad_tags as tag_filter
 
 def make_parser():
     """
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         
     OBLQ_PATH = config["OBLIQUE_DATA_PATH"]
     STRT_PATH = config["STRAIGHT_ON_DATA_PATH"]
-    sba.throw_out_bad_tags(OBLQ_PATH, visualize = False, show_coords = False)
+    tag_filter.throw_out_bad_tags(OBLQ_PATH, visualize = False, show_coords = False)
 
     VISUALIZE = args.v
     GIVE_INFO = args.i

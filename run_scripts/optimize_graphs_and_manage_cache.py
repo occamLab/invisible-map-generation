@@ -245,7 +245,7 @@ if __name__ == "__main__":
     if args.t:
         this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
         print(this_path)
-        tag_filter.throw_out_bad_tags(this_path[0], verbose = True)
+        print(tag_filter.throw_out_bad_tags(this_path[0], verbose = True))
 
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)

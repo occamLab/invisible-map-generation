@@ -18,8 +18,9 @@ sys.path.append(repository_root)
 import json
 import numpy as np
 
+import map_processing
 import map_processing.benchmarking_utils as B
-import map_processing.sba_evaluator as sba
+import map_processing.throw_out_bad_tags as tag_filter
 
 import argparse
 
@@ -92,11 +93,11 @@ def create_observations_dict(instances, unprocessed_map_data):
     for idx in instances:
         results[idx] = {}
         if idx == instances[0]:
-            sba_pixel_corners = B.compute_corner_pixels(
+            tag_filter_pixel_corners = B.compute_corner_pixels(
                 idx, unprocessed_map_data).tolist()
-        # prettified_corner_pixels = [sba_pixel_corners[:2,0],sba_pixel_corners[:2,1],sba_pixel_corners[:2,2],sba_pixel_corners[:2,3]]
+        # prettified_corner_pixels = [tag_filter_pixel_corners[:2,0],tag_filter_pixel_corners[:2,1],tag_filter_pixel_corners[:2,2],tag_filter_pixel_corners[:2,3]]
         # results[idx]["corner_pixels"] = [pixel_pair.tolist() for pixel_pair in prettified_corner_pixels]
-        results[idx]["corner_pixels"] = sba_pixel_corners
+        results[idx]["corner_pixels"] = tag_filter_pixel_corners
         results[idx]["tag_pose"] = (B.compute_tag_pose(
             idx, unprocessed_map_data).tolist())
         results[idx]["camera_pose"] = (
@@ -204,7 +205,7 @@ if __name__ == "__main__":
         print(f"your configuration: {config}")
     
     if args.t:
-        sba.throw_out_bad_tags(config["UNPROCESSED_PATH"])
+        tag_filter.throw_out_bad_tags(config["UNPROCESSED_PATH"])
 
     VISUALIZE = False
     if args.v:
