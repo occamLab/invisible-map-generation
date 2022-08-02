@@ -1,3 +1,4 @@
+import pdb
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -39,18 +40,20 @@ def plot_compare(df):
     """
 
     """
-    x = np.arange(len(df))
+    x = np.arange(len(df_SBA_oblique))
     fig, ax = plt.subplots()
+    print(df_SBA_oblique['GT'])
     rects1 = ax.bar(x - (0.35 / 2), df_SBA_oblique['GT'], 0.35, label="SBA GT")
     rects2 = ax.bar(x + (0.35 / 2), df_SBA_oblique['Alpha'], 0.35, label="SBA Alpha")
 
     ax.set_ylabel("Metric Value")
     ax.set_xlabel("Metrics per Dataset")
-    ax.set_xticks(x, ["SBA GT", "SBA Alpha"])
+    # ax.set_xticks(x, ["SBA GT", "SBA Alpha"])
     ax.legend()
 
     ax.bar_label(rects1, padding=3)
     ax.bar_label(rects2, padding=3)
+    plt.show()
 
 
 plot_compare(df_SBA_straight)
