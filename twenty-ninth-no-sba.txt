@@ -1,21 +1,3 @@
-*desnat_straight_once*
-
-*floor_2_obright*
-
-*desnat_straight_three*
-
-*209-to-occam*
-
-*robolab_straight_on*
-
-*floor_2_obleft*
-
-*floor_2_right_once*
-
-straight_209_occam
-*desnat_straight_once*
-
-*floor_2_obright*
 
 *desnat_straight_once*
 Generating list of optimization sweeping parameters...
@@ -460,11 +442,6 @@ Maximum rotation (Alpha): [0.26780427 4.9275319  0.3265864 ] (tag id: 302.0)
 
 straight_209_occam
 No matches for straight_209_occam in recursive search of /home/powerhorse/invisible-map-generation/map_processing/../.cache
-
-*209_occam_obleft_once*
-Generating list of optimization sweeping parameters...
-1000 parameters generated for sweeping
-Starting multi-process optimization parameter sweep (with 8 processes)...
 
 *mac-1-2-official*
 Generating list of optimization sweeping parameters...

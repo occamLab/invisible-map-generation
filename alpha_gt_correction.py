@@ -77,8 +77,8 @@ def plot_compare(df_this, graph_title):
 oblique = ["floor_2_obright", "floor_2_obleft", "floor_2_right_once", "209_occam_obleft_once", "mac-1-2-official"]
 
 # Map Name, SBA, GT, Alpha, Oblique
-data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False, oblique)
-data_as_list = data_from_list(data_mid, "twenty-eighth-sba.txt", True, oblique)
+data_mid = data_from_list([], "twenty-ninth-no-sba.txt", False, oblique)
+data_as_list = data_from_list(data_mid, "twenty-ninth-sba.txt", True, oblique)
 df = pd.DataFrame(data_as_list, columns=["MapName", "SBA", "GT", "Alpha", "Oblique"])
 
 # Compare SBA straight to SBA not straight
