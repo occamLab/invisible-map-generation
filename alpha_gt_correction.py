@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+oblique = ["floor_2_obright", "floor_2_obleft", "floor_2_right_once", "209_occam_obleft_once", "mac-1-2-official"]
 
-def data_from_list(data, txt, sba):
+def data_from_list(data, txt, sba, oblique):
     """
 
     """
@@ -25,41 +26,25 @@ def data_from_list(data, txt, sba):
         line_before_alpha_index = lines_list.index("For map based on min alpha,")
         alpha_pre = lines_list[line_before_alpha_index + 1]
         alpha = float(alpha_pre[9:alpha_pre.index("(")])
-        print(alpha)
 
         # Get gt based gt for dataset
         line_before_gt_index = lines_list.index("For map based on min gt,")
         gt_pre = lines_list[line_before_gt_index + 1]
         gt = float(gt_pre[9:gt_pre.index("(")])
 
-        data_final.append([dataset, sba, gt, alpha])
+        # Add variable telling if data is obliquely recorded or not
+        if dataset[1:-1] in oblique:
+            oblique_bool = True
+        else:
+            oblique_bool = False
+        data_final.append([dataset[1:-1], sba, gt, alpha, oblique_bool])
     return data
 
+# Map Name, SBA, GT, Alpha, Oblique
+data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False, oblique)
+data_as_list = data_from_list(data_mid, "twenty-eighth-sba.txt", True, oblique)
 
-data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False)
-data_final = data_from_list(data_mid, "twenty-eighth-sba.txt", True)
-
-# Map, SBA, Oblique, GT, Alpha
-data_as_list = [[0, True, False, 0.4122251805184278, 0.4693017305863726],
-                [0, False, False, 0.4693017305863726, 3.597106735269945],
-                [1, True, True, 2.4830930692532625, 4.8034737353612975],
-                [1, False, True, 1.0949620346049764, 10.84936043529909],
-                [2, True, False, 0.351327362147805, 0.3695606772244322],
-                [2, False, False, 0.38145472591695706, 3.4262794582283584],
-                [3, True, False, 0.6071509617014544, 0.6077510086873326],
-                [3, False, False, 0.7468231835444697, 0.7503525402429059],
-                [4, True, False, 0.6341077701963096, 0.7729871372392112],
-                [4, False, False, 0.8664202399348512, 2.5079394237087946],
-                [5, True, True, 5.492737599382568, 28.09804851932197],
-                [5, False, True, 1.5685393088650483, 8.750724311547673],
-                [6, True, True, 2.9659351272042755, 3.726751634303463],
-                [6, False, True, 2.7621308965933076, 3.3033897296799384],
-                [7, True, True, 0.6125945027105751, 0.8383744614481091],
-                [7, False, True, 0.8564900733897481, 3.211554203853354],
-                [8, True, True, 3.8112978959625674, 3.8648293867972283],
-                [8, False, True, 1.0060093991233812, 4.536009530216895]]
-
-df = pd.DataFrame(data_as_list, columns=["MapID", "SBA", "Oblique", "GT", "Alpha"])
+df = pd.DataFrame(data_as_list, columns=["MapName", "SBA", "GT", "Alpha", "Oblique"])
 
 # Compare SBA to no SBA for individual metrics
 # gt_sba_to_no_sba = stats.pearsonr(METRICS_DICT["sba"][0], METRICS_DICT["no_sba"][0])
@@ -90,7 +75,7 @@ def plot_compare(df_this):
     plt.show()
 
 
-# plot_compare(df_SBA_straight)
+plot_compare(df_SBA_straight)
 
 
 
