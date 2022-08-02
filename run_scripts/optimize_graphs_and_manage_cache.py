@@ -34,13 +34,21 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-from map_processing import sba_evaluator as sba
+from map_processing import throw_out_bad_tags as tag_filter
 
-SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
+    # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
+}
+
+NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 
@@ -237,7 +245,7 @@ if __name__ == "__main__":
     if args.t:
         this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
         print(this_path)
-        sba.throw_out_bad_tags(this_path[0])
+        tag_filter.throw_out_bad_tags(this_path[0], verbose = True)
 
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
@@ -245,10 +253,11 @@ if __name__ == "__main__":
         # If you want to sweep through parameters (no optimization)
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
+            sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
             sweep_params(mi=map_info, ground_truth_data=gt_data,
                          base_oconfig=OConfig(is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
                                               compute_inf_params=compute_inf_params),
-                         sweep_config=SWEEP_CONFIG, ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
+                         sweep_config=sweep_config, ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                          verbose=True, generate_plot=True, show_plot=args.v, num_processes=args.np, 
                          no_sba_baseline = args.nsb, upload_best=args.F, cms=cms)
         
