@@ -34,7 +34,7 @@ from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import holistic_optimize, WEIGHTS_DICT, WeightSpecifier
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.sweep import sweep_params
-from map_processing import sba_evaluator as sba
+from map_processing import throw_out_bad_tags as tag_filter
 
 SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     if args.t:
         this_path = cms.find_maps(map_pattern, search_only_unprocessed=True, paths=True)
         print(this_path)
-        sba.throw_out_bad_tags(this_path[0])
+        tag_filter.throw_out_bad_tags(this_path[0], verbose = True)
 
     compute_inf_params = OComputeInfParams(lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv, tag_sba_var=args.tsv,
                                            ang_vel_var=args.avv)
