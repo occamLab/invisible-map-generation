@@ -3,11 +3,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-oblique = ["floor_2_obright", "floor_2_obleft", "floor_2_right_once", "209_occam_obleft_once", "mac-1-2-official"]
 
 def data_from_list(data, txt, sba, oblique):
     """
+    This function takes in configured data and appends data read from the file specified int he arguments to it.
 
+    Args:
+        data: A list of already configured data to append new data to
+        txt: A string representing the name of the file to get data from
+        sba: A boolean representing whether this file contains SBA data or not
+        oblique: A boolean representing whether the data in the file was recorded obliquely or not
+
+    Returns:
+    A list of lists where each line contains the configured data pulled from the file. The form of this data is:
+    [Name of the Recording, SBA, min GT when GT is used, min GT when alpha is used, Oblique]
     """
     # Convert txt to list by lines
     with open(txt) as f:
@@ -40,31 +49,20 @@ def data_from_list(data, txt, sba, oblique):
         data_final.append([dataset[1:-1], sba, gt, alpha, oblique_bool])
     return data
 
-# Map Name, SBA, GT, Alpha, Oblique
-data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False, oblique)
-data_as_list = data_from_list(data_mid, "twenty-eighth-sba.txt", True, oblique)
 
-df = pd.DataFrame(data_as_list, columns=["MapName", "SBA", "GT", "Alpha", "Oblique"])
-
-# Compare SBA to no SBA for individual metrics
-# gt_sba_to_no_sba = stats.pearsonr(METRICS_DICT["sba"][0], METRICS_DICT["no_sba"][0])
-# alpha_sba_to_no_sba = stats.pearsonr(METRICS_DICT["sba"][1], METRICS_DICT["no_sba"][1])
-# No sba and sba are positively correlated, so if one is high the other will relatively be too. This shows that neither
-# can save a particularly bad dataset.
-
-# Compare SBA straight to SBA not straight
-df_SBA_straight = df.loc[(df.Oblique == False) & (df.SBA == True), ['GT', 'Alpha']]
-df_SBA_oblique = df.loc[(df.Oblique == True) & (df.SBA == True), ['GT', 'Alpha']]
-
-
-def plot_compare(df_this):
+def plot_compare(df_this, graph_title):
     """
+    This function plots the min GT when GT and Alpha are used to determine for the Pandas DataFrame provided.
+
+    Args:
+        df_this: A Pandas DataFrame to be plotted for comparing between GT and Alpha
+        graph_title: A string representing the title of the plot
 
     """
     x = np.arange(len(df_this))
     fig, ax = plt.subplots()
-    rects1 = ax.bar(x - (0.35 / 2), df_this['GT'], 0.35, label="SBA GT")
-    rects2 = ax.bar(x + (0.35 / 2), df_this['Alpha'], 0.35, label="SBA Alpha")
+    rects1 = ax.bar(x - (0.35 / 2), df_this['GT'], 0.35, label="GT")
+    rects2 = ax.bar(x + (0.35 / 2), df_this['Alpha'], 0.35, label="Alpha")
 
     ax.set_ylabel("Metric Value")
     ax.set_xlabel("Metrics per Dataset")
@@ -72,10 +70,30 @@ def plot_compare(df_this):
 
     ax.bar_label(rects1, padding=3)
     ax.bar_label(rects2, padding=3)
+    plt.title(graph_title)
     plt.show()
 
 
-plot_compare(df_SBA_straight)
+oblique = ["floor_2_obright", "floor_2_obleft", "floor_2_right_once", "209_occam_obleft_once", "mac-1-2-official"]
+
+# Map Name, SBA, GT, Alpha, Oblique
+data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False, oblique)
+data_as_list = data_from_list(data_mid, "twenty-eighth-sba.txt", True, oblique)
+df = pd.DataFrame(data_as_list, columns=["MapName", "SBA", "GT", "Alpha", "Oblique"])
+
+# Compare SBA straight to SBA not straight
+df_SBA_straight = df.loc[(df.Oblique == False) & (df.SBA == True), ['GT', 'Alpha']]
+df_SBA_oblique = df.loc[(df.Oblique == True) & (df.SBA == True), ['GT', 'Alpha']]
+
+plot_compare(df_SBA_straight, "SBA Straight")
+plot_compare(df_SBA_oblique, "SBA Oblique")
+
+# Compare no SBA straight to no SBA not straight
+df_no_SBA_straight = df.loc[(df.Oblique == False) & (df.SBA == False), ['GT', 'Alpha']]
+df_no_SBA_oblique = df.loc[(df.Oblique == True) & (df.SBA == False), ['GT', 'Alpha']]
+
+plot_compare(df_no_SBA_straight, "No SBA Straight")
+plot_compare(df_no_SBA_oblique, "No SBA Oblique")
 
 
 
