@@ -3,6 +3,7 @@ Utilities used while benchmarking Invisible Maps.
 """
 
 import os
+import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
@@ -140,7 +141,7 @@ def visualize_data_spread(qxyzs, xyzs, test_name):
         
     plt.show()
 
-# sba_evaluator.py
+# throw_out_bad_tags.py
 
 def compute_camera_intrinsics(tag_idx, unprocessed_map_data):
     """
@@ -269,11 +270,17 @@ def create_rotvec_from_simd_4x4(simd_4x4_matrix):
     
     return se3_quat
     
-def check_straight_on_detection(cam_pose, tag_pose):
+def check_straight_on_detection(tag_id, tag_pose, verbose):
     """
-    Because we have the tag pose in the camera's coordinate frame,
-    we literally just have to compute if the rotation vector describing
-    the tag's orientation is 180 degrees (facing the camera)
+    If the z-axis of the tag-pose is antiparallel with the z-axis of the camera frame 
+    (e.g., the 3rd column of the tag pose is about (0, 0, -1, 0)) that means you are
+    looking at the tag straight on.
+    
+    If the 3rd column of the tag pose deviates significantly from (0, 0, -1) then you have an oblique tag.
+    
+    easiest thing is to do arc cos of the dot product between the 3rd column of the tag and (0, 0, -1, 0)
+    which is just acos(-tag_pose[2,2]) and see how close that is to 0.
+    - Paul Ruvolo   
     
     ... 
     
@@ -282,27 +289,49 @@ def check_straight_on_detection(cam_pose, tag_pose):
     TODO: verify this math.
 
     Args:
-        pixels (list): _description_
+        tag_id (int): the tag id
+        tag_pose (simd4x4 matrix): the tag pose in the camera frame. 
+        
 
     Returns:
-        _type_: _description_
+        throw (bool): true if the tag is considered oblique, false if it's straight.
     """
     throw = False
-    
+    # pdb.set_trace()
     evaluation_matrix = np.transpose(np.array([0,0,-1,0]))
-    
-    # print(np.linalg.norm(tag_rot))
-    # theta = np.pi - np.linalg.norm(tag_rot)
-    
-    
+       
     theta = np.arccos(np.dot(tag_pose[:,2],evaluation_matrix))
     # lol
     richard = 10 # threshold (in degrees)
-    
+    # print(np.degrees(theta))
     if np.degrees(theta) > richard:
-        print(f"not a straight-on detection, angle was {np.degrees(theta)} degrees off")
+        if verbose:
+            print(f"not a straight-on detection, {tag_id} angle was {np.degrees(theta)} degrees off")
         throw = True
 
+    return throw
+
+def check_detection_distance(tag_id, tag_pose, verbose):
+    """
+    Make sure that every tag detection is within a certain distance to the camera. 
+    Helps reduce observations of tags that aren't the intended detection.
+
+    Args:
+        tag_id (int): the id of the tag
+        tag_pose (simd 4x4): the tag's POSE
+
+    Returns:
+        bool: true if tag is too far, false if tag is fine.
+    """
+    throw = False
+    tag_xyz = tag_pose[0:3,3]
+    
+    threshold = 3 # in meters
+    if np.linalg.norm(tag_xyz) > threshold:
+        if verbose:
+            print(f"tag {tag_id} is too far away: {np.linalg.norm(tag_xyz)}")
+        throw = True
+    
     return throw
 
 # loop_closure_evaluator.py
