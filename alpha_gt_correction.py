@@ -3,6 +3,42 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+
+def data_from_list(data, txt, sba):
+    """
+
+    """
+    # Convert txt to list by lines
+    with open(txt) as f:
+        lines_list = [line.rstrip() for line in f.readlines()]
+
+    # Extract data from the main list
+    data_final = data
+    dataset_names = [name for name in lines_list if '*' in name]
+
+    for dataset in dataset_names:
+        # Reset list to start from current index
+        name_index = lines_list.index(dataset)
+        lines_list = lines_list[name_index:]
+
+        # Get alpha based gt for dataset
+        line_before_alpha_index = lines_list.index("For map based on min alpha,")
+        alpha_pre = lines_list[line_before_alpha_index + 1]
+        alpha = float(alpha_pre[9:alpha_pre.index("(")])
+        print(alpha)
+
+        # Get gt based gt for dataset
+        line_before_gt_index = lines_list.index("For map based on min gt,")
+        gt_pre = lines_list[line_before_gt_index + 1]
+        gt = float(gt_pre[9:gt_pre.index("(")])
+
+        data_final.append([dataset, sba, gt, alpha])
+    return data
+
+
+data_mid = data_from_list([], "twenty-eighth-no-sba.txt", False)
+data_final = data_from_list(data_mid, "twenty-eighth-sba.txt", True)
+
 # Map, SBA, Oblique, GT, Alpha
 data_as_list = [[0, True, False, 0.4122251805184278, 0.4693017305863726],
                 [0, False, False, 0.4693017305863726, 3.597106735269945],
@@ -22,6 +58,7 @@ data_as_list = [[0, True, False, 0.4122251805184278, 0.4693017305863726],
                 [7, False, True, 0.8564900733897481, 3.211554203853354],
                 [8, True, True, 3.8112978959625674, 3.8648293867972283],
                 [8, False, True, 1.0060093991233812, 4.536009530216895]]
+
 df = pd.DataFrame(data_as_list, columns=["MapID", "SBA", "Oblique", "GT", "Alpha"])
 
 # Compare SBA to no SBA for individual metrics
@@ -33,22 +70,19 @@ df = pd.DataFrame(data_as_list, columns=["MapID", "SBA", "Oblique", "GT", "Alpha
 # Compare SBA straight to SBA not straight
 df_SBA_straight = df.loc[(df.Oblique == False) & (df.SBA == True), ['GT', 'Alpha']]
 df_SBA_oblique = df.loc[(df.Oblique == True) & (df.SBA == True), ['GT', 'Alpha']]
-print(df_SBA_oblique["GT"])
 
 
-def plot_compare(df):
+def plot_compare(df_this):
     """
 
     """
-    x = np.arange(len(df_SBA_oblique))
+    x = np.arange(len(df_this))
     fig, ax = plt.subplots()
-    print(df_SBA_oblique['GT'])
-    rects1 = ax.bar(x - (0.35 / 2), df_SBA_oblique['GT'], 0.35, label="SBA GT")
-    rects2 = ax.bar(x + (0.35 / 2), df_SBA_oblique['Alpha'], 0.35, label="SBA Alpha")
+    rects1 = ax.bar(x - (0.35 / 2), df_this['GT'], 0.35, label="SBA GT")
+    rects2 = ax.bar(x + (0.35 / 2), df_this['Alpha'], 0.35, label="SBA Alpha")
 
     ax.set_ylabel("Metric Value")
     ax.set_xlabel("Metrics per Dataset")
-    # ax.set_xticks(x, ["SBA GT", "SBA Alpha"])
     ax.legend()
 
     ax.bar_label(rects1, padding=3)
@@ -56,11 +90,7 @@ def plot_compare(df):
     plt.show()
 
 
-plot_compare(df_SBA_straight)
+# plot_compare(df_SBA_straight)
 
-# gt_straight_sba_to_gt_ob_sba = stats.pearsonr(STRAIGHT_METRICS_DICT["sba"][0], OBLIQUE_METRICS_DICT["sba"][0])
-# alpha_straight_sba_to_alpha_ob_sba = stats.pearsonr(STRAIGHT_METRICS_DICT["sba"][1], OBLIQUE_METRICS_DICT["sba"][1])
-
-# print(f"gt sba to no sba: {gt_sba_to_no_sba} \n alpha sba to no sba: {alpha_sba_to_no_sba} \n ")
 
 

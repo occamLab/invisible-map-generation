@@ -1,8 +1,4 @@
-*desnat_straight_once*
-/home/rdave/invisible-map-generation/benchmarking/..
-Generating list of optimization sweeping parameters...
-1000 parameters generated for sweeping
-Starting multi-process optimization parameter sweep (with 8 processes)...
+
 *desnat_straight_once*
 /home/rdave/invisible-map-generation/benchmarking/..
 Generating list of optimization sweeping parameters...
