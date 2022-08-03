@@ -58,10 +58,11 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize = False, verbose = Fal
     # We've discovered that the alpha metric works when observations are straight-on.
     THROW_OUT_OBLIQUE_TAGS = True
     PRINT_CORNER_PIXELS = False
+    SHOW_RMS_ERROR = False
     
     camera_intrinsics = B.compute_camera_intrinsics(tag_idx,unprocessed_map_data)
     observed_pixels = np.reshape(unprocessed_map_data["tag_data"][tag_idx][0]["tag_corners_pixel_coordinates"],[2,4],order = 'F')
-    camera_pose = B.compute_camera_pose(tag_idx,unprocessed_map_data)
+    # camera_pose = B.compute_camera_pose(tag_idx,unprocessed_map_data)
     tag_pose = B.compute_tag_pose(tag_idx,unprocessed_map_data)
     corner_pixel_poses = B.set_corner_pixels_tag_frame()
     
@@ -97,7 +98,7 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize = False, verbose = Fal
     RMS_error, throw = B.compute_RMS_error(sba_pixel_corners, observed_pixels)
     
     # Error between observed pixels in the camera + the calculated pixel positions based on camera and tag pose.
-    if verbose:
+    if verbose and SHOW_RMS_ERROR:
         print(f"tag {relevant_tag} RMS error: {RMS_error} pixels")
     
     if visualize and not throw: 

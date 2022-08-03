@@ -90,7 +90,7 @@ def run(oblq_path,strt_path,visualize,info,test_name):
     if info:
         B.data_information((o_qx,o_qy,o_qz,s_qx,s_qy,s_qz))
     if visualize:
-        B.visualize_data_spread((o_qx,o_qy,o_qz,s_qx,s_qy,s_qz), (o_x,o_y,o_z,s_x,s_y,s_z), test_name)
+        B.visualize_data_spread(xyzs = (o_x,o_y,o_z,s_x,s_y,s_z), test_name = test_name, qxyzs = (o_qx,o_qy,o_qz,s_qx,s_qy,s_qz))
     
     variances = B.compute_variances([o_qx,o_qy,o_qz,o_x,o_y,o_z])
     
@@ -114,7 +114,7 @@ if __name__ == "__main__":
         
     OBLQ_PATH = config["OBLIQUE_DATA_PATH"]
     STRT_PATH = config["STRAIGHT_ON_DATA_PATH"]
-    tag_filter.throw_out_bad_tags(OBLQ_PATH, visualize = False, show_coords = False)
+    # tag_filter.throw_out_bad_tags(OBLQ_PATH, visualize = False, verbose = False)
 
     VISUALIZE = args.v
     GIVE_INFO = args.i

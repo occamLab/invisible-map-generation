@@ -112,7 +112,7 @@ def compute_variances(all_pose_data):
         
     return variances
 
-def visualize_data_spread(qxyzs, xyzs, test_name):
+def visualize_data_spread(xyzs, test_name, qxyzs = None):
     """
     Visualize both datasets
 
@@ -128,15 +128,24 @@ def visualize_data_spread(qxyzs, xyzs, test_name):
     Returns:
         True: when complete!
     """
-    all_pose_data = (qxyzs + xyzs)
+    
+    
     titles = ["oblique-qx","oblique-qy","oblique-qz","straight-qx","straight-qy","straight-qz",
               "o_x","o_y","o_z","s_x","s_y","s_z"]
     colors = ["red","green","blue"]
     plt.figure(figsize= (15,10))
     plt.suptitle(test_name, fontsize = 15)
     
-    for i in range(12):
-        plt.subplot(4,3,i+1, title = titles[i])
+    if qxyzs == None:
+        titles = titles[:6]
+        all_pose_data = (xyzs)
+        rows = 2
+    else:  
+        all_pose_data = (qxyzs + xyzs)  
+        rows = 4
+    
+    for i in range(len(titles)):
+        plt.subplot(rows,3,i+1, title = titles[i])
         plt.hist(all_pose_data[i], bins = 25, color = colors[i%3])
         
     plt.show()

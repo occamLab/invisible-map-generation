@@ -2,11 +2,19 @@
 Analyzing the error distribution of oblique tag observations v.s. straight-on tag observations.
 """
 
+import os
+import sys
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import argparse
+import map_processing.benchmarking_utils as B
+import map_processing.throw_out_bad_tags as tag_filter
 
 
 def make_parser():
@@ -46,68 +54,7 @@ def error_calculation (mat1, mat2):
     net_rotation = (np.linalg.inv(LIDAR_array)@without_LIDAR_array)[0:3,0:3]
     net_rpy = R.from_matrix(net_rotation).as_euler("xyz", degrees = True)
     return net_rpy
-    
-def error_information (rpys):
-    """
-    Give basic information about both datasets -- median, mean, range, std, etc.
-
-    Args:
-        rpys(list): a list of lists containing rolls, pitches, and yaws data. 
-    """
-    names = ["oblique-rolls","oblique-pitches","oblique-yaws",
-             "straight-rolls","straight-pitches","straight-yaws"]
-    
-    for i, dataset in enumerate(rpys):
-        # print(dataset)
-        print(names[i])
-        print(f"Median: {np.median(dataset)}")
-        print(f"Mean: {np.mean(dataset)}")
-        print(f"Range: {max(dataset)-min(dataset)}")
-        print(f"Standard Deviation: {np.std(dataset)}")
-        print("\n")
-    
-def error_visualization(rpys,test_name):
-    """
-    Visualize both datasets
-
-    Args:
-        o_rolls (list): list of rolls from oblique observations
-        o_pitches (list): list of pitches from oblique observations
-        o_yaws (list): list of yaws from oblique observations
-        s_rolls (list): list of rolls from straight observations
-        s_pitches (list): list of pitches from straight observations
-        s_yaws (list): list of yaws from straight observations
-        test_name (str): name of the test (for titling/saving purposes)
-
-    Returns:
-        True: when complete!
-    """
-    o_rolls,o_pitches,o_yaws,s_rolls,s_pitches,s_yaws = rpys
-    plt.figure(figsize= (15,10))
-    plt.suptitle(test_name, fontsize = 20)
-    
-    plt.subplot(2,3,1, title = "oblique-rolls")
-    plt.hist(o_rolls, range = (-10,10), bins = 25, color = "red")
-
-    plt.subplot(2,3,2, title = "oblique-pitches" )
-    plt.hist(o_pitches, range = (-10,10), bins = 25, color = "green")
-    
-    plt.subplot(2,3,3, title = "oblique-yaws")
-    plt.hist(o_yaws, range = (-10,10), bins = 25, color = "blue")
-    
-    plt.subplot(2,3,4, title = "straight-rolls")
-    plt.hist(s_rolls, range = (-10,10), bins = 25, color = "red")
-
-    plt.subplot(2,3,5, title = "straight-pitches")
-    plt.hist(s_pitches, range = (-10,10), bins = 25, color = "green")
-
-    plt.subplot(2,3,6, title = "straight-yaws")
-    plt.hist(s_yaws, range = (-10,10), bins = 25, color = "blue")
-    plt.savefig(f"imgs/{test_name}.png")
-    plt.show()
-    
-    return True
-    
+      
 def run(oblq_path,strt_path,visualize,info,test_name):
     """
     Run error analysis
@@ -150,9 +97,9 @@ def run(oblq_path,strt_path,visualize,info,test_name):
             s_yaws.append(rpy[2])
             
     if info:
-        error_information((o_rolls,o_pitches,o_yaws,s_rolls,s_pitches,s_yaws))
+        B.data_information((o_rolls,o_pitches,o_yaws,s_rolls,s_pitches,s_yaws))
     if visualize:
-        error_visualization((o_rolls,o_pitches,o_yaws,s_rolls,s_pitches,s_yaws),test_name)
+        B.visualize_data_spread((o_rolls,o_pitches,o_yaws,s_rolls,s_pitches,s_yaws),test_name)
 
 if __name__ == "__main__":
     parser = make_parser()
