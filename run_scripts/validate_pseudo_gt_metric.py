@@ -30,7 +30,7 @@ GENERATE_FROM_PATH = True
 """
 If true, then a graph is generated from an existing data set. Otherwise, an elliptical parameterized path is used.
 """
-PATH_FROM = "pgt_tester3 15208801502125.json"
+PATH_FROM = "rucha_wasnt_here.json"
 NUM_REPEAT_GENERATE = 1
 
 if GENERATE_FROM_PATH:
@@ -124,15 +124,12 @@ def validate_pseudo_gt_metric():
     mi_and_gt_data_set_list: List[Tuple[MapInfo, Dict]] = []
     print(f"Generating {NUM_REPEAT_GENERATE} data set{'s' if NUM_REPEAT_GENERATE > 1 else ''}...")
     for i in range(NUM_REPEAT_GENERATE):
-        if GENERATE_FROM_PATH:
-            # gg = GraphGenerator(path_from=data_set_generate_from, gen_params=GENERATE_FROM)
-            print("gonna use real dataset instead of the generation here")
+        if GENERATE_FROM:
+            mi = CacheManagerSingleton.find_maps(pattern = f"*{PATH_FROM}").pop()
         else:
             gg = GraphGenerator(path_from=GraphGenerator.xz_path_ellipsis_four_by_two, gen_params=GENERATE_FROM,
                                 tag_poses_for_parameterized=GT_TAG_DATASETS["3line"])
-        # mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
-        
-        mi = CacheManagerSingleton.find_maps(pattern = f"*{PATH_FROM}").pop()
+            mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
         gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
         mi_and_gt_data_set_list.append((mi, gt_data_set))
 
