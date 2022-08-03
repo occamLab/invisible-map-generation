@@ -16,6 +16,7 @@ Notes:
   for further processing.
 """
 
+import json
 import os
 import sys
 
@@ -106,6 +107,14 @@ def make_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Acquire maps from Firebase and overwrite existing cache.",
         default=False,
+    )
+    p.add_argument(
+        "-fs",
+        type=str,
+        required=False,
+        help="Acquire maps from a specific bucket (device id) in firebase. This is done by linking your firebase "
+             "device_id to your name in the firebase_device_config.json",
+        default=None,
     )
     p.add_argument(
         "-F",
@@ -231,6 +240,12 @@ if __name__ == "__main__":
         cms = CacheManagerSingleton(firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0)
 
     # Download all maps from Firebase
+    if args.fs is not None:
+        f = open("run_scripts/firebase_device_config.json", 'r')
+        device_config = json.loads(f.read())
+        cms.download_maps_for_device(device_id = device_config[args.fs])
+        exit(0)
+
     if args.f:
         cms.download_all_maps()
         exit(0)

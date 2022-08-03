@@ -594,6 +594,12 @@ class CacheManagerSingleton:
             self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
             self.__were_credentials_set = True
 
+    def download_maps_for_device(self, device_id: str):
+        """Download all maps for firebase for the specified device_id
+        """
+        map_info = db.reference(f"{self.UNPROCESSED_MAPS_PARENT}/{device_id}").get()
+        return self._download_all_maps_recur(map_info=map_info)
+
     def _download_all_maps_recur(self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None):
         """Recursive function for downloading all maps from Firebase.
         """
