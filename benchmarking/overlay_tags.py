@@ -13,9 +13,7 @@ import argparse
 import json
 import pdb
 import numpy as np
-import repeat_detection_evaluator as rde
-
-from map_processing import benchmarking_utils as B
+import benchmarking_utils as B
 import pprint
 
 

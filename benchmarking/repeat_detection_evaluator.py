@@ -12,14 +12,12 @@ import os
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
-print(repository_root)
 sys.path.append(repository_root)
 
 import json
 import numpy as np
 
-import map_processing
-import map_processing.benchmarking_utils as B
+import benchmarking.benchmarking_utils as B
 import map_processing.throw_out_bad_tags as tag_filter
 
 import argparse
