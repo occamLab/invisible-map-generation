@@ -3,17 +3,17 @@ Utilities used while benchmarking Invisible Maps.
 """
 
 import os
-import pdb
 import sys
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+
 sys.path.append(repository_root)
+
 
 import json
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-
 import benchmarking.repeat_detection_evaluator as rde
 
 TAG_SIZE = 0.152
@@ -35,8 +35,8 @@ CAMERA_POSE_FLIPPER = np.array(
 ERROR_THRESHOLD = 20
 
 SHOW_INDIVIDUAL_COORDS = False
-VISUALIZE = False
-FIX_IT = False
+# VISUALIZE = False
+# FIX_IT = False
 
 
 # error_analysis_quat.py

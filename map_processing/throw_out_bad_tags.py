@@ -4,14 +4,18 @@ Takes in the pose of a tag, computes where the corner pixels SHOULD be on the
 camera's screen, then compares it to where the pixels actually were on the screen.
 Allows us to essentially remake the SBA algorithm.
 """
+import os
+import sys
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
 
 import matplotlib.pyplot as plt
 import json
 import numpy as np
 import argparse
 
-import map_processing
-import map_processing.benchmarking_utils as B
+import benchmarking.benchmarking_utils as B
 
 # import map_processing
 # from map_processing import benchmarking_utils as B

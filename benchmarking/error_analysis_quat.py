@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import argparse
-import map_processing.benchmarking_utils as B
+import benchmarking_utils as B
 import map_processing.throw_out_bad_tags as tag_filter
 
 def make_parser():
