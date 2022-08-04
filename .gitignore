@@ -14,7 +14,7 @@ venv
 
 # Map cache folder
 **/.cache/
-!*/.cache/ground_truth/ground_truth_mapping.json
+!*/ground_truth_mapping.json
 
 # Ignore video files
 *.mp4
