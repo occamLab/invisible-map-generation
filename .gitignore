@@ -14,6 +14,7 @@ venv
 
 # Map cache folder
 **/.cache/
+!*/ground_truth_mapping.json
 
 # Ignore video files
 *.mp4
@@ -23,6 +24,5 @@ venv
 
 /saved_sweeps/**/*sweep.*
 
-!ground_truth_mapping.json
 # Ignore rucha
 *.rucha
