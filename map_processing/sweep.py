@@ -235,10 +235,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         #         if ground_truth_data is not None else None, max_gt_tag=max_gt_tag)
     
     #     # Visualize the best anchor point from the best OResult (GT)
-        optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
-                       oconfig=sweep_results.sweep_args[min_value_idx][1],
-                       visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
-                if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
+        # optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx][0]),
+        #                oconfig=sweep_results.sweep_args[min_value_idx][1],
+        #                visualize=True, gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) \
+        #         if ground_truth_data is not None else None, max_gt_tag=max_rot_tag)
     #
     #     # Visualize the best anchor point from the best OResult (Alpha)
     #     optimize_graph(graph=deepcopy(sweep_results.sweep_args[min_value_idx_alpha][0]),

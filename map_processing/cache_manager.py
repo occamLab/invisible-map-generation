@@ -5,7 +5,6 @@ Contains the CacheManagerSingleton class used for managing the local cache.
 import glob
 import json
 import os
-import pdb
 from threading import Semaphore, Thread, Timer
 from typing import Dict, Union, List, Optional, Set, Callable
 
@@ -86,12 +85,15 @@ class CacheManagerSingleton:
     SWEEP_RESULTS_PARENT: str = "sweep_results"
     PGT_VALIDATION_RESULTS_PARENT: str = "pgt_validation_results"
     GROUND_TRUTH_MAPPING_FILE_NAME = "ground_truth_mapping.json"
+    FIREBASE_CONFIG_FILE_NAME = "firebase_device_config.json"
+    CONFIG_PATH = "configs"
 
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
     GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
-    GROUND_TRUTH_MAPPING_PATH = os.path.join(GROUND_TRUTH_PATH, GROUND_TRUTH_MAPPING_FILE_NAME)
+    GROUND_TRUTH_MAPPING_PATH = os.path.join(CONFIG_PATH, GROUND_TRUTH_MAPPING_FILE_NAME)
     SWEEP_RESULTS_PATH: str = os.path.join(CACHE_PATH, SWEEP_RESULTS_PARENT)
     PGT_VALIDATION_RESULTS_PATH: str = os.path.join(CACHE_PATH, PGT_VALIDATION_RESULTS_PARENT)
+    FIREBASE_CONFIG_PATH = os.path.join(CONFIG_PATH, FIREBASE_CONFIG_FILE_NAME)
 
     def __init__(self, firebase_creds: Optional[firebase_admin.credentials.Certificate] = None,
                  max_listen_wait: int = -1):
@@ -594,9 +596,14 @@ class CacheManagerSingleton:
             self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
             self.__were_credentials_set = True
 
-    def download_maps_for_device(self, device_id: str):
-        """Download all maps for firebase for the specified device_id
+    def download_maps_for_device(self, device_id_name: str):
+        """Download all maps for firebase for the specified device_id_name
         """
+        device_config_file = open(self.FIREBASE_CONFIG_PATH, 'r')
+        device_config = json.loads(device_config_file.read())
+        if device_id_name not in device_config.keys():
+            raise KeyError("User specified device_id_name that is not in firebase_device_config")
+        device_id = device_config[device_id_name]
         map_info = db.reference(f"{self.UNPROCESSED_MAPS_PARENT}/{device_id}").get()
         return self._download_all_maps_recur(map_info=map_info)
 

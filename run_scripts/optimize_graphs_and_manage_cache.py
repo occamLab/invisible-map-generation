@@ -16,7 +16,6 @@ Notes:
   for further processing.
 """
 
-import json
 import os
 import sys
 
@@ -241,9 +240,7 @@ if __name__ == "__main__":
 
     # Download all maps from Firebase
     if args.fs is not None:
-        f = open("run_scripts/firebase_device_config.json", 'r')
-        device_config = json.loads(f.read())
-        cms.download_maps_for_device(device_id = device_config[args.fs])
+        cms.download_maps_for_device(device_id_name = args.fs)
         exit(0)
 
     if args.f:
