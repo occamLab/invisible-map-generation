@@ -26,7 +26,8 @@ cms = CacheManagerSingleton(cred)
 
 
 def on_event(event):
-    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=True, override_all = False)
+    print("got a new map to process")
+    cms.get_map_from_unprocessed_map_event(event, for_each_map_info, ignore_dict=False, override_all = False)
 
 def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
