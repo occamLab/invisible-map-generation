@@ -1,4 +1,3 @@
 {
-    "docstring": "This config file is for mapping people names to device IDs, which can be called by optimize_graphs_and_manage_cache with the -fs flag.",
     "ayush": "TooZIG7cy5O0wySx9zqgos1eKIG2"
 }
