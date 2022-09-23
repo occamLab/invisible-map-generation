@@ -4,6 +4,13 @@ offers a controlled environment to conduct tests on backend system accuracy and
 efficiency, allowing for the analysis of how dataset parameters impact optimization.
 """
 
+import os
+import sys
+
+repository_root = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
+
 from map_processing.cache_manager import CacheManagerSingleton
 from run_scripts import optimize_graphs_and_manage_cache
 from map_processing.data_models import UGDataSet, GenerateParams
@@ -14,13 +21,6 @@ import datetime
 from typing import Tuple, Dict, Union
 import re
 import argparse
-import os
-import sys
-
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
-sys.path.append(repository_root)
-
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(

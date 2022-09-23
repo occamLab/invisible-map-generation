@@ -16,6 +16,11 @@ Notes:
 - The maps that are *processed* and cached are of a different format than the unprocessed graphs
   and cannot be-loaded for further processing.
 """
+import os
+import sys
+repository_root = os.path.join(os.path.dirname(
+    os.path.abspath(__file__)), os.pardir)
+sys.path.append(repository_root)
 
 from map_processing import throw_out_bad_tags as tag_filter
 from map_processing.sweep import sweep_params
@@ -33,12 +38,6 @@ from typing import Dict, Callable, Iterable, Any, Tuple
 from firebase_admin import credentials
 import numpy as np
 import argparse
-import os
-import sys
-
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
-sys.path.append(repository_root)
 
 
 SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
@@ -265,7 +264,7 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=True)
+    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=False)
     if len(matching_maps) == 0:
         print(
             f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
@@ -275,8 +274,7 @@ if __name__ == "__main__":
     # Remove tag observations that are bad
     if args.t:
         this_path = cms.find_maps(
-            map_pattern, search_only_unprocessed=True, paths=True)
-        print(this_path)
+            map_pattern, search_only_unprocessed=False, paths=True)
         print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
 
     compute_inf_params = OComputeInfParams(
