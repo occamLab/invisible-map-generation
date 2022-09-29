@@ -15,7 +15,8 @@ from firebase_admin import storage
 from varname import nameof
 
 from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
-from map_processing.data_models import GTDataSet, OSweepResults, OMultiSweepResult, OResultPseudoGTMetricValidation
+from map_processing.data_models import GTDataSet, OSweepResults, \
+    OMultiSweepResult, OResultPseudoGTMetricValidation
 
 
 class MapInfo:
@@ -43,33 +44,36 @@ class MapInfo:
 
 class CacheManagerSingleton:
     """
-    Handles caching for graphs (primarily though downloading/uploading to/from Firebase and local caching of
-    synthetically generated graphs).
+    Handles caching for graphs (primarily though downloading/uploading to/from Firebase and local
+    caching of synthetically generated graphs).
 
     Notes:
         Implemented as a singleton
 
     Class Attributes:
-        UNPROCESSED_MAPS_PARENT: Simultaneously specifies database reference to listen to in the firebase_listen
-         method and the cache location of any maps associated with that database reference.
-        PROCESSED_UPLOAD_TO: Simultaneously specifies Firebase bucket path to upload processed graphs to and the
-         cache location of processed graphs.
+        UNPROCESSED_MAPS_PARENT: Simultaneously specifies database reference to listen to in the
+            firebase_listen method and the cache location of any maps associated with that database
+            reference.
+        PROCESSED_UPLOAD_TO: Simultaneously specifies Firebase bucket path to upload processed
+            graphs to and the cache location of processed graphs.
         __app_initialize_dict: Used for initializing the app attribute
-        CACHE_PATH: String representing the absolute path to the cache folder. The cache path is evaluated to
-         always be located at <path to this file>.cache/
+        CACHE_PATH: String representing the absolute path to the cache folder. The cache path is
+            evaluated to always be located at <path to this file>.cache/
 
     Attributes:
-        __app: Firebase App initialized with a service account, granting admin privileges. Shared across all instances
-         of this class (only initialized once).
+        __app: Firebase App initialized with a service account, granting admin privileges. Shared
+            across all instances of this class (only initialized once).
         __bucket: Handle to the Google Cloud Storage __bucket
-        __db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager.WEIGHTS_DICT
-        __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every time an event is raised
-         by the listener.
-        __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one thread to access the
-         timer resetting code at a time.
-        __max_listen_wait: Amount of time to set the _listen_kill_timer. Any non-positive value results in indefinite
-         listening (i.e., the timer not being set).
+        __db_ref: Database reference representing the node as specified by the
+            GraphManager._unprocessed_listen_to
+        class attribute selected_weights (np.ndarray): Vector selected from the
+            GraphManager.WEIGHTS_DICT
+        __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every
+            time an event is raised by the listener.
+        __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one
+            thread to access the timer resetting code at a time.
+        __max_listen_wait: Amount of time to set the _listen_kill_timer. Any non-positive value
+            results in indefinite listening (i.e., the timer not being set).
     """
 
     __instance = None
@@ -100,10 +104,12 @@ class CacheManagerSingleton:
                  max_listen_wait: int = -1):
         """
         Args:
-            firebase_creds: Firebase credentials. If not set in the initializer, then later functionality that depends
-             on communication with Firebase will break until the credentials are
-            max_listen_wait: Sets the timer to this amount every time listener produces an event. When the timer
-             expires, the firebase listening function exits. If negative, then it listens indefinitely.
+            firebase_creds: Firebase credentials. If not set in the initializer, then later
+                functionality that depends on communication with Firebase will break until the
+                credentials are
+            max_listen_wait: Sets the timer to this amount every time listener produces an event.
+                When the timer expires, the firebase listening function exits. If negative, then it
+                listens indefinitely.
         """
         self.__synch_mutex: Semaphore = Semaphore()
 
@@ -133,7 +139,8 @@ class CacheManagerSingleton:
     def were_credentials_set(self) -> bool:
         return self.__were_credentials_set
 
-    def firebase_listen(self, callback: Union[None, Callable], max_wait_override: Union[int, None] = None):
+    def firebase_listen(self, callback: Union[None, Callable],
+        max_wait_override: Union[int, None] = None):
         """Wait for and act upon events using the Firebase database reference listener.
 
         Notes:
@@ -141,33 +148,43 @@ class CacheManagerSingleton:
 
         Args:
             max_wait_override: Sets the __max_listen_wait attribute if not none.
-            callback: Callback function for when a firebase event occurs (through the listen method). If none is
-             provided, then the default map_info_callback of get_map_from_unprocessed_map_event is used.
+            callback: Callback function for when a firebase event occurs (through the listen
+                method). If none is provided, then the default map_info_callback of
+                get_map_from_unprocessed_map_event is used.
         """
         with self.__synch_mutex:
             if isinstance(max_wait_override, int):
                 self.__max_listen_wait = max_wait_override
             if self.__max_listen_wait <= 0:
-                self.__db_ref.listen(self.get_map_from_unprocessed_map_event if callback is None else callback)
+                self.__db_ref.listen(
+                    self.get_map_from_unprocessed_map_event if callback is None else callback
+                )
                 return
 
             self.__firebase_listen_sem = Semaphore(0)
             self.__timer_mutex = Semaphore(1)
-            self.__listen_kill_timer = Timer(self.__max_listen_wait, self.__firebase_listen_sem.release)
+            self.__listen_kill_timer = Timer(
+                self.__max_listen_wait, self.__firebase_listen_sem.release
+                )
             self.__listen_kill_timer.start()
             thread_obj = Thread(
-                target=lambda: self.__db_ref.listen(self.get_map_from_unprocessed_map_event if callback is None else
-                                                    callback))
+                target=lambda: self.__db_ref.listen(
+                    self.get_map_from_unprocessed_map_event if callback is None else
+                                                    callback
+                                                    ))
             thread_obj.start()
             self.__firebase_listen_sem.acquire()
             thread_obj.join()
 
     def upload(self, map_info: MapInfo, json_string: str, verbose: bool = False) -> None:
-        """Uploads the map json string into the Firebase __bucket under the path
-        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
+        """
+        Uploads the map json string into the Firebase __bucket under the path
+        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate
+        database reference.
 
         Notes:
-            - Acquires the __synch_mutex (calling from another thread will block until this completes).
+            - Acquires the __synch_mutex (calling from another thread will block until this
+              completes).
             - Note that no exception catching is implemented.
 
         Args:
@@ -176,10 +193,12 @@ class CacheManagerSingleton:
             verbose: TODO
         """
         with self.__synch_mutex:
-            processed_map_filename = os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.json"
+            processed_map_filename = os.path.basename(map_info.map_json_blob_name)[:-5] \
+                + "_processed.json"
             processed_map_full_path = f"{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}"
             if verbose:
-                print(f"Attempting to upload {map_info.map_name} to the __bucket blob {processed_map_full_path}")
+                print(f"Attempting to upload {map_info.map_name} to the __bucket blob \
+                     {processed_map_full_path}")
 
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(json_string)
@@ -192,8 +211,8 @@ class CacheManagerSingleton:
             if verbose:
                 print(f"Successfully uploaded database reference maps/{map_info.map_name}/"
                       f"map_file to contain the blob path")
-            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info, json_string,
-                                            verbose=verbose)
+            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info,
+                json_string, verbose=verbose)
 
     def download_all_maps(self):
         """Downloads all maps from Firebase.
@@ -207,15 +226,16 @@ class CacheManagerSingleton:
         """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
 
         Arguments:
-            event: A firebase event corresponding a single unprocessed map (event.data is a string) or to a dictionary
-             of unprocessed maps (event.data is a dictionary).
-            map_info_callback: For every MapInfo object created, invoke this callback and pass the MapInfo object as the
-             argument.
+            event: A firebase event corresponding a single unprocessed map (event.data is a string)
+                or to a dictionary of unprocessed maps (event.data is a dictionary).
+            map_info_callback: For every MapInfo object created, invoke this callback and pass the
+                MapInfo object as the argument.
             ignore_dict: If true, no action is taken if `event.data` is a dictionary.
         """
         if type(event.data) == str:
             # A single new map just got added
-            map_info = self._firebase_get_and_cache_unprocessed_map(event.path.lstrip("/"), event.data)
+            map_info = self._firebase_get_and_cache_unprocessed_map(event.path.lstrip("/"),
+                event.data)
             if map_info_callback is not None and map_info is not None:
                 map_info_callback(map_info)
         elif type(event.data) == dict:
@@ -229,7 +249,8 @@ class CacheManagerSingleton:
                         map_info_callback(map_info)
                 elif isinstance(map_json, dict):
                     for nested_name, nested_json in map_json.items():
-                        map_info = self._firebase_get_and_cache_unprocessed_map(nested_name, nested_json, uid=map_name)
+                        map_info = self._firebase_get_and_cache_unprocessed_map(nested_name,
+                            nested_json, uid=map_name)
                         if map_info_callback is not None and map_info is not None:
                             map_info_callback(map_info)
 
@@ -239,8 +260,9 @@ class CacheManagerSingleton:
         Parses a json file into a MapInfo instance.
 
         Args:
-            map_json_path: Path to the json file. If the path is not an absolute path, then the cache directory is
-             prepended. If this path does not end with ".json", then ".json" is appended.
+            map_json_path: Path to the json file. If the path is not an absolute path, then the
+                cache directory is prepended. If this path does not end with ".json", then ".json"
+                is appended.
 
         Returns:
             MapInfo instance if the specified file exists and is a json file (and None otherwise)
