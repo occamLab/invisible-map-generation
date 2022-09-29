@@ -17,6 +17,7 @@ Notes:
   and cannot be-loaded for further processing.
 """
 import os
+from re import search
 import sys
 repository_root = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), os.pardir)
@@ -264,7 +265,7 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=False)
+    matching_maps = cms.find_maps(map_pattern, search_restriction=2)
     if len(matching_maps) == 0:
         print(
             f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
@@ -274,7 +275,7 @@ if __name__ == "__main__":
     # Remove tag observations that are bad
     if args.t:
         this_path = cms.find_maps(
-            map_pattern, search_only_unprocessed=False, paths=True)
+            map_pattern, search_restriction=0, paths=True)
         print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
 
     compute_inf_params = OComputeInfParams(
@@ -296,13 +297,14 @@ if __name__ == "__main__":
                 ),
                 sweep_config=sweep_config,
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
-                verbose=True,
+                verbose=False,
                 generate_plot=True,
                 show_plot=args.v,
                 num_processes=args.np,
                 no_sba_baseline=args.nsb,
                 upload_best=args.F,
                 cms=cms,
+                simple_metrics=True
             )
 
         # If you simply want to run the optimizer with specified weights

@@ -105,7 +105,8 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                      Dict[OConfig.OConfigEnum, np.ndarray]],
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
-                 cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False, cms: CacheManagerSingleton = None) -> OSweepResults:
+                 cache_results: bool = True, no_sba_baseline: bool = False, upload_best: bool = False, cms: CacheManagerSingleton = None,
+                 simple_metrics = False) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
@@ -218,6 +219,10 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Rotation metric (Alpha): {rot_metric_alpha}")
         print(f"Maximum rotation (Alpha): {max_rot_diff_alpha} (tag id: {max_rot_diff_tag_id_alpha})")
 
+    if simple_metrics:
+        print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+        print(f"\n \nFitness metrics (GT): \n"
+              f"{min_oresult.fitness_metrics.repr_as_list()}")
 
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
