@@ -311,24 +311,19 @@ class CacheManagerSingleton:
 
         search_dirs = {
             0: CacheManagerSingleton.UNPROCESSED_MAPS_PARENT,
-            1: ("", "**", pattern),
+            1: "",
             2: CacheManagerSingleton.GENERATED_MAPS_PARENTS,
         }
         
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH, os.path.join(
-                    search_dirs[search_restriction]
+                    search_dirs[search_restriction], "**", pattern
                 )
             ),
             recursive=recursive
         )
-        print(os.path.join(
-                CacheManagerSingleton.CACHE_PATH, os.path.join(
-                    search_dirs[search_restriction]
-                )
-            ))
-        print(matching_filepaths)
+
         if paths:
             return matching_filepaths
 
