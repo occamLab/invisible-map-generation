@@ -53,6 +53,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_NO_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -265,7 +266,7 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_restriction=2)
+    matching_maps = cms.find_maps(map_pattern, search_restriction=0)
     if len(matching_maps) == 0:
         print(
             f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
@@ -297,7 +298,7 @@ if __name__ == "__main__":
                 ),
                 sweep_config=sweep_config,
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
-                verbose=False,
+                verbose=True,
                 generate_plot=True,
                 show_plot=args.v,
                 num_processes=args.np,
