@@ -107,7 +107,7 @@ class Edge:
                     weights_vec, using_sba=using_sba, lin_vel_var=compute_inf_params.lin_vel_var,
                     ang_vel_var=compute_inf_params.ang_vel_var)
             else:
-                self._compute_information_se3_obs(weights_vec)
+                self._compute_information_se3_obs(weights_vec, compute_inf_params.tag_no_sba_var)
 
         if np.any(self.information < 0):
             raise ValueError("The information matrix should not contain negative values")
@@ -146,8 +146,8 @@ class Edge:
         # Translation component
         self.information[:3, :3] *= np.diag(1 / (np.ones(3) * delta_t_sq * lin_vel_var ** 2))
 
-    def _compute_information_se3_obs(self, weights_vec: np.ndarray) -> None:
-        self.information = np.diag(weights_vec)
+    def _compute_information_se3_obs(self, weights_vec: np.ndarray, tag_no_sba_var: float = 1.0) -> None:
+        self.information = np.diag(weights_vec) * tag_no_sba_var
 
     def _compute_information_sba(self, weights_vec: np.ndarray, tag_sba_var: float = 1.0) -> None:
         self.information = np.diag(weights_vec) * np.diag([1 / tag_sba_var] * 2)
