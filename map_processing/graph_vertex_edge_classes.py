@@ -2,6 +2,7 @@
 Vertex, VertexType, and Edge classes which are used in the Graph class.
 """
 
+import pdb
 from typing import Union, Dict, Any, Optional, Tuple
 
 import numpy as np
@@ -147,7 +148,7 @@ class Edge:
         self.information[:3, :3] *= np.diag(1 / (np.ones(3) * delta_t_sq * lin_vel_var ** 2))
 
     def _compute_information_se3_obs(self, weights_vec: np.ndarray, tag_no_sba_var: float = 1.0) -> None:
-        self.information = np.diag(weights_vec) * tag_no_sba_var
+        self.information = np.diag(weights_vec) * 1 / tag_no_sba_var
 
     def _compute_information_sba(self, weights_vec: np.ndarray, tag_sba_var: float = 1.0) -> None:
         self.information = np.diag(weights_vec) * np.diag([1 / tag_sba_var] * 2)

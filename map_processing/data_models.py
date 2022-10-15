@@ -1073,7 +1073,9 @@ class OComputeInfParams(BaseModel):
     lin_vel_var: np.ndarray = Field(default_factory=lambda: np.ones(3))
     ang_vel_var: confloat(gt=0) = 1.0
     tag_sba_var: confloat(gt=0) = 1.0
-    tag_no_sba_var = 1.0
+    # tag_no_sba_var = 1.0
+    tag_pos_var = 1.0
+    tag_rot_var = 1.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
@@ -1128,7 +1130,9 @@ class OConfig(BaseModel):
         ANG_VEL_VAR = "ang_vel_var"
         TAG_SBA_VAR = "tag_sba_var"
         GRAV_MAG = "grav_mag"
-        TAG_NO_SBA_VAR = "tag_no_sba_var"
+        # TAG_NO_SBA_VAR = "tag_no_sba_var"
+        TAG_POS_VAR = "tag_pos_var"
+        TAG_ROT_VAR = "tag_rot_var"
 
     class AltOConfigEnum(str, Enum):
         LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
@@ -1171,7 +1175,7 @@ class OConfig(BaseModel):
 
         products: List[Tuple[Any, ...]] = []
         oconfigs: List[OConfig] = []
-
+        pdb.set_trace()
         for this_product in itertools.product(*product_args, repeat=1):
             products.append(this_product)
             oconfigs.append(
@@ -1188,9 +1192,14 @@ class OConfig(BaseModel):
                         tag_sba_var=this_product[sweep_param_to_product_idx[
                             OConfig.OConfigEnum.TAG_SBA_VAR]] if OConfig.OConfigEnum.TAG_SBA_VAR in
                         included_params else base_oconfig.compute_inf_params.tag_sba_var,
-                        tag_no_sba_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.TAG_NO_SBA_VAR]] if OConfig.OConfigEnum.TAG_NO_SBA_VAR in
-                        included_params else base_oconfig.compute_inf_params.tag_no_sba_var,
+                        # tag_no_sba_var=this_product[sweep_param_to_product_idx[
+                        #     OConfig.OConfigEnum.TAG_NO_SBA_VAR]] if OConfig.OConfigEnum.TAG_NO_SBA_VAR in
+                        # included_params else base_oconfig.compute_inf_params.tag_no_sba_var,
+                        tag_rot_var=this_product[sweep_param_to_product_idx[
+                            OConfig.OConfigEnum.TAG_ROT_VAR]] if OConfig.OConfigEnum.TAG_ROT_VAR in
+                        included_params else base_oconfig.compute_inf_params.tag_rot_var,
+                        # tag_pos_var=this_product[sweep_param_to_product_idx[
+                        #     ]]
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
