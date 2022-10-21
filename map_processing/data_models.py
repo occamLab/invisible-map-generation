@@ -980,6 +980,9 @@ class GTTagPose(BaseModel):
 
 
 class GTDataSet(BaseModel):
+    """
+    TODO
+    """
     poses: List[GTTagPose] = []
 
     @property
