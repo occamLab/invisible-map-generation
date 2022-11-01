@@ -39,6 +39,8 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     for key, value in sweep_config.items():
         if isinstance(value, np.ndarray):
             sweep_arrs[key] = value
+        elif isinstance(value, float):
+            sweep_arrs[key] = np.array([value])
         else:  # Assume that value[0] is a callable and value[1] contains its arguments
             sweep_arrs[key] = value[0](*value[1])
     if verbose:
@@ -281,16 +283,16 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             "Alpha_Max_Rotation_Tag_ID": float(max_rot_diff_tag_id_alpha)
             }
         }
-    with open("results_of_sweep.json", "r+") as f:
-        try:
-            json_obj = json.load(f)
-        except json.decoder.JSONDecodeError:
-            print("HAD TO EXCEPT")
-            pass
+    # with open("results_of_sweep.json", "r+") as f:
+    #     try:
+    #         json_obj = json.load(f)
+    #     except json.decoder.JSONDecodeError:
+    #         print("HAD TO EXCEPT")
+    #         pass
 
-    json_obj.update(results_dict)
-    with open("results_of_sweep.json", "w") as f:
-        json.dump(json_obj, f, indent=2)
+    # json_obj.update(results_dict)
+    # with open("results_of_sweep.json", "w") as f:
+    #     json.dump(json_obj, f, indent=2)
 
     return sweep_results
 
