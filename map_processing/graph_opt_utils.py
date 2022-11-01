@@ -209,8 +209,6 @@ def sum_optimizer_edges_chi2(
     total_alpha = 0.0
     for edge in optimizer.edges():
         if len(edge_type_filter) == 0 or type(edge) in edge_type_filter:
-            print("EDGE VERTICES:")
-            print(edge.vertices())
             fitness_metrics = get_chi2_of_edge(edge, edge.vertices()[0])
             total_chi2 += fitness_metrics[0]
             total_alpha += fitness_metrics[1]
