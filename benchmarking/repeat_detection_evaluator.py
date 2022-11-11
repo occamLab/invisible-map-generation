@@ -16,10 +16,11 @@ sys.path.append(repository_root)
 
 import json
 import numpy as np
-
+import pandas as pd
 import benchmarking.benchmarking_utils as B
 import map_processing.throw_out_bad_tags as tag_filter
-
+from scipy.spatial.transform import Rotation as R
+import pdb
 import argparse
 
 VISUALIZE = False
@@ -47,6 +48,92 @@ def make_parser():
 
     return p
 
+
+def calc_variance(quats_and_trans):
+    variances = []
+    [variances.append(np.var(row)) for row in quats_and_trans]
+    return variances
+
+def create_quat_from_simd_4x4(simd_4x4_matrix):
+    """
+    create the corresponding se3quat from a SIMD 4x4 matrix
+
+    Args:
+        simd_4x4_matrix (_type_): _description_
+    
+    Ret:
+        quat: quaternion
+    """
+    
+    simd_as_R = R.from_matrix(simd_4x4_matrix[:3, :3])
+    quat = simd_as_R.as_quat()
+
+    t = np.transpose([simd_4x4_matrix[:, 3]])
+    
+    print(t)
+    
+    return quat[:3], t
+
+def calculate_tag_detection_variance(tag_idxs, first_observation, next_observations):
+    """
+    Calculate the variance of tag detections.
+    - We collect the consecutive observations of a tag
+
+    Args:
+        tag_idxs (_type_): _description_
+        first_observation (_type_): _description_
+        next_observations (_type_): _description_
+    """
+    # pdb.set_trace()
+    all_observations = [first_observation]
+    [all_observations.append(observation) for observation in next_observations]
+    prev_idx = tag_idxs[0]
+    cons_obs_l = [] # list of sets of consecutive observations
+    cons_obs = []
+    
+    # iterate through indexes, group by consecutive observations.
+    for ls_idx, tag_idx in enumerate(tag_idxs):
+        
+        if tag_idx != prev_idx + 1:
+            cons_obs_l.append(cons_obs)
+            cons_obs = []
+            
+        cons_obs.append(ls_idx)
+        prev_idx = tag_idx
+    
+    cons_obs_l.append(cons_obs)
+    cons_obs_l.pop(0)
+    
+    qx = []
+    qy = []
+    qz = []
+    x = []
+    y = []
+    z = []
+    
+    variance = []
+    num_obs = []
+    for cons_observations in cons_obs_l:
+        # if there's only one observation
+        if len(cons_observations) == 1:
+            continue
+        
+        for obs in cons_observations:
+            obs_pose = all_observations[obs]
+            # pdb.set_trace()
+            quat, t = create_quat_from_simd_4x4(obs_pose)
+            qx.append(quat[0])
+            qy.append(quat[1])
+            qz.append(quat[2])
+            x.append(t[0])
+            y.append(t[1])
+            z.append(t[2])
+        
+        num_obs.append(len(cons_observations))
+        variance.append(calc_variance([qx, qy, qz, x, y , z]))
+        
+    return variance, num_obs
+    
 def create_observations_dict(instances, unprocessed_map_data):
     """
     Create a dictionary with all the tools necessary to complete the loop closure overlay evaluator
@@ -103,7 +190,7 @@ def create_observations_dict(instances, unprocessed_map_data):
 
     return results
 
-def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print_info):
+def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print_info, all_variances):
     """
     Overlays the first observation of the tag on top of subsequent observations to see
     how much error has been accumulated.
@@ -120,20 +207,26 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
     tag_idxs = list(tags_to_overlay.keys())
     first_detection = tags_to_overlay[tag_idxs[0]]
     first_detection_pose = np.array(tags_to_overlay[tag_idxs[0]]["tag_pose"])
-    first_detection_pixels = np.array(
-        tags_to_overlay[tag_idxs[0]]["corner_pixels"])
+    first_detection_pixels = np.array(tags_to_overlay[tag_idxs[0]]["corner_pixels"])
     all_pixels.append(first_detection_pixels)
     for idx in tag_idxs[1:]:
         subsequent_detection = tags_to_overlay[idx]
         init_observation_new_coord_frame = B.CAMERA_POSE_FLIPPER@np.linalg.inv(
             subsequent_detection["camera_pose"])@first_detection["camera_pose"]@B.CAMERA_POSE_FLIPPER@first_detection["tag_pose"]
-        init_observation_new_coord_frame = init_observation_new_coord_frame
+        #init_observation_new_coord_frame = init_observation_new_coord_frame
         subsequent_detection_poses.append(init_observation_new_coord_frame)
         all_pixels.append(B.compute_corner_pixels(
             tag_idxs[1], unprocessed_map_data, tag_pose=init_observation_new_coord_frame))
-
-    # A FEW PRINT STATEMENTS FOR METRICS
     
+    variances, weighting = calculate_tag_detection_variance(tag_idxs,init_observation_new_coord_frame, subsequent_detection_poses)
+    
+    for variance in variances:
+        all_variances.loc[tag_id] = variance
+        
+        
+    # pdb.set_trace()
+    
+    # A FEW PRINT STATEMENTS FOR METRICS
     if print_info:
         print("\n")
         print(f"TAG_ID: {tag_id}")
@@ -142,14 +235,18 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
         for i, set_of_pixels in enumerate(all_pixels[1:]):
             errors.append(B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0])
             print(f"error for observation {tag_idxs[i+1]} is {B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0]} pixels")
-            # print(
-            #     f"that's roughly {B.compute_RMS_error(first_detection_pose, subsequent_detection_poses[i])[0]} meters")
-        # print(f" \n tag_pose for tag {tag_idxs[i]} is \n {first_detection_pose} \n \n tag {tag_idxs[i+1]} is \n {subsequent_detection_poses[0]}")
-        
+            print(
+                f"that's roughly {B.compute_RMS_error(first_detection_pose, subsequent_detection_poses[i])[0]} meters")
+            
+        print(f" \n tag_pose for tag {tag_idxs[i]} is \n {init_observation_new_coord_frame} \n \n tag {tag_idxs[i+1]} is \n {subsequent_detection_poses[0]}")
+        print(f" \n tag variances for tag {tag_id} is \n {calculate_tag_detection_variance(tag_idxs,init_observation_new_coord_frame, subsequent_detection_poses)}")
+
+    
+   
     if visualize:
         B.visualizing_corner_pixel_differences(all_pixels, tag_id, "LCD")
     
-    return errors
+    return errors, all_variances
 
 def create_matching_tags_dict(path, visualize = False, print_info = False):
     """
@@ -180,10 +277,16 @@ def create_matching_tags_dict(path, visualize = False, print_info = False):
     # To check and make sure data looks good
     with open("loop_closure_comparison.json", "w") as write_file:
         json.dump(matching_tags_data, write_file, indent=4, sort_keys=True, )
-
+        
+    all_variances = pd.DataFrame(columns = ["qx","qy","qz","x","y","z"])
     for key in matching_tags_data:
-        errors.extend(overlay_tags(matching_tags_data[key], unprocessed_map_data, key, visualize, print_info))
-    
+        # pdb.set_trace()
+        # print(all_variances)
+        error, all_variances = overlay_tags(matching_tags_data[key], unprocessed_map_data, key, visualize, print_info, all_variances)
+        errors.extend(error)
+       
+    all_variances.to_csv(f"{NAME_OF_TEST}_variance.csv")
+        
     if print_info:
         print(f"mean error is {np.array(errors).mean()}")
         
