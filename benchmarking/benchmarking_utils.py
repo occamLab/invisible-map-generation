@@ -73,7 +73,8 @@ def rotational_difference_calculation (mat1, mat2):
     
     net_translation = (t_x, t_y, t_z)
     # print(net_translation)
-    
+    print(net_quat)
+    print(net_quat[0:3])
     return net_quat[0:3], net_translation
 
 def data_information (data, names = None):
@@ -274,10 +275,14 @@ def create_rotvec_from_simd_4x4(simd_4x4_matrix):
         simd_4x4_matrix (_type_): _description_
     """
     
-    simd_as_R = R.from_matrix(simd_4x4_matrix)
+    simd_as_R = R.from_matrix(simd_4x4_matrix[:3, :3])
     se3_quat = simd_as_R.as_rotvec()
+
+    t = np.transpose([simd_4x4_matrix[:, 3]])
     
-    return se3_quat
+    print(t)
+    
+    return se3_quat + t
     
 def check_straight_on_detection(tag_id, tag_pose, verbose):
     """
