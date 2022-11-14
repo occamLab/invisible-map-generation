@@ -31,7 +31,7 @@ from map_processing.graph_opt_hl_interface import (
     WEIGHTS_DICT,
     WeightSpecifier,
 )
-from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
+from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig, Variances
 from map_processing.cache_manager import CacheManagerSingleton
 from map_processing import PrescalingOptEnum, VertexType
 import map_processing
@@ -53,8 +53,8 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_POS_ROT_RATIO: (np.linspace, [1, 1, 1]),
+    # OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
+    # OConfig.OConfigEnum.TAG_POS_ROT_RATIO: (np.linspace, [1, 1, 1]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -289,7 +289,12 @@ if __name__ == "__main__":
         # If you want to sweep through optimization parameters
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-            sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
+            if args.pso == 1:
+                sweep_config = NO_SBA_SWEEP_CONFIG
+                # sweep_config[OConfig.OConfigEnum.TAG_VAR] = get_variances()
+                sweep_config[OConfig.OConfigEnum.TAG_VAR] = np.array([Variances(var_qx=100, var_qy=100, var_qz=100), Variances()])
+            else:
+                sweep_config = SBA_SWEEP_CONFIG
 
             sweep_params(
                 mi=map_info,
@@ -301,11 +306,11 @@ if __name__ == "__main__":
                 sweep_config=sweep_config,
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                 verbose=True,
-                generate_plot=True,
+                generate_plot=False,
                 show_plot=args.v,
                 num_processes=args.np,
                 no_sba_baseline=args.nsb,
-                upload_best=args.F,
+                upload_best=    args.F,
                 cms=cms,
                 simple_metrics=True
             )

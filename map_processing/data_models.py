@@ -23,6 +23,7 @@ import itertools
 from enum import Enum
 import pdb
 from typing import Union, Optional, Dict, List, Tuple, Any
+import json
 
 import numpy as np
 from g2o import SE3Quat
@@ -1068,13 +1069,38 @@ class PGDataSet(BaseModel):
     odometry_vertices: List[PGOdomVertex]
     waypoints_vertices: List[PGWaypointVertex]
 
+class Variances(BaseModel):
+    var_qx = 1.0
+    var_qy = 1.0
+    var_qz = 1.0
+    var_x = 1.0
+    var_y = 1.0
+    var_z = 1.0
+
+    @property
+    def vector(self):
+        return np.array([self.var_x, self.var_y, self.var_z, self.var_qx, self.var_qy, self.var_qz])
+
+    @property
+    def reciprocal_vector(self):
+        return 1/self.vector
+
+    def __hash__(self):
+            # TODO: there are more efficient ways to do this, but this works for now
+            return self.json().__hash__()
+    
+    def __repr__(self):
+        return (dict(self))
+
+    def __str__(self):
+        return self.__repr__()
 
 class OComputeInfParams(BaseModel):
     lin_vel_var: np.ndarray = Field(default_factory=lambda: np.ones(3))
     ang_vel_var: confloat(gt=0) = 1.0
     tag_sba_var: confloat(gt=0) = 1.0
     # tag_no_sba_var = 1.0
-    tag_var = 1.0
+    tag_var = Variances()
     tag_pos_rot_ratio = 1.0
 
     class Config:
@@ -1194,9 +1220,9 @@ class OConfig(BaseModel):
                         tag_var=this_product[sweep_param_to_product_idx[
                             OConfig.OConfigEnum.TAG_VAR]] if OConfig.OConfigEnum.TAG_VAR in
                         included_params else base_oconfig.compute_inf_params.tag_var,
-                        tag_pos_rot_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.TAG_POS_ROT_RATIO]] if OConfig.OConfigEnum.TAG_POS_ROT_RATIO in
-                        included_params else base_oconfig.compute_inf_params.tag_pos_rot_ratio,
+                        # tag_pos_rot_ratio=this_product[sweep_param_to_product_idx[
+                        #     OConfig.OConfigEnum.TAG_POS_ROT_RATIO]] if OConfig.OConfigEnum.TAG_POS_ROT_RATIO in
+                        # included_params else base_oconfig.compute_inf_params.tag_pos_rot_ratio,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
@@ -1411,7 +1437,7 @@ class  OSweepResults(BaseModel):
     """
 
     gt_results_arr_shape: List[int]
-    sweep_config: Dict[str, List[float]]
+    sweep_config: Dict[str, List[Any]]
     """
     The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
     """
@@ -1534,7 +1560,10 @@ class  OSweepResults(BaseModel):
     def args_producing_min(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
-            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
+            if key == 'tag_var':
+                args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]].__repr__()
+            else:
+                args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
         return args_producing_min
 
     @property
@@ -1542,7 +1571,10 @@ class  OSweepResults(BaseModel):
     def args_producing_min_alpha(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
-            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
+            if key == 'tag_var':
+                args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]].__repr__()
+            else:
+                args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
         return args_producing_min
 
 

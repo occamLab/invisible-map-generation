@@ -281,16 +281,16 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
             "Alpha_Max_Rotation_Tag_ID": float(max_rot_diff_tag_id_alpha)
             }
         }
-    with open("results_of_sweep.json", "r+") as f:
-        try:
-            json_obj = json.load(f)
-        except json.decoder.JSONDecodeError:
-            print("HAD TO EXCEPT")
-            pass
+    # with open("results_of_sweep.json", "r+") as f:
+    #     try:
+    #         json_obj = json.load(f)
+    #     except json.decoder.JSONDecodeError:
+    #         print("HAD TO EXCEPT")
+    #         pass
 
-    json_obj.update(results_dict)
-    with open("results_of_sweep.json", "w") as f:
-        json.dump(json_obj, f, indent=2)
+    # json_obj.update(results_dict)
+    # with open("results_of_sweep.json", "w") as f:
+    #     json.dump(json_obj, f, indent=2)
 
     return sweep_results
 
