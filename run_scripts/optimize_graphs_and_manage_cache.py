@@ -54,7 +54,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_POS_ROT_RATIO: (np.linspace, [1, 1, 1]),
+    OConfig.OConfigEnum.TAG_POS_ROT_RATIO: (np.ndarray, [1]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
