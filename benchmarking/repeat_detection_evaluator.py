@@ -49,6 +49,28 @@ def make_parser():
     return p
 
 
+def calc_ratio(variances) -> list:
+    """
+    Compute the importance matrix ratios by average all of the variances.
+
+    Args:
+        variances (dataframe): dataframe with variance qx, qy, qz, x, y, z, id
+
+    Returns:
+        list: a list of two values [angle variance, position variance]
+    """
+    transposed = variances.transpose()
+    
+    ratios = []
+    for col in transposed.columns:
+        rot_avg = (transposed[col]["qx"] + transposed[col]["qy"] + transposed[col]["qz"]) /3
+        trans_avg = (transposed[col]["x"] + transposed[col]["y"] + transposed[col]["z"]) /3
+        
+        ratios.append(rot_avg/trans_avg)
+        
+    print(ratios)
+        
+    
 def calc_variance(quats_and_trans):
     variances = []
     [variances.append(np.var(row)) for row in quats_and_trans]
@@ -69,8 +91,6 @@ def create_quat_from_simd_4x4(simd_4x4_matrix):
     quat = simd_as_R.as_quat()
 
     t = np.transpose([simd_4x4_matrix[:, 3]])
-    
-    print(t)
     
     return quat[:3], t
 
@@ -114,10 +134,11 @@ def calculate_tag_detection_variance(tag_idxs, first_observation, next_observati
     variance = []
     num_obs = []
     for cons_observations in cons_obs_l:
-        # if there's only one observation
+        # if there's only one observation, no variance can be calculated.
         if len(cons_observations) == 1:
             continue
         
+        # for each observation in the consecutive observations of a tag
         for obs in cons_observations:
             obs_pose = all_observations[obs]
             # pdb.set_trace()
@@ -129,6 +150,7 @@ def calculate_tag_detection_variance(tag_idxs, first_observation, next_observati
             y.append(t[1])
             z.append(t[2])
         
+        # Find the variance amongst those consecutive observations
         num_obs.append(len(cons_observations))
         variance.append(calc_variance([qx, qy, qz, x, y , z]))
         
@@ -193,7 +215,7 @@ def create_observations_dict(instances, unprocessed_map_data):
 def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print_info, all_variances):
     """
     Overlays the first observation of the tag on top of subsequent observations to see
-    how much error has been accumulated.
+    how much error has been accumulated.7
 
     Args:
         tags_to_overlay (list)): a list of tags to overlay, where each "tag" is a dictionary of 3 things (corner pixels, camera pose and tag pose) with a key of the index.
@@ -206,8 +228,8 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
 
     tag_idxs = list(tags_to_overlay.keys())
     first_detection = tags_to_overlay[tag_idxs[0]]
-    first_detection_pose = np.array(tags_to_overlay[tag_idxs[0]]["tag_pose"])
-    first_detection_pixels = np.array(tags_to_overlay[tag_idxs[0]]["corner_pixels"])
+    first_detection_pose = np.array(first_detection["tag_pose"])
+    first_detection_pixels = np.array(first_detection["corner_pixels"])
     all_pixels.append(first_detection_pixels)
     for idx in tag_idxs[1:]:
         subsequent_detection = tags_to_overlay[idx]
@@ -221,7 +243,9 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
     variances, weighting = calculate_tag_detection_variance(tag_idxs,init_observation_new_coord_frame, subsequent_detection_poses)
     
     for variance in variances:
-        all_variances.loc[tag_id] = variance
+        variance.append(tag_id)
+        # pdb.set_trace()
+        all_variances.loc[len(all_variances.index)] =  variance
         
         
     # pdb.set_trace()
@@ -278,13 +302,14 @@ def create_matching_tags_dict(path, visualize = False, print_info = False):
     with open("loop_closure_comparison.json", "w") as write_file:
         json.dump(matching_tags_data, write_file, indent=4, sort_keys=True, )
         
-    all_variances = pd.DataFrame(columns = ["qx","qy","qz","x","y","z"])
+    all_variances = pd.DataFrame(columns = ["qx","qy","qz","x","y","z", "id"])
     for key in matching_tags_data:
         # pdb.set_trace()
         # print(all_variances)
         error, all_variances = overlay_tags(matching_tags_data[key], unprocessed_map_data, key, visualize, print_info, all_variances)
         errors.extend(error)
-       
+        
+    calc_ratio(all_variances)
     all_variances.to_csv(f"{NAME_OF_TEST}_variance.csv")
         
     if print_info:
