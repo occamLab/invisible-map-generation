@@ -1075,7 +1075,6 @@ class OComputeInfParams(BaseModel):
     tag_sba_var: confloat(gt=0) = 1.0
     # tag_no_sba_var = 1.0
     tag_var = 1.0
-    tag_pos_rot_ratio = 1.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
@@ -1131,7 +1130,6 @@ class OConfig(BaseModel):
         TAG_SBA_VAR = "tag_sba_var"
         GRAV_MAG = "grav_mag"
         TAG_VAR = "tag_var"
-        TAG_POS_ROT_RATIO = "tag_pos_rot_ratio"
 
     class AltOConfigEnum(str, Enum):
         LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
@@ -1194,9 +1192,6 @@ class OConfig(BaseModel):
                         tag_var=this_product[sweep_param_to_product_idx[
                             OConfig.OConfigEnum.TAG_VAR]] if OConfig.OConfigEnum.TAG_VAR in
                         included_params else base_oconfig.compute_inf_params.tag_var,
-                        tag_pos_rot_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.TAG_POS_ROT_RATIO]] if OConfig.OConfigEnum.TAG_POS_ROT_RATIO in
-                        included_params else base_oconfig.compute_inf_params.tag_pos_rot_ratio,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(

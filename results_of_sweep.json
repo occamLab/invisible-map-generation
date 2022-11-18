@@ -34,38 +34,38 @@
     "Alpha_Max_Rotation_Tag_ID": 305.0
   },
   "floor_2_obright 83932076089666": {
-    "Min_GT_Param_Index": 787.0,
-    "Min_Alpha_Param_Index": 897.0,
-    "GT_Param": "{\"lin_vel_var\": 0.0359381366380464, \"ang_vel_var\": 0.5994842503189421, \"tag_sba_var\": 0.0359381366380464}",
-    "Alpha_Param": "{\"lin_vel_var\": 0.5994842503189421, \"ang_vel_var\": 10.0, \"tag_sba_var\": 0.0359381366380464}",
-    "GT_GT": 2.4830930692532625,
-    "GT_GT_Delta": 0.4781038170914367,
-    "Alpha_GT": 4.8034737353612975,
-    "Alpha_GT_Delta": 2.7984844831994717,
-    "GT_Fitness": ">        chi2_all_before: 3.8e+11\n>       alpha_all_before: 1.9e+11\n> se3_not_gravity_before: 4.7e-23\n>          psi2uv_before: 3.8e+11\n>         gravity_before: 5.3e-13\n---------------------------------\n>         chi2_all_after: 6.4e+08\n>        alpha_all_after: 3.2e+08\n>  se3_not_gravity_after: 1.7e+06\n>           psi2uv_after: 6.4e+08\n>          gravity_after: 0.039",
-    "Alpha_Fitness": ">        chi2_all_before: 1.4e+09\n>       alpha_all_before: 6.9e+08\n> se3_not_gravity_before: 2.8e-24\n>          psi2uv_before: 1.4e+09\n>         gravity_before: 5.3e-13\n---------------------------------\n>         chi2_all_after: 2.2e+06\n>        alpha_all_after: 1.1e+06\n>  se3_not_gravity_after: 4.7e+03\n>           psi2uv_after: 2.2e+06\n>          gravity_after: 17",
+    "Min_GT_Param_Index": 32.0,
+    "Min_Alpha_Param_Index": 808.0,
+    "GT_Param": "{\"lin_vel_var\": 1e-10, \"ang_vel_var\": 4.641588833612782e-07, \"tag_var\": 2.782559402207126e-08}",
+    "Alpha_Param": "{\"lin_vel_var\": 0.5994842503189421, \"ang_vel_var\": 1e-10, \"tag_var\": 0.5994842503189421}",
+    "GT_GT": 1.8925837468793145,
+    "GT_GT_Delta": -0.11240670406149533,
+    "Alpha_GT": 2.9132856736377897,
+    "Alpha_GT_Delta": 0.9082952226969798,
+    "GT_Fitness": ">        chi2_all_before: 1.1e+12\n>       alpha_all_before: 5.4e+11\n> se3_not_gravity_before: 1.1e+12\n>          psi2uv_before: 0\n>         gravity_before: 5.3e-13\n---------------------------------\n>         chi2_all_after: 1.7e+08\n>        alpha_all_after: 8.4e+07\n>  se3_not_gravity_after: 1.7e+08\n>           psi2uv_after: 0\n>          gravity_after: 0.065",
+    "Alpha_Fitness": ">        chi2_all_before: 2.3e+07\n>       alpha_all_before: 1.1e+07\n> se3_not_gravity_before: 2.3e+07\n>          psi2uv_before: 0\n>         gravity_before: 5.3e-13\n----------------------------------\n>         chi2_all_after: 2.2e+04\n>        alpha_all_after: -2.6e+04\n>  se3_not_gravity_after: 2.2e+04\n>           psi2uv_after: 0\n>          gravity_after: 2e-06",
     "GT_Rotation": [
-      0.3875645346201077,
-      2.6637488516400505,
-      0.5697894864985072
+      0.8794845523234933,
+      0.47414018867170354,
+      0.34073667646223477
     ],
     "Alpha_Rotation": [
-      4.920417316347192,
-      4.375500258638215,
-      5.552355855603439
+      1.466937935225605,
+      1.3925324874582707,
+      1.943814590452669
     ],
     "GT_Max_Rotation": [
-      3.6558847796715987,
-      18.763580567860366,
-      1.5844139383006584
+      5.279707664974505,
+      3.046074117158784,
+      1.9034411679178942
     ],
-    "GT_Max_Rotation_Tag_ID": 317.0,
+    "GT_Max_Rotation_Tag_ID": 301.0,
     "Alpha_Max_Rotation": [
-      53.14805033798535,
-      27.7878158158653,
-      55.28120916999758
+      9.43156667450467,
+      5.108255083495536,
+      12.03913104114635
     ],
-    "Alpha_Max_Rotation_Tag_ID": 301.0
+    "Alpha_Max_Rotation_Tag_ID": 300.0
   },
   "desnat_straight_three": {
     "Min_GT_Param_Index": 890.0,
