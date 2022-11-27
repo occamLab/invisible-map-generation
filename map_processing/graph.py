@@ -25,7 +25,7 @@ from .data_models import UGDataSet, OComputeInfParams, Weights, OResultFitnessMe
 from .graph_vertex_edge_classes import Vertex, Edge
 from .transform_utils import pose_to_se3quat, isometry_to_pose, transform_vector_to_matrix, se3_quat_average, \
     transform_matrix_to_vector, make_sba_tag_arrays, pose_to_isometry
-
+import pdb
 
 class Graph:
     """A class for the graph encoding a map with class methods to optimize it.
@@ -205,18 +205,20 @@ class Graph:
                                                                    edge_type_filter={EdgeProjectPSI2UV})[0]
         opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(self.optimized_graph,
                                                                     edge_type_filter={EdgeSE3Gravity})[0]
-
-        chi2_result = OResultFitnessMetrics(
-            chi2_all_before=pre_opt_chi2,
-            alpha_all_before=pre_opt_alpha,
-            se3_not_gravity_before=pre_opt_se3_chi2,
-            psi2uv_before=pre_opt_psi2uv_chi2,
-            gravity_before=pre_opt_gravity_chi2,
-            chi2_all_after=opt_chi2,
-            alpha_all_after=opt_alpha,
-            se3_not_gravity_after=opt_se3_chi2,
-            psi2uv_after=opt_psi2uv_chi2,
-            gravity_after=opt_gravity_chi2)
+        try:
+            chi2_result = OResultFitnessMetrics(
+                chi2_all_before=pre_opt_chi2,
+                alpha_all_before=pre_opt_alpha,
+                se3_not_gravity_before=pre_opt_se3_chi2,
+                psi2uv_before=pre_opt_psi2uv_chi2,
+                gravity_before=pre_opt_gravity_chi2,
+                chi2_all_after=opt_chi2,
+                alpha_all_after=opt_alpha,
+                se3_not_gravity_after=opt_se3_chi2,
+                psi2uv_after=opt_psi2uv_chi2,
+                gravity_after=opt_gravity_chi2)
+        except pydantic.ValidationError:
+            pdb.set_trace()
         return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:

@@ -17,7 +17,7 @@ Notes:
   and cannot be-loaded for further processing.
 """
 import os
-from re import search
+import pdb
 import sys
 repository_root = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), os.pardir)
@@ -53,6 +53,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -288,6 +289,7 @@ if __name__ == "__main__":
         if args.s:
             gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
+
             sweep_params(
                 mi=map_info,
                 ground_truth_data=gt_data,
@@ -297,7 +299,7 @@ if __name__ == "__main__":
                 ),
                 sweep_config=sweep_config,
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
-                verbose=False,
+                verbose=True,
                 generate_plot=True,
                 show_plot=args.v,
                 num_processes=args.np,
