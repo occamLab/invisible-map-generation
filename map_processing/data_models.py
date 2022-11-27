@@ -1074,7 +1074,7 @@ class PGDataSet(BaseModel):
 class OComputeInfParams(BaseModel):
     lin_vel_var: np.ndarray = Field(default_factory=lambda: np.ones(3))
     ang_vel_var: confloat(gt=0) = 1.0
-    tag_sba_var: confloat(gt=0) = 1.0
+    tag_sba_var: confloat(gt=0) = 10.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
