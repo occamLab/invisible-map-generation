@@ -68,8 +68,9 @@ def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
     if num_processes == 1:  # Skip multiprocessing if only one process is specified
         if verbose:
             print("Starting single-process optimization parameter sweep...")
-        for sweep_arg in sweep_args:
+        for i, sweep_arg in enumerate(sweep_args):
             results_tuples = [_sweep_target(sweep_arg)]
+            print(i)
     else:
         if verbose:
             print(f"Starting multi-process optimization parameter sweep (with {num_processes} processes)...")
