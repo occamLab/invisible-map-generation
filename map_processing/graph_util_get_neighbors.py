@@ -10,8 +10,6 @@ import shapely.geometry
 from g2o import SE3Quat
 from shapely.geometry import LineString
 import scipy.spatial
-import time
-
 from map_processing.transform_utils import se3_quat_average
 
 
@@ -24,14 +22,11 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
                   neighbor_type: _NeighborType = _NeighborType.INTERSECTION)\
         -> Tuple[List[List[int]], List[Dict[str, Any]]]:
     """TODO: documentation
-
     Args:
         vertices:
         vertex_ids:
         neighbor_type:
-
     Returns:
-
     """
     nvertices = vertices.shape[0]
     if vertex_ids is None:
@@ -68,15 +63,12 @@ def get_neighbors(vertices: np.ndarray, vertex_ids: Union[List[int], None] = Non
 
 def _get_intersection(vertices, id1, id2, curr_id):
     """TODO: Documentation
-
     Args:
         vertices:
         id1:
         id2:
         curr_id:
-
     Returns:
-
     """
     line1 = LineString([(vertices[id1 - 1][0], vertices[id1 - 1][2]),
                         (vertices[id1][0], vertices[id1][2])])
@@ -109,14 +101,11 @@ def _get_intersection(vertices, id1, id2, curr_id):
 
 def _is_close_enough(vertices, id1, id2):
     """TODO: Documentation
-
     Args:
         vertices:
         id1:
         id2:
-
     Returns:
-
     """
     v1 = vertices[id1]
     v2 = vertices[id2]

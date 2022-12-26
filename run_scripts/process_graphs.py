@@ -18,6 +18,7 @@ from map_processing.graph_opt_hl_interface import (
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 import os
 import sys
+from datetime import datetime
 
 repository_root = os.path.join(os.path.dirname(
     os.path.abspath(__file__)), os.pardir)
@@ -37,7 +38,7 @@ def on_event(event):
     extract the unprocessed map json and run for_each_map_info on it.
     """
     cms.get_map_from_unprocessed_map_event(
-        event, for_each_map_info, ignore_dict=True)
+        event, for_each_map_info, ignore_dict=True, override_all=False)
 
 
 def for_each_map_info(map_info: MapInfo) -> None:
@@ -52,15 +53,12 @@ def for_each_map_info(map_info: MapInfo) -> None:
     """
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
-    graph = Graph.as_graph(
-        map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
+    map_info.map_json_blob_name = f'{map_info.map_json_blob_name[:-5]} {datetime.now().strftime("%Y%m%d%H%M%S")}.json'
+    graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
-        is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
-    )
-    opt_chi2, opt_result, _ = optimize_graph(
-        graph=graph, oconfig=optimization_config)
-    json_str = make_processed_map_json(
-        opt_result, calculate_intersections=True)
+        is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP])
+    opt_result = optimize_graph(graph=graph, oconfig=optimization_config)
+    json_str = make_processed_map_json(opt_result.map_opt, calculate_intersections=True)
     cms.upload(map_info, json_str)
 
 
