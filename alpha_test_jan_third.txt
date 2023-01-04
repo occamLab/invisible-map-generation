@@ -1,0 +1,225 @@
+generated_23-01-03-23-46-16.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 5.878782301429833e-06
+For map based on min alpha, GT: 6.604051328880211e-06 (delta = 7.252690274503776e-07)
+For map based on min gt, GT: 3.864989911584678e-06 (delta = -2.0137923898451554e-06)
+
+generated_23-01-03-23-48-03.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 2.8937035017054447
+For map based on min alpha, GT: 1.0254546173749521 (delta = -1.8682488843304925)
+For map based on min gt, GT: 0.8488478537678389 (delta = -2.044855647937606)
+
+generated_23-01-03-23-49-26.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 4.479773313738838
+For map based on min alpha, GT: 2.196902333330264 (delta = -2.2828709804085743)
+For map based on min gt, GT: 1.995498255816365 (delta = -2.4842750579224733)
+
+generated_23-01-03-23-50-57.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 1.1695330565128454
+For map based on min alpha, GT: 1.8380861438768794 (delta = 0.668553087364034)
+For map based on min gt, GT: 0.3740161974446356 (delta = -0.7955168590682098)
+
+generated_23-01-03-23-52-28.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 2.789296951704556
+For map based on min alpha, GT: 2.3943109044587554 (delta = -0.39498604724580044)
+For map based on min gt, GT: 0.74855067146276 (delta = -2.040746280241796)
+
+generated_23-01-03-23-53-51.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 4.764166322868952
+For map based on min alpha, GT: 2.2946035592541087 (delta = -2.4695627636148436)
+For map based on min gt, GT: 1.5712362421012203 (delta = -3.192930080767732)
+
+generated_23-01-03-23-55-12.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 6.972636820670319
+For map based on min alpha, GT: 4.038984990281555 (delta = -2.933651830388764)
+For map based on min gt, GT: 2.4047004079001035 (delta = -4.567936412770216)
+
+generated_23-01-03-23-46-59.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 5.293868336446158e-06
+For map based on min alpha, GT: 4.8003994296076786e-06 (delta = -4.934689068384797e-07)
+For map based on min gt, GT: 4.463238947748469e-06 (delta = -8.306293886976896e-07)
+
+generated_23-01-03-23-48-32.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 2.240351678916121
+For map based on min alpha, GT: 0.6235749715081745 (delta = -1.6167767074079467)
+For map based on min gt, GT: 0.6225497098308694 (delta = -1.6178019690852516)
+
+generated_23-01-03-23-49-40.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 4.031177519680771
+For map based on min alpha, GT: 1.828896430700426 (delta = -2.202281088980345)
+For map based on min gt, GT: 1.8167552839753291 (delta = -2.2144222357054417)
+
+generated_23-01-03-23-51-16.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 1.4354027078883953
+For map based on min alpha, GT: 1.8802673681228548 (delta = 0.4448646602344595)
+For map based on min gt, GT: 0.5200984621201291 (delta = -0.9153042457682662)
+
+generated_23-01-03-23-52-37.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 5.151029672339991
+For map based on min alpha, GT: 5.069803996590185 (delta = -0.08122567574980621)
+For map based on min gt, GT: 0.8967873776335333 (delta = -4.254242294706458)
+
+generated_23-01-03-23-54-02.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 2.8922948133259414
+For map based on min alpha, GT: 1.1610603716782604 (delta = -1.731234441647681)
+For map based on min gt, GT: 0.9716335806792719 (delta = -1.9206612326466694)
+
+generated_23-01-03-23-55-21.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 5.54595272663688
+For map based on min alpha, GT: 2.910962004720307 (delta = -2.6349907219165734)
+For map based on min gt, GT: 2.22050139550822 (delta = -3.32545133112866)
+
+generated_23-01-03-23-47-25.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 5.092439901200086e-06
+For map based on min alpha, GT: 3.904059129771331e-06 (delta = -1.1883807714287547e-06)
+For map based on min gt, GT: 3.7028357327541223e-06 (delta = -1.3896041684459634e-06)
+
+generated_23-01-03-23-48-58.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 2.3942454960695954
+For map based on min alpha, GT: 1.3904783536988403 (delta = -1.003767142370755)
+For map based on min gt, GT: 1.2301178566505104 (delta = -1.164127639419085)
+
+generated_23-01-03-23-49-54.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 4.790106796392818
+For map based on min alpha, GT: 2.3795775790802067 (delta = -2.4105292173126114)
+For map based on min gt, GT: 2.347165945188679 (delta = -2.4429408512041393)
+
+generated_23-01-03-23-51-31.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 1.30752306032518
+For map based on min alpha, GT: 1.1724765667950467 (delta = -0.1350464935301332)
+For map based on min gt, GT: 0.5458875679865526 (delta = -0.7616354923386274)
+
+generated_23-01-03-23-52-47.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 2.0963686892983864
+For map based on min alpha, GT: 2.1273233496644544 (delta = 0.030954660366067976)
+For map based on min gt, GT: 1.0861370101065244 (delta = -1.010231679191862)
+
+generated_23-01-03-23-54-21.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+CHOLMOD warning: not positive definite. file: ../Cholesky/t_cholmod_rowfac.c line: 430
+Pre-Optimization GT: 5.575187396256069
+For map based on min alpha, GT: 2.75388372812224 (delta = -2.8213036681338295)
+For map based on min gt, GT: 1.8056792508915105 (delta = -3.7695081453645587)
+
+generated_23-01-03-23-55-46.json
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Generating list of optimization sweeping parameters...
+1000 parameters generated for sweeping
+Starting multi-process optimization parameter sweep (with 8 processes)...
+Pre-Optimization GT: 8.696546684028233
+For map based on min alpha, GT: 2.817155425412952 (delta = -5.87939125861528)
+For map based on min gt, GT: 2.507831820506335 (delta = -6.1887148635218985)

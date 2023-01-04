@@ -266,7 +266,7 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_restriction=0)
+    matching_maps = cms.find_maps(map_pattern, search_restriction=2)
     if len(matching_maps) == 0:
         print(
             f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
@@ -300,13 +300,13 @@ if __name__ == "__main__":
                 sweep_config=sweep_config,
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                 verbose=True,
-                generate_plot=True,
+                generate_plot=args.v,
                 show_plot=args.v,
                 num_processes=args.np,
                 no_sba_baseline=args.nsb,
                 upload_best=args.F,
                 cms=cms,
-                simple_metrics=True
+                simple_metrics=False
             )
 
         # If you simply want to run the optimizer with specified weights

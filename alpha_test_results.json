@@ -102,5 +102,161 @@
             "min_gt": 0.8929984486306685,
             "alpha_min_gt": 2.133523421975388
         }
+    },
+    "p1_WH4":  {
+        "no_noise": {
+            "dataset_name": "generated_23-01-03-23-46-16",
+            "pre_opt_gt": 5.878782301429833e-06,
+            "min_gt": 3.864989911584678e-06,
+            "alpha_min_gt": 6.604051328880211e-06
+        },
+        "tag_noise": {
+            "dataset_name": "generated_23-01-03-23-48-03",
+            "noise": 5,
+            "pre_opt_gt": 2.8937035017054447,
+            "min_gt": 0.8488478537678389,
+            "alpha_min_gt": 1.0254546173749521
+        },
+        "more_tag_noise": {
+            "dataset_name": "generated_23-01-03-23-49-26",
+            "noise": 10,
+            "pre_opt_gt": 4.479773313738838,
+            "min_gt": 0.3740161974446356,
+            "alpha_min_gt": 1.8380861438768794
+        },
+        "odom_noise": {
+            "dataset_name": "generated_23-01-03-23-50-57",
+            "noise": "0.01, 0.01, 0.01, 0.001",
+            "pre_opt_gt": 1.1695330565128454,
+            "min_gt": 0.3740161974446356,
+            "alpha_min_gt": 1.8380861438768794
+        },
+        "more_odom_noise": {
+            "dataset_name": "generated_23-01-03-23-52-28",
+            "noise": "0.1, 0.1, 0.1, 0.0025",
+            "pre_opt_gt": 2.789296951704556,
+            "min_gt": 0.74855067146276,
+            "alpha_min_gt": 2.3943109044587554
+        },
+        "both_noise": {
+            "dataset_name": "generated_23-01-03-23-53-51",
+            "odom_noise": "0.01, 0.01, 0.01, 0.001",
+            "tag_noise": 5,
+            "pre_opt_gt": 4.764166322868952,
+            "min_gt": 1.5712362421012203,
+            "alpha_min_gt": 2.2946035592541087
+        },
+        "more_both_noise": {
+            "dataset_name": "generated_23-01-03-23-55-12",
+            "odom_noise": "0.1, 0.1, 0.1, 0.0025",
+            "tag_noise": 10,
+            "pre_opt_gt": 6.972636820670319,
+            "min_gt": 2.4047004079001035,
+            "alpha_min_gt": 4.038984990281555
+        }
+    },
+    "p1_WH4_2":  {
+        "no_noise": {
+            "dataset_name": "generated_23-01-03-23-46-59",
+            "pre_opt_gt": 5.293868336446158e-06,
+            "min_gt": 4.463238947748469e-06,
+            "alpha_min_gt": 4.8003994296076786e-06
+        },
+        "tag_noise": {
+            "dataset_name": "generated_23-01-03-23-48-32",
+            "noise": 5,
+            "pre_opt_gt": 2.240351678916121,
+            "min_gt": 0.6225497098308694,
+            "alpha_min_gt": 0.6235749715081745
+        },
+        "more_tag_noise": {
+            "dataset_name": "generated_23-01-03-23-49-40",
+            "noise": 10,
+            "pre_opt_gt": 4.031177519680771,
+            "min_gt": 1.8167552839753291,
+            "alpha_min_gt": 1.828896430700426
+        },
+        "odom_noise": {
+            "dataset_name": "generated_23-01-03-23-51-16",
+            "noise": "0.01, 0.01, 0.01, 0.001",
+            "pre_opt_gt": 1.4354027078883953,
+            "min_gt": 1.8802673681228548,
+            "alpha_min_gt": 0.5200984621201291
+        },
+        "more_odom_noise": {
+            "dataset_name": "generated_23-01-03-23-52-37",
+            "noise": "0.1, 0.1, 0.1, 0.0025",
+            "pre_opt_gt": 5.151029672339991,
+            "min_gt": 0.5200984621201291,
+            "alpha_min_gt": 5.069803996590185
+        },
+        "both_noise": {
+            "dataset_name": "generated_23-01-03-23-54-02",
+            "odom_noise": "0.01, 0.01, 0.01, 0.001",
+            "tag_noise": 5,
+            "pre_opt_gt": 2.8922948133259414,
+            "min_gt": 0.9716335806792719,
+            "alpha_min_gt": 1.1610603716782604
+        },
+        "more_both_noise": {
+            "dataset_name": "generated_23-01-03-23-55-21",
+            "odom_noise": "0.1, 0.1, 0.1, 0.0025",
+            "tag_noise": 10,
+            "pre_opt_gt": 5.54595272663688,
+            "min_gt": 2.22050139550822,
+            "alpha_min_gt": 2.910962004720307
+        }
+    },
+    "WH4":  {
+        "no_noise": {
+            "dataset_name": "generated_23-01-03-23-47-25",
+            "pre_opt_gt": 5.092439901200086e-06,
+            "min_gt": 3.7028357327541223e-06,
+            "alpha_min_gt": 3.904059129771331e-06
+        },
+        "tag_noise": {
+            "dataset_name": "generated_23-01-03-23-48-58",
+            "noise": 5,
+            "pre_opt_gt": 2.3942454960695954,
+            "min_gt": 1.2301178566505104,
+            "alpha_min_gt": 1.3904783536988403
+        },
+        "more_tag_noise": {
+            "dataset_name": "generated_23-01-03-23-49-54",
+            "noise": 10,
+            "pre_opt_gt": 4.790106796392818,
+            "min_gt": 2.347165945188679,
+            "alpha_min_gt": 2.3795775790802067
+        },
+        "odom_noise": {
+            "dataset_name": "generated_23-01-03-23-51-31",
+            "noise": "0.01, 0.01, 0.01, 0.001",
+            "pre_opt_gt": 1.30752306032518,
+            "min_gt": 0.5458875679865526,
+            "alpha_min_gt": 1.1724765667950467
+        },
+        "more_odom_noise": {
+            "dataset_name": "generated_23-01-03-23-52-47",
+            "noise": "0.1, 0.1, 0.1, 0.0025",
+            "pre_opt_gt": 2.0963686892983864,
+            "min_gt": 2.1273233496644544,
+            "alpha_min_gt": 1.0861370101065244
+        },
+        "both_noise": {
+            "dataset_name": "generated_23-01-03-23-54-21",
+            "odom_noise": "0.01, 0.01, 0.01, 0.001",
+            "tag_noise": 5,
+            "pre_opt_gt": 5.575187396256069,
+            "min_gt": 1.8056792508915105,
+            "alpha_min_gt": 2.75388372812224
+        },
+        "more_both_noise": {
+            "dataset_name": "generated_23-01-03-23-55-46",
+            "odom_noise": "0.1, 0.1, 0.1, 0.0025",
+            "tag_noise": 10,
+            "pre_opt_gt": 8.696546684028233,
+            "min_gt": 2.507831820506335,
+            "alpha_min_gt": 2.817155425412952
+        }
     }
 }
