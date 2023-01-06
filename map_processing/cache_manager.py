@@ -116,8 +116,8 @@ class CacheManagerSingleton:
         self.__bucket: Optional[firebase_admin.storage.storage.Bucket] = None
         self.__db_ref: Optional[db.Reference] = None
         self.__were_credentials_set: bool = False
-        if firebase_creds is not None:
-            self.set_credentials(firebase_creds)
+        # if firebase_creds is not None:
+        #     self.set_credentials(firebase_creds)
 
         # Thread-related attributes for firebase_listen invocation (instantiation here is arbitrary)
         self.__listen_kill_timer: Timer = Timer(0, lambda x: x)
