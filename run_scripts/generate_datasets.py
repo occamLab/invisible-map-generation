@@ -249,7 +249,7 @@ if __name__ == "__main__":
         args.p == "d"
     ):  # d specifies a data set-based path, so get a CacheManagerSingleton instance ready
         matching_maps = CacheManagerSingleton.find_maps(
-            args.d_p, search_only_unprocessed=True
+            args.d_p, search_restriction=0
         )
         if len(matching_maps) == 0:
             print(
