@@ -1074,7 +1074,7 @@ class OComputeInfParams(BaseModel):
     ang_vel_var: confloat(gt=0) = 1.0
     tag_sba_var: confloat(gt=0) = 1.0
     # tag_no_sba_var = 1.0
-    tag_var = 1.0
+    tag_var: confloat(gt=0) = 1.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
