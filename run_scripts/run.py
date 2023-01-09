@@ -23,6 +23,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -37,7 +38,7 @@ def run_sweep(map_name, pso):
             firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0
         )
 
-    map_info = cms.find_maps(map_name).pop()
+    map_info = cms.find_maps(map_name, search_restriction=2).pop()
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * 1.0,
@@ -47,22 +48,23 @@ def run_sweep(map_name, pso):
 
     gt_dataset = cms.find_ground_truth_data_from_map_info(map_info)
     sweep_config = NO_SBA_SWEEP_CONFIG if pso == 1 else SBA_SWEEP_CONFIG
-    sweep_one_result = sweep_params(
+    sweep_result = sweep_params(
         mi=map_info,
         ground_truth_data=gt_dataset,
         base_oconfig=OConfig(
-            is_sba= pso==0,
+            is_sba=pso==0,
             compute_inf_params=compute_inf_params,
         ),
         sweep_config=sweep_config,
         ordered_sweep_config_keys=[key for key in sweep_config.keys()],
         verbose=False,
-        generate_plot=True,
+        generate_plot=False,
         show_plot=False,
         num_processes=12,
         cms=cms,
-        simple_metrics=True
+        simple_metrics=False
     )
+    return sweep_result
 
 def extrapolate_parameters(map_name_one, map_name_two, pso):
     # Fetch the service account key JSON file contents
