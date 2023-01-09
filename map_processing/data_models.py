@@ -1355,6 +1355,7 @@ class OResult(BaseModel):
     min_idx_pre: Optional[float] = None
     min_idx_opt: Optional[float] = None
     gt_per_anchor_tag_opt: Optional[Dict[int, float]] = [None, None]
+    shift_metric: Optional[List] = None
 
     @property
     def find_max_gt(self):
@@ -1540,7 +1541,21 @@ class  OSweepResults(BaseModel):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
         return args_producing_min
 
+    @property
+    def shift_metric_list(self):
+        return [oresult.shift_metric[-1] for oresult in self.oresults_list]
 
+    @property
+    def min_shift_oresult_idx(self):
+        return np.argmin(self.shift_metric_list)
+
+    @property
+    def min_shift_oresult(self):
+        return self.oresults_list[self.min_shift_oresult_idx]
+
+    @property
+    def min_shift_gt(self):
+        return self.min_shift_oresult.gt_metric_opt
 
     def query_at(self, parameter_query: Dict[str, float]):
         query_at_quantized: Dict[str, int] = {}
