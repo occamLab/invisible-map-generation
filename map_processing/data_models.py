@@ -1484,6 +1484,10 @@ class  OSweepResults(BaseModel):
         return self.oresults_list[self.min_gt_result_idx]
 
     @property
+    def gt_metric_pre(self):
+        return self.oresults_list[0].gt_metric_pre
+
+    @property
     def populate_alpha_result_list(self):
         self.alpha_results_list = []
         for oresult in self.oresults_list:
@@ -1544,6 +1548,10 @@ class  OSweepResults(BaseModel):
     @property
     def shift_metric_list(self):
         return [oresult.shift_metric[-1] for oresult in self.oresults_list]
+
+    @property
+    def min_shift_metric(self):
+        return np.min(self.shift_metric_list)
 
     @property
     def min_shift_oresult_idx(self):

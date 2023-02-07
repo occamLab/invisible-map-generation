@@ -71,6 +71,10 @@ class DetectionPair():
         return self.detection_two.tag_pose_global@np.linalg.inv(self.detection_one.tag_pose_global)
 
     @property
+    def relative_tag_transform_trans(self):
+        return self.relative_tag_transform[0:3,3]
+
+    @property
     def opt_tag_one_on_tag_one(self):
         return self.detection_one.opt_tag_pose_homogeneous@self.detection_one.tag_pose_global@np.linalg.inv(self.detection_one.opt_tag_pose_homogeneous)
 
@@ -162,8 +166,8 @@ def calculate_shift_metric(opt_result_opt_tags, trajectory_map_dct):
         )
         tag_pairs.append(curr_tag_pair)
 
-        shift_metric[:3] += curr_tag_pair.opt_tag_shift_pos
-        shift_metric[3] += np.linalg.norm(curr_tag_pair.opt_tag_shift_pos)
+        shift_metric[:3] += curr_tag_pair.opt_tag_shift_pos/np.linalg.norm(curr_tag_pair.relative_tag_transform_trans)
+        shift_metric[3] += np.linalg.norm(curr_tag_pair.opt_tag_shift_pos)/np.linalg.norm(curr_tag_pair.relative_tag_transform_trans)
 
     return shift_metric/len(tag_pairs)
 

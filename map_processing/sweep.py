@@ -205,13 +205,13 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
 
         # Print fitness metrics
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        print(f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
-              f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
+        # print(f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
+        #       f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
         print(f"For map based on min gt, GT: {min_gt} "
               f"(delta = {min_gt - min_oresult.gt_metric_pre})")
         print(f"For map based on min shift, GT: {sweep_results.min_shift_gt} "
               f"(delta = {sweep_results.min_shift_gt - min_oresult.gt_metric_pre})")
-
+        print(f"Min Shift Metric: {sweep_results.min_shift_metric}")
         # print(f"\n \nFitness metrics (GT): \n"
         #       f"{min_oresult.fitness_metrics.repr_as_list()}")
         # print(f"\nFitness metrics (Alpha): \n"
