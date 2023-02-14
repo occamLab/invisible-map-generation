@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 # will be iterated across to determine the shift metric.
 # TRAJECTORY_MAP_NAME = "generated_23-01-09-21-07-32.json"
 OPTIMIZATION_MAP_NAME = "r1-single-straight-3round*"
-SBA = False
+SBA = True
 
 CAMERA_POSE_FLIPPER = np.array(
     [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
@@ -236,7 +236,7 @@ def visualize_results_one_dataset(opt_results: OSweepResults):
     plt.figtext(
         0.5,
         0.01,
-        f"This test was done on the real recording of {OPTIMIZATION_MAP_NAME}. The shift metric was calculated by comparing the optimized tags to unoptimized detections.\nPre-Opt GT: {opt_results.gt_metric_pre}    Min GT: {opt_results.min_gt}    Min Shift GT: {opt_results.min_shift_gt}",
+        f"This test was done on the real recording of {OPTIMIZATION_MAP_NAME} w/ SBA. The shift metric was calculated by comparing the optimized tags to unoptimized detections.\nPre-Opt GT: {opt_results.gt_metric_pre}    Min GT: {opt_results.min_gt}    Min Shift GT: {opt_results.min_shift_gt}",
         wrap=True,
         horizontalalignment="center",
         fontsize=10,

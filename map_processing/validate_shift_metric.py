@@ -24,7 +24,7 @@ import numpy as np
 # tag. The trajectory map will be used as a "test" map that
 # will be iterated across to determine the shift metric.
 TRAJECTORY_MAP_NAME = "generated_23-01-07-22-14-40.json"
-OPTIMIZATION_MAP_NAME = "generated_23-01-08-18-48-10.json"
+OPTIMIZATION_MAP_NAME = "r1-single-straight-3round.json"
 SBA = False
 WEIGHTS = WEIGHTS_DICT[WeightSpecifier(5)]
 
@@ -101,13 +101,13 @@ def find_maps_and_data():
     )
 
     # Assumes only one map exists in the .cache folder for the optimization and trajectory
-    optimization_map_info = cms.find_maps(OPTIMIZATION_MAP_NAME, search_restriction=2).pop()
-    trajectory_map_info = cms.find_maps(TRAJECTORY_MAP_NAME, search_restriction=2).pop()
+    optimization_map_info = cms.find_maps(OPTIMIZATION_MAP_NAME, search_restriction=0).pop()
+    # trajectory_map_info = cms.find_maps(TRAJECTORY_MAP_NAME, search_restriction=2).pop()
 
     # Both maps should have the same ground truth
     gt_data = cms.find_ground_truth_data_from_map_info(optimization_map_info)
 
-    return optimization_map_info, trajectory_map_info, gt_data
+    return optimization_map_info, gt_data
 
 def run_optimization(optimization_map_info, gt_data):
     compute_inf_params = OComputeInfParams(
@@ -172,7 +172,7 @@ def calculate_shift_metric(opt_result_opt_tags, trajectory_map_dct):
     return shift_metric/len(tag_pairs)
 
 def run_shift_metric_test():
-    optimization_map_info, trajectory_map_info, gt_data = find_maps_and_data()
+    optimization_map_info, gt_data = find_maps_and_data()
     opt_result = run_optimization(optimization_map_info, gt_data)
     # shift_metric = calculate_shift_metric(opt_result.map_opt.tags, trajectory_map_info.map_dct)
     shift_metric = opt_result.shift_metric
