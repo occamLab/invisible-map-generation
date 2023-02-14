@@ -266,7 +266,7 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_restriction=0)
+    matching_maps = cms.find_maps(map_pattern, search_restriction=2)
     if len(matching_maps) == 0:
         print(
             f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
