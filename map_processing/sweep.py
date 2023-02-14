@@ -168,9 +168,9 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         min_gt = sweep_results.min_gt_result
         min_alpha = sweep_results.min_alpha_result
         # Represent results
-        # print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        # print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
-        # print(f"Best Alpha: {min_alpha}")
+        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+        print(f"Best Alpha: {min_alpha}")
 
     # Get best parameter based on ground truth
     min_value_idx = sweep_results.min_gt_result_idx # Index in the list of parameters that provides the min gt_result
@@ -205,25 +205,25 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
 
         # Print fitness metrics
         print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        # print(f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
-        #       f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
+        print(f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
+              f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})")
         print(f"For map based on min gt, GT: {min_gt} "
               f"(delta = {min_gt - min_oresult.gt_metric_pre})")
         print(f"For map based on min shift, GT: {sweep_results.min_shift_gt} "
               f"(delta = {sweep_results.min_shift_gt - min_oresult.gt_metric_pre})")
         print(f"Min Shift Metric: {sweep_results.min_shift_metric}")
-        # print(f"\n \nFitness metrics (GT): \n"
-        #       f"{min_oresult.fitness_metrics.repr_as_list()}")
-        # print(f"\nFitness metrics (Alpha): \n"
-        #       f"{min_oresult_alpha.fitness_metrics.repr_as_list()}")
-        # print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
-        # print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+        print(f"\n \nFitness metrics (GT): \n"
+              f"{min_oresult.fitness_metrics.repr_as_list()}")
+        print(f"\nFitness metrics (Alpha): \n"
+              f"{min_oresult_alpha.fitness_metrics.repr_as_list()}")
+        print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+        print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
 
         # Print rotation metrics
-        # print(f"\n \nRotation metric (GT): {rot_metric}")
-        # print(f"Maximum rotation (GT): {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
-        # print(f"Rotation metric (Alpha): {rot_metric_alpha}")
-        # print(f"Maximum rotation (Alpha): {max_rot_diff_alpha} (tag id: {max_rot_diff_tag_id_alpha})")
+        print(f"\n \nRotation metric (GT): {rot_metric}")
+        print(f"Maximum rotation (GT): {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
+        print(f"Rotation metric (Alpha): {rot_metric_alpha}")
+        print(f"Maximum rotation (Alpha): {max_rot_diff_alpha} (tag id: {max_rot_diff_tag_id_alpha})")
 
     if simple_metrics:
         print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))
