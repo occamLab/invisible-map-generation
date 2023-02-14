@@ -34,5 +34,11 @@
         "RTABMAP_DATA_PATH" : "wh_4.txt",
         "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_wh4.json",
         "PROCESSED_GRAPH_DATA_PATH": ""
+    },
+    "mac_2":
+    {
+        "RTABMAP_DATA_PATH" : "mac_2.g2o",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_2.json",
+        "PROCESSED_GRAPH_DATA_PATH": ""
     }
 }
