@@ -17,14 +17,14 @@ from matplotlib import pyplot as plt
 from map_processing import TIME_FORMAT
 from map_processing import graph_opt_utils
 from map_processing.cache_manager import MapInfo, CacheManagerSingleton
-from map_processing.data_models import OConfig, OResult, OSweepResults, UGDataSet, GTDataSet
+from map_processing.data_models import OConfig, OResult, OSweepResults, UGDataSet, GTDataSet, OG2oOptimizer
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import optimize_graph, ground_truth_metric_with_tag_id_intersection, \
     tag_pose_array_with_metadata_to_map
 from map_processing.graph_vertex_edge_classes import VertexType
 from map_processing.graph_opt_utils import rotation_metric
 from map_processing.validate_shift_metric import calculate_shift_metric
-from . import PrescalingOptEnum
+from . import PrescalingOptEnum, graph_opt_plot_utils
 
 
 def run_param_sweep(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
@@ -110,7 +110,7 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                  ordered_sweep_config_keys: List[OConfig.OConfigEnum], fixed_vertices: Optional[Set[VertexType]] = None,
                  verbose: bool = False, generate_plot: bool = False, show_plot: bool = False, num_processes: int = 1,
                  cache_results: bool = False, no_sba_baseline: bool = False, upload_best: bool = False, cms: CacheManagerSingleton = None,
-                 simple_metrics = False) -> OSweepResults:
+                 simple_metrics = False, visualize_best_map = True) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
     """
@@ -229,13 +229,26 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))
         print(f"\n \nFitness metrics (GT): \n"
               f"{min_oresult.fitness_metrics.repr_as_list()}")
-
     # Cache file from sweep
     results_cache_file_name_no_ext = f"{datetime.datetime.now().strftime(TIME_FORMAT)}_{mi.map_name}_sweep"
     
     processed_map_json = graph_opt_utils.make_processed_map_json(min_oresult.map_opt,
                                                                  calculate_intersections=upload_best)
-
+    
+    if visualize_best_map:
+        opt_map: OG2oOptimizer = sweep_results.min_oresult.map_opt
+        pre_map: OG2oOptimizer = sweep_results.min_oresult.map_pre
+        graph_opt_plot_utils.plot_optimization_result(
+            opt_odometry=opt_map.locations,
+            orig_odometry=pre_map.locations,
+            opt_tag_verts=opt_map.tags,
+            opt_tag_corners=opt_map.tagpoints,
+            opt_waypoint_verts=(opt_map.waypoints_metadata, opt_map.waypoints_arr),
+            orig_tag_verts=pre_map.tags,
+            ground_truth_tags=GTDataSet.gt_data_set_from_dict_of_arrays(ground_truth_data) if ground_truth_data else None,
+            plot_title=base_oconfig.graph_plot_title,
+        )
+        graph_opt_plot_utils.plot_adj_chi2(opt_map, base_oconfig.chi2_plot_title)
     if cache_results:
         CacheManagerSingleton.cache_sweep_results(deepcopy(sweep_results), results_cache_file_name_no_ext)
         CacheManagerSingleton.cache_map(CacheManagerSingleton.SWEEP_PROCESSED_UPLOAD_TO, mi, processed_map_json)

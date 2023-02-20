@@ -48,7 +48,7 @@ def run_sweep(map_name, pso):
 
     gt_dataset = cms.find_ground_truth_data_from_map_info(map_info)
     sweep_config = NO_SBA_SWEEP_CONFIG if pso == 1 else SBA_SWEEP_CONFIG
-    sweep_result = sweep_params(
+    _ = sweep_params(
         mi=map_info,
         ground_truth_data=gt_dataset,
         base_oconfig=OConfig(
@@ -58,13 +58,13 @@ def run_sweep(map_name, pso):
         sweep_config=sweep_config,
         ordered_sweep_config_keys=[key for key in sweep_config.keys()],
         verbose=True,
-        generate_plot=False,
-        show_plot=False,
+        generate_plot=True,
+        show_plot=True,
         num_processes=8,
         cms=cms,
         simple_metrics=False
     )
-    return sweep_result
+    # return sweep_result
 
 def extrapolate_parameters(map_name_one, map_name_two, pso):
     # Fetch the service account key JSON file contents
@@ -147,4 +147,5 @@ def extrapolate_parameters(map_name_one, map_name_two, pso):
     print(f"Full Sweep gt: {sweep_two_gt}")
 
 if __name__ == "__main__":
-    extrapolate_parameters("floor_2_all_twice*", "floor_2_all_once*", 1)
+    # extrapolate_parameters("floor_2_all_twice*", "floor_2_all_once*", 1)
+    run_sweep("4_lou_to_rich_room*", 1)
