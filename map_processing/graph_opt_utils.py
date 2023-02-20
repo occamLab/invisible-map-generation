@@ -233,7 +233,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
         The last dictionary maps ground truth values to anchor tag ids
     """
     num_tags = optimized_tag_verts.shape[0]
-    sum_trans_diffs = np.zeros((num_tags,))
+    sum_trans_diffs = np.zeros((num_tags-1,))
     ground_truth_as_se3 = [SE3Quat(tag_pose) for tag_pose in ground_truth_tags]
     ground_truth_by_tag = {}
 
