@@ -217,6 +217,8 @@
   ],
   "mac_2": [
     "r1-single-oblique-3round",
-    "r1-single-straight-3round"
+    "r1-single-straight-3round",
+    "r1-five-straight-3rounds",
+    "r1-five-straight-elevator-3rounds"
   ]
 }

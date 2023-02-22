@@ -10,6 +10,7 @@ from typing import Dict, Callable, Iterable, Any, Tuple
 from firebase_admin import credentials
 import numpy as np
 import pdb
+import matplotlib.pyplot as plt
 
 SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
@@ -21,9 +22,9 @@ SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
 
 NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 20]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 20]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 20]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -48,7 +49,7 @@ def run_sweep(map_name, pso):
 
     gt_dataset = cms.find_ground_truth_data_from_map_info(map_info)
     sweep_config = NO_SBA_SWEEP_CONFIG if pso == 1 else SBA_SWEEP_CONFIG
-    _ = sweep_params(
+    sweep_result = sweep_params(
         mi=map_info,
         ground_truth_data=gt_dataset,
         base_oconfig=OConfig(
@@ -64,7 +65,23 @@ def run_sweep(map_name, pso):
         cms=cms,
         simple_metrics=False
     )
-    # return sweep_result
+    sweep_result.populate_alpha_result_list
+    gt_results = sweep_result.gt_results_list
+    alpha_results = sweep_result.alpha_results_list
+    shift_results = sweep_result.shift_metric_list
+
+    # plt.plot(gt_results, alpha_results, 'o')
+    # plt.xlabel("Ground Truth Metric")
+    # plt.ylabel("Alpha Metric")
+    # # plt.ylim([-200000, 200000])
+    # plt.show()
+    # plt.plot(gt_results, shift_results, 'o')
+    # plt.xlabel("Ground Truth Metric")
+    # plt.ylabel("Shift Metric")
+    # plt.show()
+
+
+    return sweep_result
 
 def extrapolate_parameters(map_name_one, map_name_two, pso):
     # Fetch the service account key JSON file contents
@@ -98,7 +115,7 @@ def extrapolate_parameters(map_name_one, map_name_two, pso):
         sweep_config=sweep_config,
         ordered_sweep_config_keys=[key for key in sweep_config.keys()],
         verbose=False,
-        generate_plot=True,
+        generate_plot=False,
         show_plot=False,
         num_processes=12,
         cms=cms,
@@ -115,7 +132,7 @@ def extrapolate_parameters(map_name_one, map_name_two, pso):
         sweep_config=sweep_config,
         ordered_sweep_config_keys=[key for key in sweep_config.keys()],
         verbose=False,
-        generate_plot=True,
+        generate_plot=False,
         show_plot=False,
         num_processes=12,
         cms=cms,
@@ -135,7 +152,7 @@ def extrapolate_parameters(map_name_one, map_name_two, pso):
         sweep_config=new_sweep_config,
         ordered_sweep_config_keys=[key for key in sweep_config.keys()],
         verbose=False,
-        generate_plot=True,
+        generate_plot=False,
         show_plot=False,
         num_processes=8,
         cms=cms,
@@ -148,4 +165,4 @@ def extrapolate_parameters(map_name_one, map_name_two, pso):
 
 if __name__ == "__main__":
     # extrapolate_parameters("floor_2_all_twice*", "floor_2_all_once*", 1)
-    run_sweep("4_lou_to_rich_room*", 1)
+    run_sweep("p1_WH4_2.json", 1)

@@ -1292,16 +1292,16 @@ class OG2oOptimizer(BaseModel):
 class OResultFitnessMetrics(BaseModel):
     """Container to store the chi2 values
     """
-    chi2_all_before: confloat(ge=0)
+    chi2_all_before: np.float64
     alpha_all_before: Optional[float]
-    se3_not_gravity_before: confloat(ge=0)
-    psi2uv_before: confloat(ge=0)
-    gravity_before: confloat(ge=0)
-    chi2_all_after: confloat(ge=0)
+    se3_not_gravity_before: np.float64
+    psi2uv_before: np.float64
+    gravity_before: np.float64
+    chi2_all_after: np.float64
     alpha_all_after: Optional[float]
-    se3_not_gravity_after: confloat(ge=0)
-    psi2uv_after: confloat(ge=0)
-    gravity_after: confloat(ge=0)
+    se3_not_gravity_after: np.float64
+    psi2uv_after: np.float64
+    gravity_after: np.float64
 
     def repr_as_list(self) -> str:
         lines_before: List[str] = []
