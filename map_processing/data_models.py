@@ -1077,7 +1077,7 @@ class OComputeInfParams(BaseModel):
     ang_vel_var: confloat(gt=0) = 1.0
     tag_sba_var: confloat(gt=0) = 1.0
     # tag_no_sba_var = 1.0
-    tag_var = 1.0
+    tag_var: confloat(gt=0) = 1.0
 
     class Config:
         arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
@@ -1295,16 +1295,16 @@ class OG2oOptimizer(BaseModel):
 class OResultFitnessMetrics(BaseModel):
     """Container to store the chi2 values
     """
-    chi2_all_before: confloat(ge=0)
+    chi2_all_before: np.float64
     alpha_all_before: Optional[float]
-    se3_not_gravity_before: confloat(ge=0)
-    psi2uv_before: confloat(ge=0)
-    gravity_before: confloat(ge=0)
-    chi2_all_after: confloat(ge=0)
+    se3_not_gravity_before: np.float64
+    psi2uv_before: np.float64
+    gravity_before: np.float64
+    chi2_all_after: np.float64
     alpha_all_after: Optional[float]
-    se3_not_gravity_after: confloat(ge=0)
-    psi2uv_after: confloat(ge=0)
-    gravity_after: confloat(ge=0)
+    se3_not_gravity_after: np.float64
+    psi2uv_after: np.float64
+    gravity_after: np.float64
 
     def repr_as_list(self) -> str:
         lines_before: List[str] = []
@@ -1358,6 +1358,7 @@ class OResult(BaseModel):
     min_idx_pre: Optional[float] = None
     min_idx_opt: Optional[float] = None
     gt_per_anchor_tag_opt: Optional[Dict[int, float]] = [None, None]
+    shift_metric: Optional[List] = None
 
     @property
     def find_max_gt(self):
@@ -1486,6 +1487,10 @@ class  OSweepResults(BaseModel):
         return self.oresults_list[self.min_gt_result_idx]
 
     @property
+    def gt_metric_pre(self):
+        return self.oresults_list[0].gt_metric_pre
+
+    @property
     def populate_alpha_result_list(self):
         self.alpha_results_list = []
         for oresult in self.oresults_list:
@@ -1543,7 +1548,25 @@ class  OSweepResults(BaseModel):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
         return args_producing_min
 
+    @property
+    def shift_metric_list(self):
+        return [oresult.shift_metric[-1] for oresult in self.oresults_list]
 
+    @property
+    def min_shift_metric(self):
+        return np.min(self.shift_metric_list)
+
+    @property
+    def min_shift_oresult_idx(self):
+        return np.argmin(self.shift_metric_list)
+
+    @property
+    def min_shift_oresult(self):
+        return self.oresults_list[self.min_shift_oresult_idx]
+
+    @property
+    def min_shift_gt(self):
+        return self.min_shift_oresult.gt_metric_opt
 
     def query_at(self, parameter_query: Dict[str, float]):
         query_at_quantized: Dict[str, int] = {}

@@ -17,7 +17,6 @@ from .data_models import PGTranslation, PGRotation, PGTagVertex, PGOdomVertex, P
 from .transform_utils import transform_gt_to_have_common_reference
 from scipy.spatial.transform import Rotation as R
 
-
 def optimizer_to_map(vertices, optimizer: g2o.SparseOptimizer, is_sba=False) -> OG2oOptimizer:
     """Convert a :class: g2o.SparseOptimizer to a dictionary containing locations of the phone, tags, and waypoints.
 
@@ -234,7 +233,7 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
         The last dictionary maps ground truth values to anchor tag ids
     """
     num_tags = optimized_tag_verts.shape[0]
-    sum_trans_diffs = np.zeros((num_tags,))
+    sum_trans_diffs = np.zeros((num_tags-1,))
     ground_truth_as_se3 = [SE3Quat(tag_pose) for tag_pose in ground_truth_tags]
     ground_truth_by_tag = {}
 
@@ -245,8 +244,11 @@ def ground_truth_metric(tag_ids, optimized_tag_verts: np.ndarray, ground_truth_t
                                                                          GT_anchor_pose=ground_truth_as_se3[anchor_tag],
                                                                          ground_truth_tags=ground_truth_as_se3)[:, :3]
         this_diff = np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[:, :3], axis=1)
-        sum_trans_diffs += this_diff
-        ground_truth_by_tag[tag_ids[anchor_tag]] = np.mean(this_diff)
+        dist_to_anchor_tag = np.linalg.norm(world_frame_ground_truth - optimized_tag_verts[anchor_tag, :3], axis=1)
+        # Remove anchor tag to avoid divide by 0 errors
+        normalized_diff = np.delete(this_diff, anchor_tag) / np.delete(dist_to_anchor_tag, anchor_tag)
+        sum_trans_diffs += normalized_diff
+        ground_truth_by_tag[tag_ids[anchor_tag]] = np.mean(normalized_diff)
 
     # Find average error across all anchor tags
     avg_trans_diffs = sum_trans_diffs / num_tags

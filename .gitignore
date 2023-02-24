@@ -23,5 +23,7 @@ venv
 
 /saved_sweeps/**/*sweep.*
 
+*debug.txt
+
 # Ignore rucha
 *.rucha

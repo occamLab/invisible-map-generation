@@ -301,6 +301,7 @@ if __name__ == "__main__":
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                 verbose=True,
                 generate_plot=True,
+                visualize_best_map=True,
                 show_plot=args.v,
                 num_processes=args.np,
                 no_sba_baseline=args.nsb,
