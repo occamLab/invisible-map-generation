@@ -123,14 +123,12 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
                                              ordered_sweep_config_keys=ordered_sweep_config_keys,
                                              fixed_vertices=fixed_vertices, verbose=verbose,
                                              num_processes=num_processes)
-        sba_osweep_results.populate_alpha_result_list
         print("Running No SBA Sweep")
         non_sba_osweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data,
                                                  base_oconfig=non_sba_base_oconfig, sweep_config=sweep_config,
                                                  ordered_sweep_config_keys=ordered_sweep_config_keys,
                                                  fixed_vertices=fixed_vertices, verbose=verbose,
                                                  num_processes=num_processes)
-        non_sba_osweep_results.populate_alpha_result_list
 
         # Compare minimum gt metric for best parameter across sba and no sba
         min_sba_gt = sba_osweep_results.min_gt_result
@@ -162,7 +160,6 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         sweep_results = run_param_sweep(mi=mi, ground_truth_data=ground_truth_data, base_oconfig=base_oconfig,
                                         sweep_config=sweep_config, ordered_sweep_config_keys=ordered_sweep_config_keys,
                                         fixed_vertices=fixed_vertices, verbose=verbose, num_processes=num_processes)
-        sweep_results.populate_alpha_result_list
 
         # Find min metrics from all the parameters
         min_gt = sweep_results.min_gt_result
@@ -224,6 +221,11 @@ def sweep_params(mi: MapInfo, ground_truth_data: dict, base_oconfig: OConfig,
         print(f"Maximum rotation (GT): {max_rot_diff} (tag id: {max_rot_diff_tag_id})")
         print(f"Rotation metric (Alpha): {rot_metric_alpha}")
         print(f"Maximum rotation (Alpha): {max_rot_diff_alpha} (tag id: {max_rot_diff_tag_id_alpha})")
+
+        print("Optimal Hyperparameters:")
+        print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))
+        print("Parameters (Alpha):\n" + json.dumps(sweep_results.args_producing_min_alpha, indent=2))
+        print("Parameters (Shift):\n" + json.dumps(sweep_results.args_producing_min_shift, indent=2))
 
     if simple_metrics:
         print("Parameters (GT):\n" + json.dumps(sweep_results.args_producing_min, indent=2))

@@ -1414,7 +1414,6 @@ class  OSweepResults(BaseModel):
     """
     The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
     """
-    alpha_results_list: List[float] = []
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
     map_name: str
@@ -1467,6 +1466,10 @@ class  OSweepResults(BaseModel):
     @property
     def alpha_results_arr(self) -> np.ndarray:
         return np.array(self.alpha_results_list).reshape(self.gt_results_arr_shape)
+    
+    @property
+    def shift_results_arr(self) -> np.ndarray:
+        return np.array(self.shift_metric_list).reshape(self.gt_results_arr_shape)
 
     @property
     # This finds the minimum gt_metric from a list of gt_metrics corresponding to each parameter config in the sweep
@@ -1491,14 +1494,16 @@ class  OSweepResults(BaseModel):
         return self.oresults_list[0].gt_metric_pre
 
     @property
-    def populate_alpha_result_list(self):
-        self.alpha_results_list = []
-        for oresult in self.oresults_list:
-            self.alpha_results_list.append(oresult.fitness_metrics.alpha_all_after)
+    def alpha_results_list(self):
+        return [oresult.fitness_metrics.alpha_all_after for oresult in self.oresults_list]
 
     @property
     def min_alpha_result(self) -> float:
         return np.min(self.alpha_results_list)
+    
+    @property
+    def min_shift_result(self) -> float:
+        return np.min(self.shift_metric_list)
 
     @property
     def min_alpha_result_idx(self) -> float:
@@ -1531,6 +1536,13 @@ class  OSweepResults(BaseModel):
         where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = \
             np.where(self.alpha_results_arr == self.min_alpha_result)
         return tuple([arr[0] for arr in where_min_pre])
+    
+    @property
+    def where_min_shift(self) -> Tuple[int, ...]:
+    # Where minimum shift metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = \
+            np.where(self.shift_results_arr == self.min_shift_result)
+        return tuple([arr[0] for arr in where_min_pre])
 
     @property
     # Parameters to produce min gt_metric
@@ -1546,6 +1558,14 @@ class  OSweepResults(BaseModel):
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
             args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
+        return args_producing_min
+    
+    @property
+    # Parameters to produce min alpha metric
+    def args_producing_min_shift(self) -> Dict[str, float]:
+        args_producing_min: Dict[str, float] = {}
+        for i, key in enumerate(self.sweep_config_keys_order):
+            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_shift[i]]
         return args_producing_min
 
     @property
@@ -1609,7 +1629,16 @@ class  OSweepResults(BaseModel):
         # value
         where_min = self.where_min
         fig, axs = plt.subplots(subplot_height, subplot_width)
-        fig.subplots_adjust(wspace=0.6, hspace=0.5)
+        fig.subplots_adjust(wspace=1.9, hspace=0.5)
+        fs=10
+        plt.rcParams.update({'font.size': fs})
+
+        label_mapping_dct = {
+            "ang_vel_var": "Angular Velocity Variance",
+            "lin_vel_var": "Linear Velocity Variance",
+            "tag_var": "Tag Pose Variance"
+        }
+
         for i, ax in enumerate(axs.flat) if num_possible_slice_comb != 1 else [(0, axs), ]:
             if i == num_possible_slice_comb:
                 break
@@ -1629,19 +1658,19 @@ class  OSweepResults(BaseModel):
 
             # Add a colorbar to the axis
             divider = make_axes_locatable(ax)
-            cax = divider.append_axes('right', size='5%', pad=0.05)
-            fig.colorbar(c, cax=cax, orientation='vertical', label="GT Metric")
+            cax = divider.append_axes('right', size='15%', pad=0.05)
+            fig.colorbar(c, cax=cax, orientation='vertical', label="Ground Truth Metric")
 
-            ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
+            ax.set_xlabel(label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[0]]], fontsize=fs)
             ax.set_xscale("log")
             ax.set_xlim(left=np.min(x_vec), right=np.max(x_vec))
-            ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
+            ax.set_ylabel(label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[1]]], fontsize=fs)
             ax.set_yscale("log")
             ax.set_ylim(bottom=np.min(y_vec), top=np.max(y_vec))
 
         fig.suptitle(f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
                      f"\n(red dot{'s' if num_possible_slice_comb > 1 else ''} show"
-                     f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)")
+                     f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)", fontsize=fs)
         return fig
 
 
