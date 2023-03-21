@@ -147,7 +147,7 @@ class Edge:
         # Translation component
         self.information[:3, :3] *= np.diag(1 / (np.ones(3) * delta_t_sq * lin_vel_var ** 2))
 
-    def _compute_information_se3_obs(self, weights_vec: np.ndarray, tag_var: float = 1.0, tag_pos_rot_ratio: float = 1) -> None:
+    def _compute_information_se3_obs(self, weights_vec: np.ndarray, tag_var: float = 1.0, tag_pos_rot_ratio: float = 0.1) -> None:
         self.information = np.diag(weights_vec)
         self.information[:3, :3] /= tag_var
         self.information[3:, 3:] /= (tag_var*tag_pos_rot_ratio)
