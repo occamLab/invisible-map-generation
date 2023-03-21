@@ -202,7 +202,7 @@ def plot_optimization_result(
     else:
         plt.plot(orig_odometry[:, 0], orig_odometry[:, 2], "-", label="Raw Odom Vertices", linewidth=0.75, c="g")
         plt.plot(opt_odometry[:, 0], opt_odometry[:, 2], "-",  label="Optimized Odom Vertices", linewidth=0.75, c="b")
-    plt.legend(bbox_to_anchor=(1.05, 1), loc="lower left", fontsize="small")
+    plt.legend(bbox_to_anchor=(1.05, 1), fontsize="small")
     axis_equal(ax, three_dimensional)
     plt.gcf().set_dpi(300)
     if isinstance(plot_title, str):
@@ -232,7 +232,7 @@ def axis_equal(ax: plt.Axes, three_dimensional: bool):
         for xb, yb, zb in zip(Xb, Yb, Zb):
             ax.plot([xb], [yb], [zb], "w")
     else:
-        for xb, yb, zb in zip(Xb, Yb):
+        for xb, yb in zip(Xb, Yb):
             ax.plot([xb], [yb], "w")
 
 
