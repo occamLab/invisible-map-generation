@@ -5,9 +5,9 @@ VENV_DIR_REL_PATH="./venv"
 VENV_ACTIVATE_PATH="${VENV_DIR_REL_PATH}/bin/activate"
 
 # To handle this script being run from any directory, cd into the repository's root directory
-SCRIPT_PATH=$(relpath "$0")
-REPODIR=$(dirname "$(dirname "$SCRIPT_PATH")")
-cd "$REPODIR" || exit
+# SCRIPT_PATH=$(relpath "$0")
+# REPODIR=$(dirname "$(dirname "$SCRIPT_PATH")")
+# cd "$REPODIR" || exit
 
 if [ ! -d ${VENV_DIR_REL_PATH} ]
 then
@@ -33,8 +33,9 @@ cd build || exit
 
 cmake .. || exit
 make "-j$(nproc --all)" || exit
+make install
 cd ..
 
 echo "Using python version: $(python3 --version)"
-sudo python3 setup.py install || exit
+python3 setup.py install || exit
 cd "${REPODIR}" || exit
