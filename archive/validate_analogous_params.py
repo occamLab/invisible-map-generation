@@ -22,8 +22,7 @@ import numpy as np
 import os
 import sys
 
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 
@@ -79,14 +78,12 @@ def validate_analogous_params(
             alt_param_multiplicands_for_generation[generate_key] = generate_value[0](
                 *generate_value[1]
             )
-    alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {
-    }
+    alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {}
     for opt_key, opt_value in alt_opt_config.items():
         if isinstance(opt_value, np.ndarray):
             alt_param_multiplicands_for_opt[opt_key] = opt_value
         else:
-            alt_param_multiplicands_for_opt[opt_key] = opt_value[0](
-                *opt_value[1])
+            alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
 
     # Get the data necessary to batch generate data sets and configure the parameter sweep over each of them
     _, generate_params_list = GenerateParams.alt_generate_params_generator(
@@ -96,8 +93,7 @@ def validate_analogous_params(
         ratio_xz_to_y_lin_vel_var=ratio_xz_to_y_lin_vel_var,
     )
     if len(set(generate_params_list)) != len(generate_params_list):
-        raise Exception(
-            f"Non-unique set of {GenerateParams.__name__} objects created")
+        raise Exception(f"Non-unique set of {GenerateParams.__name__} objects created")
     param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
         alt_param_multiplicands=alt_param_multiplicands_for_opt
     )
@@ -121,8 +117,7 @@ def validate_analogous_params(
                 path_from=data_set_generate_from, gen_params=generate_param
             )
             mi = gg.export_to_map_processing_cache()
-            gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(
-                mi)
+            gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
 
             sweep_results_list_per_gen_params.append(
                 sweep_params(

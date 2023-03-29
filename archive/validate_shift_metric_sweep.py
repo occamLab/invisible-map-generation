@@ -9,7 +9,6 @@ from run import run_sweep
 from map_processing.cache_manager import CacheManagerSingleton
 from firebase_admin import credentials
 from map_processing.data_models import OSweepResults
-from map_processing import PrescalingOptEnum
 from map_processing.transform_utils import transform_vector_to_matrix
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,7 +19,7 @@ import matplotlib.pyplot as plt
 # of parameters in order to obtain global positions of each
 # tag. The trajectory map will be used as a "test" map that
 # will be iterated across to determine the shift metric.
-# TRAJECTORY_MAP_NAME = "generated_23-01-09-21-07-32.json"
+TRAJECTORY_MAP_NAME = "generated_23-01-09-21-07-32.json"
 OPTIMIZATION_MAP_NAME = "r1-single-straight-3round*"
 SBA = True
 

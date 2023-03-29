@@ -9,8 +9,6 @@ from map_processing.cache_manager import CacheManagerSingleton
 from typing import Dict, Callable, Iterable, Any, Tuple
 from firebase_admin import credentials
 import numpy as np
-import pdb
-import matplotlib.pyplot as plt
 
 SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
@@ -54,7 +52,7 @@ def run_gt_correlation(small_map_name, big_map_name, pso):
     # gt_dataset = small_gt_dataset
     sweep_config = NO_SBA_SWEEP_CONFIG if pso == 1 else SBA_SWEEP_CONFIG
 
-    print(f"Running Small Map Sweep")
+    print("Running Small Map Sweep")
     small_sweep_result = sweep_params(
         mi=small_map_info,
         ground_truth_data=gt_dataset,
@@ -128,7 +126,7 @@ def run_full_extrapolation(small_map_name, big_map_name, pso):
     # gt_dataset = small_gt_dataset
     sweep_config = NO_SBA_SWEEP_CONFIG if pso == 1 else SBA_SWEEP_CONFIG
 
-    print(f"Running Small Map Sweep")
+    print("Running Small Map Sweep")
     small_sweep_result = sweep_params(
         mi=small_map_info,
         ground_truth_data=gt_dataset,

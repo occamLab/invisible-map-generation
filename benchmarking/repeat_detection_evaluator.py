@@ -25,27 +25,25 @@ import argparse
 VISUALIZE = False
 FIX_IT = False
 
+
 def make_parser():
     """
     Creates a ArgumentParser object for CLI.
     """
     p = argparse.ArgumentParser(
-        description="Visualize and analyze error from oblique/straight tag observations")
-    
-    p.add_argument(
-        "-n", help="name of the test in the config file")
-    
-    p.add_argument(
-        "-t", help="throw out bad tags", action = "store_true")
-    
-    p.add_argument(
-        "-v", help="visualize data", action = "store_true")
-    
-    p.add_argument(
-        "-i", help="print result data", action = "store_true")
-    
+        description="Visualize and analyze error from oblique/straight tag observations"
+    )
+
+    p.add_argument("-n", help="name of the test in the config file")
+
+    p.add_argument("-t", help="throw out bad tags", action="store_true")
+
+    p.add_argument("-v", help="visualize data", action="store_true")
+
+    p.add_argument("-i", help="print result data", action="store_true")
 
     return p
+
 
 def create_observations_dict(instances, unprocessed_map_data):
     """
@@ -56,7 +54,7 @@ def create_observations_dict(instances, unprocessed_map_data):
         unprocessed_map_data (dict): dictionary of unprocessed map data
 
     Returns:
-        dict as follows 
+        dict as follows
 
         "id":
         {
@@ -92,16 +90,20 @@ def create_observations_dict(instances, unprocessed_map_data):
         results[idx] = {}
         if idx == instances[0]:
             tag_filter_pixel_corners = B.compute_corner_pixels(
-                idx, unprocessed_map_data).tolist()
+                idx, unprocessed_map_data
+            ).tolist()
         # prettified_corner_pixels = [tag_filter_pixel_corners[:2,0],tag_filter_pixel_corners[:2,1],tag_filter_pixel_corners[:2,2],tag_filter_pixel_corners[:2,3]]
         # results[idx]["corner_pixels"] = [pixel_pair.tolist() for pixel_pair in prettified_corner_pixels]
         results[idx]["corner_pixels"] = tag_filter_pixel_corners
-        results[idx]["tag_pose"] = (B.compute_tag_pose(
-            idx, unprocessed_map_data).tolist())
-        results[idx]["camera_pose"] = (
-            B.compute_camera_pose(idx, unprocessed_map_data).tolist())
+        results[idx]["tag_pose"] = B.compute_tag_pose(
+            idx, unprocessed_map_data
+        ).tolist()
+        results[idx]["camera_pose"] = B.compute_camera_pose(
+            idx, unprocessed_map_data
+        ).tolist()
 
     return results
+
 
 def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print_info):
     """
@@ -119,21 +121,30 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
 
     tag_idxs = list(tags_to_overlay.keys())
     first_detection = tags_to_overlay[tag_idxs[0]]
-    first_detection_pose = np.array(tags_to_overlay[tag_idxs[0]]["tag_pose"])
-    first_detection_pixels = np.array(
-        tags_to_overlay[tag_idxs[0]]["corner_pixels"])
+    np.array(tags_to_overlay[tag_idxs[0]]["tag_pose"])
+    first_detection_pixels = np.array(tags_to_overlay[tag_idxs[0]]["corner_pixels"])
     all_pixels.append(first_detection_pixels)
     for idx in tag_idxs[1:]:
         subsequent_detection = tags_to_overlay[idx]
-        init_observation_new_coord_frame = B.CAMERA_POSE_FLIPPER@np.linalg.inv(
-            subsequent_detection["camera_pose"])@first_detection["camera_pose"]@B.CAMERA_POSE_FLIPPER@first_detection["tag_pose"]
+        init_observation_new_coord_frame = (
+            B.CAMERA_POSE_FLIPPER
+            @ np.linalg.inv(subsequent_detection["camera_pose"])
+            @ first_detection["camera_pose"]
+            @ B.CAMERA_POSE_FLIPPER
+            @ first_detection["tag_pose"]
+        )
         init_observation_new_coord_frame = init_observation_new_coord_frame
         subsequent_detection_poses.append(init_observation_new_coord_frame)
-        all_pixels.append(B.compute_corner_pixels(
-            tag_idxs[1], unprocessed_map_data, tag_pose=init_observation_new_coord_frame))
+        all_pixels.append(
+            B.compute_corner_pixels(
+                tag_idxs[1],
+                unprocessed_map_data,
+                tag_pose=init_observation_new_coord_frame,
+            )
+        )
 
     # A FEW PRINT STATEMENTS FOR METRICS
-    
+
     if print_info:
         print("\n")
         print(f"TAG_ID: {tag_id}")
@@ -141,17 +152,20 @@ def overlay_tags(tags_to_overlay, unprocessed_map_data, tag_id, visualize, print
         print("\nRMS ERROR:")
         for i, set_of_pixels in enumerate(all_pixels[1:]):
             errors.append(B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0])
-            print(f"error for observation {tag_idxs[i+1]} is {B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0]} pixels")
+            print(
+                f"error for observation {tag_idxs[i+1]} is {B.compute_RMS_error(first_detection_pixels, set_of_pixels)[0]} pixels"
+            )
             # print(
             #     f"that's roughly {B.compute_RMS_error(first_detection_pose, subsequent_detection_poses[i])[0]} meters")
         # print(f" \n tag_pose for tag {tag_idxs[i]} is \n {first_detection_pose} \n \n tag {tag_idxs[i+1]} is \n {subsequent_detection_poses[0]}")
-        
+
     if visualize:
         B.visualizing_corner_pixel_differences(all_pixels, tag_id, "LCD")
-    
+
     return errors
 
-def create_matching_tags_dict(path, visualize = False, print_info = False):
+
+def create_matching_tags_dict(path, visualize=False, print_info=False):
     """
     Main pipeline of the loop closure workflow
 
@@ -168,48 +182,67 @@ def create_matching_tags_dict(path, visualize = False, print_info = False):
     for i in range(len(tags)):
         # print(seen_tags)
         if tags[i][0]["tag_id"] in seen_tags:
-            matched_tags = ([idx for idx, tag_id in enumerate(
-                seen_tags) if tag_id == tags[i][0]["tag_id"]])
+            matched_tags = [
+                idx
+                for idx, tag_id in enumerate(seen_tags)
+                if tag_id == tags[i][0]["tag_id"]
+            ]
             matched_tags.append(i)
 
             # Append the occurences to the tag in question.
-            matching_tags_data[tags[i][0]["tag_id"]] = (
-                create_observations_dict(matched_tags, unprocessed_map_data))
+            matching_tags_data[tags[i][0]["tag_id"]] = create_observations_dict(
+                matched_tags, unprocessed_map_data
+            )
 
         seen_tags.append(tags[i][0]["tag_id"])
     # To check and make sure data looks good
     with open("loop_closure_comparison.json", "w") as write_file:
-        json.dump(matching_tags_data, write_file, indent=4, sort_keys=True, )
+        json.dump(
+            matching_tags_data,
+            write_file,
+            indent=4,
+            sort_keys=True,
+        )
 
     for key in matching_tags_data:
-        errors.extend(overlay_tags(matching_tags_data[key], unprocessed_map_data, key, visualize, print_info))
-    
+        errors.extend(
+            overlay_tags(
+                matching_tags_data[key],
+                unprocessed_map_data,
+                key,
+                visualize,
+                print_info,
+            )
+        )
+
     if print_info:
         print(f"mean error is {np.array(errors).mean()}")
-        
 
     return matching_tags_data
 
+
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
-    
+
     parser = make_parser()
     args = parser.parse_args()
-    
+
     NAME_OF_TEST = args.n.lower()
-    
+
     with open("benchmarking_config.json") as config_file:
         config = json.load(config_file)["overlay_tags"][NAME_OF_TEST]
         print(f"your configuration: {config}")
-    
+
     if args.t:
         tag_filter.throw_out_bad_tags(config["UNPROCESSED_PATH"])
 
     VISUALIZE = False
     if args.v:
         VISUALIZE = True
-    
+
     PRINT_INFO = False
     if args.i:
         PRINT_INFO = True
-    create_matching_tags_dict(config["UNPROCESSED_PATH"], visualize = VISUALIZE, print_info= PRINT_INFO)
+    create_matching_tags_dict(
+        config["UNPROCESSED_PATH"], visualize=VISUALIZE, print_info=PRINT_INFO
+    )

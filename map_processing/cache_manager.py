@@ -14,8 +14,12 @@ from firebase_admin import db, storage
 from varname import nameof
 
 from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
-from map_processing.data_models import GTDataSet, OSweepResults, \
-    OMultiSweepResult, OResultPseudoGTMetricValidation
+from map_processing.data_models import (
+    GTDataSet,
+    OSweepResults,
+    OMultiSweepResult,
+    OResultPseudoGTMetricValidation,
+)
 
 
 class MapInfo:
@@ -28,7 +32,9 @@ class MapInfo:
         map_dct (dict): String of json containing graph
     """
 
-    def __init__(self, map_name: str, map_json_name: str, map_dct: Dict = None, uid: str = None):
+    def __init__(
+        self, map_name: str, map_json_name: str, map_dct: Dict = None, uid: str = None
+    ):
         self.map_name: str = str(map_name)
         self.map_json_blob_name: str = str(map_json_name)
         self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
@@ -78,7 +84,7 @@ class CacheManagerSingleton:
     __instance = None
     __app_initialize_dict: Dict[str, str] = {
         "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
-        "storageBucket": "invisible-map.appspot.com"
+        "storageBucket": "invisible-map.appspot.com",
     }
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
@@ -94,13 +100,20 @@ class CacheManagerSingleton:
 
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
     GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
-    GROUND_TRUTH_MAPPING_PATH = os.path.join(CONFIG_PATH, GROUND_TRUTH_MAPPING_FILE_NAME)
+    GROUND_TRUTH_MAPPING_PATH = os.path.join(
+        CONFIG_PATH, GROUND_TRUTH_MAPPING_FILE_NAME
+    )
     SWEEP_RESULTS_PATH: str = os.path.join(CACHE_PATH, SWEEP_RESULTS_PARENT)
-    PGT_VALIDATION_RESULTS_PATH: str = os.path.join(CACHE_PATH, PGT_VALIDATION_RESULTS_PARENT)
+    PGT_VALIDATION_RESULTS_PATH: str = os.path.join(
+        CACHE_PATH, PGT_VALIDATION_RESULTS_PARENT
+    )
     FIREBASE_CONFIG_PATH = os.path.join(CONFIG_PATH, FIREBASE_CONFIG_FILE_NAME)
 
-    def __init__(self, firebase_creds: Optional[firebase_admin.credentials.Certificate] = None,
-                 max_listen_wait: int = -1):
+    def __init__(
+        self,
+        firebase_creds: Optional[firebase_admin.credentials.Certificate] = None,
+        max_listen_wait: int = -1,
+    ):
         """
         Args:
             firebase_creds: Firebase credentials. If not set in the initializer, then later
@@ -126,8 +139,7 @@ class CacheManagerSingleton:
         self.__max_listen_wait = max_listen_wait
 
     def __new__(cls, *args, **kwargs):
-        """Implements the singleton pattern.
-        """
+        """Implements the singleton pattern."""
         if cls.__instance is None:
             cls.__instance = super(CacheManagerSingleton, cls).__new__(cls)
             # Generate all ground truth data files from hard-coded data
@@ -138,8 +150,11 @@ class CacheManagerSingleton:
     def were_credentials_set(self) -> bool:
         return self.__were_credentials_set
 
-    def firebase_listen(self, callback: Union[None, Callable],
-        max_wait_override: Union[int, None] = None):
+    def firebase_listen(
+        self,
+        callback: Union[None, Callable],
+        max_wait_override: Union[int, None] = None,
+    ):
         """Wait for and act upon events using the Firebase database reference listener.
 
         Notes:
@@ -156,7 +171,9 @@ class CacheManagerSingleton:
                 self.__max_listen_wait = max_wait_override
             if self.__max_listen_wait <= 0:
                 self.__db_ref.listen(
-                    self.get_map_from_unprocessed_map_event if callback is None else callback
+                    self.get_map_from_unprocessed_map_event
+                    if callback is None
+                    else callback
                 )
                 return
 
@@ -164,18 +181,22 @@ class CacheManagerSingleton:
             self.__timer_mutex = Semaphore(1)
             self.__listen_kill_timer = Timer(
                 self.__max_listen_wait, self.__firebase_listen_sem.release
-                )
+            )
             self.__listen_kill_timer.start()
             thread_obj = Thread(
                 target=lambda: self.__db_ref.listen(
-                    self.get_map_from_unprocessed_map_event if callback is None else
-                                                    callback
-                                                    ))
+                    self.get_map_from_unprocessed_map_event
+                    if callback is None
+                    else callback
+                )
+            )
             thread_obj.start()
             self.__firebase_listen_sem.acquire()
             thread_obj.join()
 
-    def upload(self, map_info: MapInfo, json_string: str, verbose: bool = False) -> None:
+    def upload(
+        self, map_info: MapInfo, json_string: str, verbose: bool = False
+    ) -> None:
         """
         Uploads the map json string into the Firebase __bucket under the path
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate
@@ -192,12 +213,17 @@ class CacheManagerSingleton:
             verbose: TODO
         """
         with self.__synch_mutex:
-            processed_map_filename = os.path.basename(map_info.map_json_blob_name)[:-5] \
-                + "_processed.json"
-            processed_map_full_path = f"{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}"
+            processed_map_filename = (
+                os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.json"
+            )
+            processed_map_full_path = (
+                f"{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}"
+            )
             if verbose:
-                print(f"Attempting to upload {map_info.map_name} to the __bucket blob \
-                     {processed_map_full_path}")
+                print(
+                    f"Attempting to upload {map_info.map_name} to the __bucket blob \
+                     {processed_map_full_path}"
+                )
 
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
             processed_map_blob.upload_from_string(json_string)
@@ -208,20 +234,27 @@ class CacheManagerSingleton:
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
 
             if verbose:
-                print(f"Successfully uploaded database reference maps/{map_info.map_name}/"
-                      f"map_file to contain the blob path")
-            CacheManagerSingleton.cache_map(CacheManagerSingleton.PROCESSED_UPLOAD_TO, map_info,
-                json_string, verbose=verbose)
+                print(
+                    f"Successfully uploaded database reference maps/{map_info.map_name}/"
+                    f"map_file to contain the blob path"
+                )
+            CacheManagerSingleton.cache_map(
+                CacheManagerSingleton.PROCESSED_UPLOAD_TO,
+                map_info,
+                json_string,
+                verbose=verbose,
+            )
 
     def download_all_maps(self):
-        """Downloads all maps from Firebase.
-        """
+        """Downloads all maps from Firebase."""
         return self._download_all_maps_recur()
 
     def get_map_from_unprocessed_map_event(
-            self, event: firebase_admin.db.Event,
-            map_info_callback: Union[Callable[[MapInfo], None], None] = None,
-            ignore_dict: bool = False, override_all: bool = False
+        self,
+        event: firebase_admin.db.Event,
+        map_info_callback: Union[Callable[[MapInfo], None], None] = None,
+        ignore_dict: bool = False,
+        override_all: bool = False,
     ) -> None:
         """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
 
@@ -236,8 +269,13 @@ class CacheManagerSingleton:
         firebase_reference = db.reference("maps")
         if type(event.data) == str:
             # A single new map just got added
-            map_info = self._firebase_get_and_cache_unprocessed_map(event.path.lstrip("/"), event.data)
-            if 'map_file' in firebase_reference.child(map_info.map_name).get().keys() and not override_all:
+            map_info = self._firebase_get_and_cache_unprocessed_map(
+                event.path.lstrip("/"), event.data
+            )
+            if (
+                "map_file" in firebase_reference.child(map_info.map_name).get().keys()
+                and not override_all
+            ):
                 return
             if map_info_callback is not None and map_info is not None:
                 map_info_callback(map_info)
@@ -247,19 +285,37 @@ class CacheManagerSingleton:
             # This will be a dictionary of all the data that is there initially
             for map_name, map_json in event.data.items():
                 if isinstance(map_json, str):
-                    map_info = self._firebase_get_and_cache_unprocessed_map(map_name, map_json)
-                    if firebase_reference.child(map_info.map_name).get() is not None and 'map_file'\
-                        in firebase_reference.child(map_info.map_name).get().keys() and not override_all:
+                    map_info = self._firebase_get_and_cache_unprocessed_map(
+                        map_name, map_json
+                    )
+                    if (
+                        firebase_reference.child(map_info.map_name).get() is not None
+                        and "map_file"
+                        in firebase_reference.child(map_info.map_name).get().keys()
+                        and not override_all
+                    ):
                         continue
                     if map_info_callback is not None:
                         map_info_callback(map_info)
                 elif isinstance(map_json, dict):
                     for nested_name, nested_json in map_json.items():
-                        map_info = self._firebase_get_and_cache_unprocessed_map(nested_name, nested_json, uid=map_name)
+                        map_info = self._firebase_get_and_cache_unprocessed_map(
+                            nested_name, nested_json, uid=map_name
+                        )
                         if map_info is None:
                             continue
-                        if firebase_reference.child(map_name).child(map_info.map_name).get() is not None and 'map_file'\
-                            in firebase_reference.child(map_name).child(map_info.map_name).get().keys() and not override_all:
+                        if (
+                            firebase_reference.child(map_name)
+                            .child(map_info.map_name)
+                            .get()
+                            is not None
+                            and "map_file"
+                            in firebase_reference.child(map_name)
+                            .child(map_info.map_name)
+                            .get()
+                            .keys()
+                            and not override_all
+                        ):
                             continue
                         if map_info_callback is not None:
                             map_info_callback(map_info)
@@ -280,7 +336,9 @@ class CacheManagerSingleton:
         if not map_json_path.endswith(".json"):
             map_json_path += ".json"
         if not os.path.isabs(map_json_path):
-            map_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, map_json_path)
+            map_json_path = os.path.join(
+                CacheManagerSingleton.CACHE_PATH, map_json_path
+            )
 
         if not os.path.exists(map_json_path):
             return None
@@ -291,18 +349,24 @@ class CacheManagerSingleton:
             json_string_file.close()
 
         map_json_blob_name = os.path.sep.join(
-            map_json_path.split(os.path.sep)[len(CacheManagerSingleton.CACHE_PATH.split(os.path.sep)) + 1:]
+            map_json_path.split(os.path.sep)[
+                len(CacheManagerSingleton.CACHE_PATH.split(os.path.sep)) + 1 :
+            ]
         )
         map_dct = json.loads(json_string)
-        map_name = CacheManagerSingleton._read_cache_directory(os.path.basename(map_json_blob_name))
+        map_name = CacheManagerSingleton._read_cache_directory(
+            os.path.basename(map_json_blob_name)
+        )
 
-        last_folder = map_json_path.split('/')[-2]
+        last_folder = map_json_path.split("/")[-2]
         if last_folder == CacheManagerSingleton.UNPROCESSED_MAPS_PARENT:
             return MapInfo(map_name, map_json_blob_name, map_dct)
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
 
     @staticmethod
-    def find_maps(pattern: str, search_restriction: int = 0, paths: bool = False) -> Set[MapInfo]:
+    def find_maps(
+        pattern: str, search_restriction: int = 0, paths: bool = False
+    ) -> Set[MapInfo]:
         """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
         directory.
 
@@ -311,8 +375,10 @@ class CacheManagerSingleton:
 
         Args:
             pattern: Pattern to match map file paths in any subdirectory of the cache to.
-            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
-             class attribute.
+            search_restriction: Determines which directory to search within.
+                0: UNPROCESSED_MAPS_PARENT
+                1: Entire cache folder
+                2: GENERATED_MAPS_PARENT
 
         Returns:
             Set of matched files as absolute file paths
@@ -324,14 +390,13 @@ class CacheManagerSingleton:
             1: "",
             2: CacheManagerSingleton.GENERATED_MAPS_PARENTS,
         }
-        
+
         matching_filepaths = glob.glob(
             os.path.join(
-                CacheManagerSingleton.CACHE_PATH, os.path.join(
-                    search_dirs[search_restriction], "**", pattern
-                )
+                CacheManagerSingleton.CACHE_PATH,
+                os.path.join(search_dirs[search_restriction], "**", pattern),
             ),
-            recursive=recursive
+            recursive=recursive,
         )
 
         if paths:
@@ -347,8 +412,13 @@ class CacheManagerSingleton:
         return matches
 
     @staticmethod
-    def cache_map(parent_folder: str, map_info: MapInfo, json_string: str, file_suffix: Union[str, None] = None,
-                  verbose: bool = False) -> bool:
+    def cache_map(
+        parent_folder: str,
+        map_info: MapInfo,
+        json_string: str,
+        file_suffix: Union[str, None] = None,
+        verbose: bool = False,
+    ) -> bool:
         """Saves a map to a json file in cache directory.
 
         Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
@@ -373,17 +443,32 @@ class CacheManagerSingleton:
             NotADirectoryError: Raised if _resolve_cache_dir method returns false.
         """
         if not isinstance(map_info, MapInfo):
-            raise ValueError("Cannot cache map because '{}' argument is not a {} instance"
-                             .format(nameof(map_info), nameof(MapInfo)))
-        for arg in [parent_folder, map_info.map_name, map_info.map_json_blob_name, json_string]:
+            raise ValueError(
+                "Cannot cache map because '{}' argument is not a {} instance".format(
+                    nameof(map_info), nameof(MapInfo)
+                )
+            )
+        for arg in [
+            parent_folder,
+            map_info.map_name,
+            map_info.map_json_blob_name,
+            json_string,
+        ]:
             if not isinstance(arg, str):
-                raise ValueError("Cannot cache map because '{}' argument is not a string".format(nameof(arg)))
+                raise ValueError(
+                    "Cannot cache map because '{}' argument is not a string".format(
+                        nameof(arg)
+                    )
+                )
 
         if not CacheManagerSingleton._resolve_cache_dir():
-            raise NotADirectoryError("Cannot cache map because cache folder existence could not be resolved at path {}"
-                                     .format(CacheManagerSingleton.CACHE_PATH))
+            raise NotADirectoryError(
+                "Cannot cache map because cache folder existence could not be resolved at path {}".format(
+                    CacheManagerSingleton.CACHE_PATH
+                )
+            )
 
-        file_suffix_str = (file_suffix if isinstance(file_suffix, str) else "")
+        file_suffix_str = file_suffix if isinstance(file_suffix, str) else ""
         map_json_to_use = str(map_info.map_json_blob_name)
         if len(map_json_to_use) < 6:
             map_json_to_use += file_suffix_str + ".json"
@@ -393,14 +478,18 @@ class CacheManagerSingleton:
             else:
                 map_json_to_use = map_json_to_use[:-5] + file_suffix_str + ".json"
 
-        cached_file_path = os.path.join(CacheManagerSingleton.CACHE_PATH, parent_folder, map_json_to_use)
+        cached_file_path = os.path.join(
+            CacheManagerSingleton.CACHE_PATH, parent_folder, map_json_to_use
+        )
         try:
             cache_to = os.path.join(parent_folder, map_json_to_use)
             cache_to_split = cache_to.split(os.path.sep)
             cache_to_split_idx = 0
             while cache_to_split_idx < len(cache_to_split) - 1:
-                dir_to_check = os.path.join(CacheManagerSingleton.CACHE_PATH,
-                                            os.path.sep.join(cache_to_split[:cache_to_split_idx + 1]))
+                dir_to_check = os.path.join(
+                    CacheManagerSingleton.CACHE_PATH,
+                    os.path.sep.join(cache_to_split[: cache_to_split_idx + 1]),
+                )
                 if not os.path.exists(dir_to_check):
                     os.mkdir(dir_to_check)
                 cache_to_split_idx += 1
@@ -409,14 +498,20 @@ class CacheManagerSingleton:
                 map_json_file.write(json_string)
                 map_json_file.close()
 
-            CacheManagerSingleton._append_to_cache_directory(os.path.basename(map_json_to_use), map_info.map_name)
+            CacheManagerSingleton._append_to_cache_directory(
+                os.path.basename(map_json_to_use), map_info.map_name
+            )
 
             if verbose:
                 print("Successfully cached {}".format(cached_file_path))
             return True
         except Exception as ex:
             if verbose:
-                print("Could not cache map {} due to error: {}".format(map_json_to_use, ex))
+                print(
+                    "Could not cache map {} due to error: {}".format(
+                        map_json_to_use, ex
+                    )
+                )
             return False
 
     @staticmethod
@@ -424,7 +519,8 @@ class CacheManagerSingleton:
         for dataset_name, dataset in GT_TAG_DATASETS.items():
             CacheManagerSingleton.cache_ground_truth_data(
                 gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(dataset),
-                dataset_name=dataset_name)
+                dataset_name=dataset_name,
+            )
 
     @staticmethod
     def find_ground_truth_data_from_map_info(map_info: MapInfo) -> Optional[Dict]:
@@ -454,7 +550,11 @@ class CacheManagerSingleton:
             return None
         else:
             ret = {}
-            unprocessed = CacheManagerSingleton.find_ground_truth_data_from_dataset_name(matching_datasets[0])
+            unprocessed = (
+                CacheManagerSingleton.find_ground_truth_data_from_dataset_name(
+                    matching_datasets[0]
+                )
+            )
             for pose_dict in unprocessed["poses"]:
                 ret[pose_dict["tag_id"]] = np.array(pose_dict["pose"])
             return ret
@@ -465,7 +565,9 @@ class CacheManagerSingleton:
         name. Specifically, a file is searched for whose name is given by gt_{dataset_name}.json. If the file is found,
         then the object given by json.load(.) is returned.
         """
-        file_path = os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, "gt_" + dataset_name + ".json")
+        file_path = os.path.join(
+            CacheManagerSingleton.GROUND_TRUTH_PATH, "gt_" + dataset_name + ".json"
+        )
         if not os.path.exists(file_path):
             return None
         ret: Dict
@@ -474,8 +576,11 @@ class CacheManagerSingleton:
         return ret
 
     @staticmethod
-    def cache_ground_truth_data(gt_data: GTDataSet, dataset_name: str,
-                                corresponding_map_names: Optional[List[str]] = None) -> None:
+    def cache_ground_truth_data(
+        gt_data: GTDataSet,
+        dataset_name: str,
+        corresponding_map_names: Optional[List[str]] = None,
+    ) -> None:
         """Serialize the ground truth data object and save it in the ground truth directory under the name
         gt_{dataset_name}.json.
 
@@ -492,7 +597,9 @@ class CacheManagerSingleton:
             os.mkdir(CacheManagerSingleton.GROUND_TRUTH_PATH)
         gt_dict = gt_data.dict()
         file_name = "gt_" + dataset_name + ".json"
-        with open(os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, file_name), "w") as f:
+        with open(
+            os.path.join(CacheManagerSingleton.GROUND_TRUTH_PATH, file_name), "w"
+        ) as f:
             json.dump(gt_dict, f, indent=2)
 
         ground_truth_mapping_dict: Dict[str, List[str]]
@@ -510,7 +617,9 @@ class CacheManagerSingleton:
             json.dump(ground_truth_mapping_dict, f, indent=2)
 
     @staticmethod
-    def cache_sweep_results(sr: Union[OSweepResults, OMultiSweepResult], file_name: str):
+    def cache_sweep_results(
+        sr: Union[OSweepResults, OMultiSweepResult], file_name: str
+    ):
         """Serialize the provided pydantic model and write as a json file to the file specified by the file name under
         the cache subdirectory CacheManagerSingleton.SWEEP_RESULTS_PARENT.
         """
@@ -522,12 +631,16 @@ class CacheManagerSingleton:
 
         if sr.sweep_args is not None:
             sr.sweep_args = None
-            
-        with open(os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, file_name), "w") as f:
+
+        with open(
+            os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, file_name), "w"
+        ) as f:
             f.write(sr.json(indent=2))
 
     @staticmethod
-    def cache_pgt_validation_results(results: OResultPseudoGTMetricValidation, file_name: str):
+    def cache_pgt_validation_results(
+        results: OResultPseudoGTMetricValidation, file_name: str
+    ):
         """Serialize the provided pydantic model and write as a json file to the file specified by the file name under
         the cache subdirectory CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH.
         """
@@ -537,7 +650,10 @@ class CacheManagerSingleton:
         if not os.path.exists(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH):
             os.mkdir(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH)
 
-        with open(os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, file_name), "w") as f:
+        with open(
+            os.path.join(CacheManagerSingleton.PGT_VALIDATION_RESULTS_PATH, file_name),
+            "w",
+        ) as f:
             f.write(results.json(indent=2))
 
     # -- Private static methods
@@ -555,7 +671,9 @@ class CacheManagerSingleton:
         Returns:
             Value associated with the key
         """
-        with open(os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"), "r") as directory_file:
+        with open(
+            os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"), "r"
+        ) as directory_file:
             directory_json = json.loads(directory_file.read())
             directory_file.close()
             loaded = True
@@ -580,18 +698,29 @@ class CacheManagerSingleton:
             try:
                 os.mkdir(CacheManagerSingleton.CACHE_PATH)
             except Exception as ex:
-                print(f"Could not create a cache directory at {CacheManagerSingleton.CACHE_PATH} due to error: {ex}")
+                print(
+                    f"Could not create a cache directory at {CacheManagerSingleton.CACHE_PATH} due to error: {ex}"
+                )
                 return False
 
-        directory_path = os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json")
+        directory_path = os.path.join(
+            CacheManagerSingleton.CACHE_PATH, "directory.json"
+        )
         if not os.path.exists(directory_path):
             try:
-                with open(os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"), "w") as directory_file:
+                with open(
+                    os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json"),
+                    "w",
+                ) as directory_file:
                     directory_file.write(json.dumps({}))
                     directory_file.close()
                 return True
             except Exception as ex:
-                print("Could not create {} file due to error: {}".format(directory_path, ex))
+                print(
+                    "Could not create {} file due to error: {}".format(
+                        directory_path, ex
+                    )
+                )
         else:
             return True
 
@@ -607,7 +736,9 @@ class CacheManagerSingleton:
             key (str): Key to store value in
             value (str): Value to store under key
         """
-        directory_json_path = os.path.join(CacheManagerSingleton.CACHE_PATH, "directory.json")
+        directory_json_path = os.path.join(
+            CacheManagerSingleton.CACHE_PATH, "directory.json"
+        )
         with open(directory_json_path, "r") as directory_file_read:
             directory_json = json.loads(directory_file_read.read())
             directory_file_read.close()
@@ -619,7 +750,9 @@ class CacheManagerSingleton:
 
     # -- Private instance methods --
 
-    def set_credentials(self, credentials: firebase_admin.credentials.Certificate) -> None:
+    def set_credentials(
+        self, credentials: firebase_admin.credentials.Certificate
+    ) -> None:
         """Instantiates a firebase app with the credentials. If the app has already been initialized, then no action is
         taken.
 
@@ -630,37 +763,46 @@ class CacheManagerSingleton:
             credentials: Firebase credentials
         """
         with self.__synch_mutex:
-            self.__app = firebase_admin.initialize_app(credentials, self.__app_initialize_dict)
+            self.__app = firebase_admin.initialize_app(
+                credentials, self.__app_initialize_dict
+            )
             self.__bucket = storage.bucket(app=self.__app)
-            self.__db_ref = db.reference(f'/{self.UNPROCESSED_MAPS_PARENT}')
+            self.__db_ref = db.reference(f"/{self.UNPROCESSED_MAPS_PARENT}")
             self.__were_credentials_set = True
 
     def download_maps_for_device(self, device_id_name: str):
-        """Download all maps for firebase for the specified device_id_name
-        """
-        device_config_file = open(self.FIREBASE_CONFIG_PATH, 'r')
+        """Download all maps for firebase for the specified device_id_name"""
+        device_config_file = open(self.FIREBASE_CONFIG_PATH, "r")
         device_config = json.loads(device_config_file.read())
         if device_id_name not in device_config.keys():
-            raise KeyError("User specified device_id_name that is not in firebase_device_config")
+            raise KeyError(
+                "User specified device_id_name that is not in firebase_device_config"
+            )
         device_id = device_config[device_id_name]
         map_info = db.reference(f"{self.UNPROCESSED_MAPS_PARENT}/{device_id}").get()
         return self._download_all_maps_recur(map_info=map_info)
 
-    def _download_all_maps_recur(self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None):
-        """Recursive function for downloading all maps from Firebase.
-        """
+    def _download_all_maps_recur(
+        self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None
+    ):
+        """Recursive function for downloading all maps from Firebase."""
         if map_info is None:
             map_info = db.reference(self.UNPROCESSED_MAPS_PARENT).get()
 
         for child_key, child_val in map_info.items():
             if isinstance(child_val, str):
                 print(f'Downloading {"" if uid is None else uid + "/"}{child_key}')
-                self._firebase_get_and_cache_unprocessed_map(child_key, child_val, uid=uid)
+                self._firebase_get_and_cache_unprocessed_map(
+                    child_key, child_val, uid=uid
+                )
             elif isinstance(child_val, dict):
-                self._download_all_maps_recur(map_info=child_val, uid=child_key if uid is None else uid)
+                self._download_all_maps_recur(
+                    map_info=child_val, uid=child_key if uid is None else uid
+                )
 
-    def _firebase_get_and_cache_unprocessed_map(self, map_name: str, map_json: str, uid: str = None) \
-            -> Union[MapInfo, None]:
+    def _firebase_get_and_cache_unprocessed_map(
+        self, map_name: str, map_json: str, uid: str = None
+    ) -> Union[MapInfo, None]:
         """Acquires a map from the specified blob and caches it.
 
         A diagnostic message is printed if the map_json_blob_name blob name was not found by Firebase.
@@ -678,7 +820,9 @@ class CacheManagerSingleton:
         if self.__max_listen_wait > 0:
             self.__timer_mutex.acquire()
             self.__listen_kill_timer.cancel()
-            self.__listen_kill_timer = Timer(self.__max_listen_wait, self.__firebase_listen_sem.release)
+            self.__listen_kill_timer = Timer(
+                self.__max_listen_wait, self.__firebase_listen_sem.release
+            )
             self.__listen_kill_timer.start()
             self.__timer_mutex.release()
 
@@ -688,7 +832,9 @@ class CacheManagerSingleton:
             json_data = json_blob.download_as_bytes()
             json_dct = json.loads(json_data)
             map_info.map_dct = json_dct
-            CacheManagerSingleton.cache_map(self.UNPROCESSED_MAPS_PARENT, map_info, json.dumps(json_dct, indent=2))
+            CacheManagerSingleton.cache_map(
+                self.UNPROCESSED_MAPS_PARENT, map_info, json.dumps(json_dct, indent=2)
+            )
             return map_info
         else:
             print("Map '{}' was missing".format(map_info.map_name))
