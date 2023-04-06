@@ -1,4 +1,6 @@
-import pdb
+"""
+Getting an understanding of how good correcting for Alpha in our maps would be
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -73,7 +75,7 @@ def plot_compare(df_this, graph_title):
     plt.title(graph_title)
     plt.show()
 
-
+# CHECK README FOR DESCRIPTIONS FOR THESE DATASETS
 oblique = ["floor_2_obright", "floor_2_obleft", "floor_2_right_once", "209_occam_obleft_once", "mac-1-2-official"]
 
 # Map Name, SBA, GT, Alpha, Oblique

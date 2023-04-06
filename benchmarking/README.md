@@ -54,4 +54,18 @@ Kind of similar to the repeat detection script, this script maps the optimized t
 
 ---
 
+## DATSETS
+The datasets that we collected over the summer of 2022 were not very robust, but here's a minimal description of what they were:
+
+`floor_2_obright` - A right-side oblique detection of every tag on the 2nd floor of the MAC, more than once
+
+`floor_2_obleft` -  A left-side oblique detection of every tag on the 2nd floor of the MAC, more than once
+
+`floor_2_right_once`,  A right-side oblique detection of every tag on the 2nd floor of the MAC, once
+
+`209_occam_obleft_once`, to be frank, not certain about this one, but it seems like a left-side detection from classroom 209 to the OCCaM lab, once
+
+`mac-1-2-official`, our official scan of the entire first and second floor of the MAC. Unclear if left/right oblique or straight-on
+
+
 TODO: Pseudo ground truth. 

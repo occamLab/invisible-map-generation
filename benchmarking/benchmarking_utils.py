@@ -16,7 +16,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import benchmarking.repeat_detection_evaluator as rde
 
-TAG_SIZE = 0.152
+TAG_SIZE = 0.152 # meters
 MATRIX_SIZE_CONVERTER = np.array(
     [
         [1, 0, 0, 0], 

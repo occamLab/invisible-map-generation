@@ -1,4 +1,5 @@
-"""Utilities for parameter sweeping
+"""
+Utilities for parameter sweeping
 """
 
 import datetime
