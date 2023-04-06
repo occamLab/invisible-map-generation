@@ -19,6 +19,8 @@ else
   which python3
 fi
 
+pip3 install -r requirements.txt
+
 if [ ! -d "./g2opy/" ]  # Ignore cloning the repository if it already exists
 then
   git clone https://github.com/occamLab/g2opy || exit
@@ -36,5 +38,7 @@ make "-j$(nproc --all)" || exit
 cd ..
 
 echo "Using python version: $(python3 --version)"
-python3 setup.py install || exit
+sudo python3 setup.py install || exit
 cd "${REPODIR}" || exit
+
+pre-commit install
