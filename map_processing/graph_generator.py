@@ -15,9 +15,19 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-from map_processing.data_models import UGDataSet, UGTagDatum, UGPoseDatum, GTDataSet, GenerateParams
+from map_processing.data_models import (
+    UGDataSet,
+    UGTagDatum,
+    UGPoseDatum,
+    GTDataSet,
+    GenerateParams,
+)
 from map_processing.graph_opt_plot_utils import draw_frames
-from map_processing.transform_utils import norm_array_cols, NEGATE_Y_AND_Z_AXES, angle_axis_to_quat
+from map_processing.transform_utils import (
+    norm_array_cols,
+    NEGATE_Y_AND_Z_AXES,
+    angle_axis_to_quat,
+)
 
 
 class GraphGenerator:
@@ -51,48 +61,60 @@ class GraphGenerator:
         1458.0604248046875,  # fx (camera focal length in the x-axis)
         1458.0604248046875,  # fy (camera focal length in the y-axis)
         924.9375,  # cx (principal point offset in the x-axis)
-        725.906494140625  # cy (principal point offset along the y-axis)
+        725.906494140625,  # cy (principal point offset along the y-axis)
     ]
 
-    CAMERA_INTRINSICS = np.array([
-        [CAMERA_INTRINSICS_VEC[0], 0, CAMERA_INTRINSICS_VEC[2]],
-        [0, CAMERA_INTRINSICS_VEC[1], CAMERA_INTRINSICS_VEC[3]],
-        [0, 0, 1]
-    ])
+    CAMERA_INTRINSICS = np.array(
+        [
+            [CAMERA_INTRINSICS_VEC[0], 0, CAMERA_INTRINSICS_VEC[2]],
+            [0, CAMERA_INTRINSICS_VEC[1], CAMERA_INTRINSICS_VEC[3]],
+            [0, 0, 1],
+        ]
+    )
     _double_camera_intrinsics = 2 * CAMERA_INTRINSICS
 
-    TAG_CORNERS_SIZE_2 = np.transpose(np.array([
-        [-1, -1, 0, 1],
-        [1, -1, 0, 1],
-        [1, 1, 0, 1],
-        [-1, 1, 0, 1],
-    ]).astype(float))
+    TAG_CORNERS_SIZE_2 = np.transpose(
+        np.array(
+            [
+                [-1, -1, 0, 1],
+                [1, -1, 0, 1],
+                [1, 1, 0, 1],
+                [-1, 1, 0, 1],
+            ]
+        ).astype(float)
+    )
 
-    TAG_CORNERS_SIZE_2_FOR_CV_PNP = np.array([
-        [-1, 1, 0],
-        [1, 1, 0],
-        [1, -1, 0],
-        [-1, -1, 0],
-    ]).astype(float)
+    TAG_CORNERS_SIZE_2_FOR_CV_PNP = np.array(
+        [
+            [-1, 1, 0],
+            [1, 1, 0],
+            [1, -1, 0],
+            [-1, -1, 0],
+        ]
+    ).astype(float)
 
-    NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE = np.array([
-        [1, -1, -1],
-        [1, -1, -1],
-        [1, -1, -1],
-    ])
+    NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE = np.array(
+        [
+            [1, -1, -1],
+            [1, -1, -1],
+            [1, -1, -1],
+        ]
+    )
 
-    PHONE_IN_FRENET = np.array([
-        [0, -1, 0, 0],
-        [0, 0, 1, 0],
-        [-1, 0, 0, 0],
-        [0, 0, 0, 1]
-    ])
+    PHONE_IN_FRENET = np.array(
+        [[0, -1, 0, 0], [0, 0, 1, 0], [-1, 0, 0, 0], [0, 0, 0, 1]]
+    )
 
     PATH_LINEAR_DELTA_T = 0.0001  # Time span over which a parameterized path can be assumed to be approximately linear
 
     def __init__(
-            self, path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet],
-            gen_params: GenerateParams, tag_poses_for_parameterized: Optional[Dict[int, np.ndarray]] = None):
+        self,
+        path_from: Union[
+            Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet
+        ],
+        gen_params: GenerateParams,
+        tag_poses_for_parameterized: Optional[Dict[int, np.ndarray]] = None,
+    ):
         """Initializes a GraphGenerator instance and automatically invokes the `generate` method.
 
         Args:
@@ -113,16 +135,26 @@ class GraphGenerator:
             ValueError - If `path_from` is a callable and `gen_params` has a null value for any of its t_max, n_poses,
              or parameterized_path_args attributes.
         """
-        self._path_from: Union[Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet] = path_from
-        self._path_type = GraphGenerator.PathType.PARAMETERIZED if isinstance(self._path_from, Callable) else \
-            GraphGenerator.PathType.RECORDED
+        self._path_from: Union[
+            Callable[[np.ndarray, Dict[str, float]], np.ndarray], UGDataSet
+        ] = path_from
+        self._path_type = (
+            GraphGenerator.PathType.PARAMETERIZED
+            if isinstance(self._path_from, Callable)
+            else GraphGenerator.PathType.RECORDED
+        )
 
         self._gen_params = gen_params
         self._tag_corners_in_tag = np.array(GraphGenerator.TAG_CORNERS_SIZE_2)
         self._tag_corners_in_tag[:3, :] *= self._gen_params.tag_size / 2
-        self._tag_corners_for_pnp = GraphGenerator.TAG_CORNERS_SIZE_2_FOR_CV_PNP * self._gen_params.tag_size / 2
-        self._n_poses = self._gen_params.n_poses if isinstance(self._path_from, Callable) else \
-            len(self._path_from.pose_data)
+        self._tag_corners_for_pnp = (
+            GraphGenerator.TAG_CORNERS_SIZE_2_FOR_CV_PNP * self._gen_params.tag_size / 2
+        )
+        self._n_poses = (
+            self._gen_params.n_poses
+            if isinstance(self._path_from, Callable)
+            else len(self._path_from.pose_data)
+        )
 
         self._observation_poses: Optional[List[Optional[Dict[int, np.ndarray]]]] = None
         self._obs_from_poses: Optional[np.ndarray] = None
@@ -131,12 +163,20 @@ class GraphGenerator:
         self._tag_poses: Dict[int, np.ndarray]
 
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
-            if self._gen_params.t_max is None or \
-                    self._gen_params.n_poses is None or \
-                    self._gen_params.parameterized_path_args is None:
-                raise ValueError("Provided GenerateParams instance cannot have a null value for any of its t_max, "
-                                 "n_poses, or parameterized_path_args attributes.")
-            self._tag_poses = {} if tag_poses_for_parameterized is None else tag_poses_for_parameterized
+            if (
+                self._gen_params.t_max is None
+                or self._gen_params.n_poses is None
+                or self._gen_params.parameterized_path_args is None
+            ):
+                raise ValueError(
+                    "Provided GenerateParams instance cannot have a null value for any of its t_max, "
+                    "n_poses, or parameterized_path_args attributes."
+                )
+            self._tag_poses = (
+                {}
+                if tag_poses_for_parameterized is None
+                else tag_poses_for_parameterized
+            )
         else:
             self._tag_poses = self._path_from.approx_tag_in_global_by_id
         self._tag_poses_orig = deepcopy(self._tag_poses)
@@ -147,8 +187,11 @@ class GraphGenerator:
 
         self._odometry_poses: Optional[np.ndarray] = None
         if self._path_type is GraphGenerator.PathType.PARAMETERIZED:
-            self._odometry_t_vec = np.arange(0, self._gen_params.t_max, self._gen_params.t_max /
-                                             self._gen_params.n_poses)
+            self._odometry_t_vec = np.arange(
+                0,
+                self._gen_params.t_max,
+                self._gen_params.t_max / self._gen_params.n_poses,
+            )
         else:
             self._odometry_t_vec = self._path_from.timestamps
             self._delta_t = 0
@@ -173,7 +216,7 @@ class GraphGenerator:
                     pose=list(self._odometry_poses[pose_idx, :, :].flatten(order="F")),
                     timestamp=self._odometry_t_vec[pose_idx],
                     # Intentionally skipping planes
-                    id=pose_idx
+                    id=pose_idx,
                 )
             )
 
@@ -186,48 +229,64 @@ class GraphGenerator:
                 tag_data[tag_data_idx].append(
                     UGTagDatum(
                         tag_corners_pixel_coordinates=list(
-                            self._observation_pixels[pose_idx][tag_id].flatten(order="F")),
+                            self._observation_pixels[pose_idx][tag_id].flatten(
+                                order="F"
+                            )
+                        ),
                         tag_id=tag_id,
                         pose_id=pose_idx,
-                        camera_intrinsics=list(np.array(GraphGenerator.CAMERA_INTRINSICS_VEC)),
+                        camera_intrinsics=list(
+                            np.array(GraphGenerator.CAMERA_INTRINSICS_VEC)
+                        ),
                         # Intentionally skipping position and orientation variance
                         timestamp=self._odometry_t_vec[pose_idx],
-                        tag_pose=list(self._observation_poses[pose_idx][tag_id].flatten(order="C")),
+                        tag_pose=list(
+                            self._observation_poses[pose_idx][tag_id].flatten(order="C")
+                        ),
                         # Intentionally skipping joint covariance
                     )
                 )
 
         return UGDataSet(
             # Intentionally skipping location data
-            map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S") if self._gen_params.map_id \
-            is None else self._gen_params.map_id,
+            map_id="generated_" + datetime.datetime.now().strftime("%y-%m-%d-%H-%M-%S")
+            if self._gen_params.map_id is None
+            else self._gen_params.map_id,
             # Intentionally skipping plane data
             pose_data=pose_data,
             tag_data=tag_data,
-            generated_from=self._gen_params
+            generated_from=self._gen_params,
         ), GTDataSet.gt_data_set_from_dict_of_arrays(self._tag_poses_orig)
 
-    def export_to_map_processing_cache(self, verbose=False, file_name_suffix: str = "") -> MapInfo:
-        """Serializes the graph into a json file and saves it to the target destination as set by the TODO
-        """
+    def export_to_map_processing_cache(
+        self, verbose=False, file_name_suffix: str = ""
+    ) -> MapInfo:
+        """Serializes the graph into a json file and saves it to the target destination as set by the TODO"""
         map_obj, gt_obj = self.export()
         map_dct = map_obj.dict()
         map_str = json.dumps(map_dct, indent=2)
 
         map_id = map_dct["map_id"]
         if verbose:
-            print(f"Generated new data set '{map_id}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
-                  f"tags observed a total of {map_obj.num_observations} "
-                  f"{'times' if map_obj.num_observations > 1 else 'time'}.")
+            print(
+                f"Generated new data set '{map_id}' containing {map_obj.pose_data_len} poses and {map_obj.num_tags} "
+                f"tags observed a total of {map_obj.num_observations} "
+                f"{'times' if map_obj.num_observations > 1 else 'time'}."
+            )
 
-        mi = MapInfo(map_name=map_id + file_name_suffix, map_json_name=map_id + file_name_suffix, map_dct=map_dct)
+        mi = MapInfo(
+            map_name=map_id + file_name_suffix,
+            map_json_name=map_id + file_name_suffix,
+            map_dct=map_dct,
+        )
         CacheManagerSingleton.cache_map(
-            parent_folder="generated",
-            map_info=mi,
-            json_string=map_str
+            parent_folder="generated", map_info=mi, json_string=map_str
         )
         CacheManagerSingleton.cache_ground_truth_data(
-            gt_obj, dataset_name=self._gen_params.dataset_name, corresponding_map_names=[map_id + file_name_suffix])
+            gt_obj,
+            dataset_name=self._gen_params.dataset_name,
+            corresponding_map_names=[map_id + file_name_suffix],
+        )
         return mi
 
     def visualize(self, plus_minus_lim=5) -> None:
@@ -250,7 +309,11 @@ class GraphGenerator:
         ax.axes.set_ylim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
         ax.axes.set_zlim3d(bottom=-plus_minus_lim, top=plus_minus_lim)
 
-        plt.plot(self._odometry_poses[:, 0, 3], self._odometry_poses[:, 1, 3], self._odometry_poses[:, 2, 3])
+        plt.plot(
+            self._odometry_poses[:, 0, 3],
+            self._odometry_poses[:, 1, 3],
+            self._odometry_poses[:, 2, 3],
+        )
         plt.plot(path_samples[0, :], path_samples[1, :], path_samples[2, :])
 
         # Get observation vectors in the global frame and plot them
@@ -269,7 +332,8 @@ class GraphGenerator:
                     xs=[line_start[0], line_end[0]],
                     ys=[line_start[1], line_end[1]],
                     zs=[line_start[2], line_end[2]],
-                    color="c")
+                    color="c",
+                )
         plt.show()
 
     def generate(self) -> None:
@@ -280,21 +344,28 @@ class GraphGenerator:
             ValueError - If `_path_from` is not a Callable or a UGDataSet.
         """
         if isinstance(self._path_from, Callable):
-            positions = self._path_from(self._odometry_t_vec, self._gen_params.parameterized_path_args)  # 3xN array
+            positions = self._path_from(
+                self._odometry_t_vec, self._gen_params.parameterized_path_args
+            )  # 3xN array
             # Nx3x3 array
-            frenet_frames = GraphGenerator.frenet_frames(self._odometry_t_vec, self._path_from,
-                                                         self._gen_params.parameterized_path_args)
+            frenet_frames = GraphGenerator.frenet_frames(
+                self._odometry_t_vec,
+                self._path_from,
+                self._gen_params.parameterized_path_args,
+            )
             true_poses = np.zeros((len(self._odometry_t_vec), 4, 4))  # Nx4x4
             true_poses[:, 3, 3] = 1
             true_poses[:, :3, 3] = positions.transpose()
-            true_poses[:, :3, :3] = np.matmul(frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3])
+            true_poses[:, :3, :3] = np.matmul(
+                frenet_frames, GraphGenerator.PHONE_IN_FRENET[:3, :3]
+            )
             self._odometry_poses = self._apply_noise(true_poses)
             self._obs_from_poses = true_poses
         elif isinstance(self._path_from, UGDataSet):
             self._odometry_poses = self._apply_noise(self._path_from.pose_matrices)
             self._obs_from_poses = self._path_from.pose_matrices
         else:
-            raise ValueError(f"'_path_from' attribute is not of a known type")
+            raise ValueError("'_path_from' attribute is not of a known type")
 
         self._observation_poses = []
         self._observation_pixels = []
@@ -302,7 +373,9 @@ class GraphGenerator:
             self._observation_poses.append(dict())
             self._observation_pixels.append(dict())
             for tag_id in self._tag_poses:
-                tag_obs, tag_pixels = self._get_tag_observation(self._obs_from_poses[i, :, :], self._tag_poses[tag_id])
+                tag_obs, tag_pixels = self._get_tag_observation(
+                    self._obs_from_poses[i, :, :], self._tag_poses[tag_id]
+                )
                 if tag_obs.shape[0] == 0:  # True if no tags were visible
                     continue
 
@@ -319,32 +392,56 @@ class GraphGenerator:
         # The t^th sub-array of the pose_to_pose array contains the transform from the pose at time t-1 to t.
         pose_to_pose = np.zeros((true_poses.shape[0] - 1, 4, 4))
         for i in range(0, true_poses.shape[0] - 1):
-            pose_to_pose[i, :, :] = np.matmul(np.linalg.inv(true_poses[i, :, :]), true_poses[i + 1, :, :])
+            pose_to_pose[i, :, :] = np.matmul(
+                np.linalg.inv(true_poses[i, :, :]), true_poses[i + 1, :, :]
+            )
 
-        odom_noise_x = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
-        odom_noise_y = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
-        odom_noise_z = self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
+        odom_noise_x = self._gen_params.odometry_noise_var[
+            GenerateParams.OdomNoiseDims.X
+        ]
+        odom_noise_y = self._gen_params.odometry_noise_var[
+            GenerateParams.OdomNoiseDims.Y
+        ]
+        odom_noise_z = self._gen_params.odometry_noise_var[
+            GenerateParams.OdomNoiseDims.Z
+        ]
         noisy_poses = np.zeros(true_poses.shape)
         noisy_poses[0, :, :] = true_poses[0, :, :]
         for i in range(0, true_poses.shape[0] - 1):
             this_delta_t = self._odometry_t_vec[i + 1] - self._odometry_t_vec[i]
             noise_as_transform = np.zeros((4, 4))
             noise_as_transform[3, 3] = 1
-            noise_as_transform[:3, 3] = np.array([
-                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_x)),
-                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_y)),
-                np.random.normal(0, this_delta_t * np.sqrt(odom_noise_z))])
+            noise_as_transform[:3, 3] = np.array(
+                [
+                    np.random.normal(0, this_delta_t * np.sqrt(odom_noise_x)),
+                    np.random.normal(0, this_delta_t * np.sqrt(odom_noise_y)),
+                    np.random.normal(0, this_delta_t * np.sqrt(odom_noise_z)),
+                ]
+            )
             theta = np.random.normal(
-                0, this_delta_t * np.sqrt(self._gen_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]))
+                0,
+                this_delta_t
+                * np.sqrt(
+                    self._gen_params.odometry_noise_var[
+                        GenerateParams.OdomNoiseDims.RVERT
+                    ]
+                ),
+            )
 
             # Assume rotational noise can be modeled as a normally-distributed rotational error about the gravity axis
-            gravity_axis_in_phone_frame = noisy_poses[i, 1, :3]  # Select y basis vector of inverted pose
-            noise_as_transform[:3, :3] = angle_axis_to_quat(theta, gravity_axis_in_phone_frame).R
+            gravity_axis_in_phone_frame = noisy_poses[
+                i, 1, :3
+            ]  # Select y basis vector of inverted pose
+            noise_as_transform[:3, :3] = angle_axis_to_quat(
+                theta, gravity_axis_in_phone_frame
+            ).R
             noisy_transform = np.matmul(pose_to_pose[i, :, :], noise_as_transform)
             noisy_poses[i + 1, :, :] = np.matmul(noisy_poses[i, :, :], noisy_transform)
         return noisy_poses
 
-    def _get_tag_observation(self, obs_from: np.ndarray, tag: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _get_tag_observation(
+        self, obs_from: np.ndarray, tag: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """
         Args:
             obs_from: Pose (4x4 homogenous transform) from which the observation is made. Assumed to be from the same
@@ -375,8 +472,11 @@ class GraphGenerator:
             # Avoid divide by zero by setting angle of attack to pi
             aoa = np.pi
         else:
-            aoa = np.arccos(dot_for_aoa / dist_to_tag) if dot_for_aoa > 0 else \
-                (np.pi - np.arccos(dot_for_aoa / dist_to_tag))
+            aoa = (
+                np.arccos(dot_for_aoa / dist_to_tag)
+                if dot_for_aoa > 0
+                else (np.pi - np.arccos(dot_for_aoa / dist_to_tag))
+            )
         if aoa > self._gen_params.aoa_threshold:
             return np.array([]), np.array([])
 
@@ -397,34 +497,51 @@ class GraphGenerator:
         Returns:
             True if all points are visible according to the camera intrinsics.
         """
-        # Compute the pixel_vals values first. Note the slightly different computation between this and the pixels 
+        # Compute the pixel_vals values first. Note the slightly different computation between this and the pixels
         # computed for solvePnP
-        pixel_vals_tmp = np.matmul(GraphGenerator.CAMERA_INTRINSICS,
-                                   np.matmul(np.matmul(NEGATE_Y_AND_Z_AXES, tag_in_phone),
-                                             self._tag_corners_in_tag)[:3, :])
+        pixel_vals_tmp = np.matmul(
+            GraphGenerator.CAMERA_INTRINSICS,
+            np.matmul(
+                np.matmul(NEGATE_Y_AND_Z_AXES, tag_in_phone), self._tag_corners_in_tag
+            )[:3, :],
+        )
         for col_idx in range(pixel_vals_tmp.shape[1]):
             if pixel_vals_tmp[2, col_idx] == 0:
                 # Avoid divide-by-zero by setting pixels to -1 (corresponds to non-visible observation)
                 pixel_vals_tmp[:, col_idx] = -1
-            pixel_vals_tmp[:, col_idx] = pixel_vals_tmp[:, col_idx] / pixel_vals_tmp[2, col_idx]
+            pixel_vals_tmp[:, col_idx] = (
+                pixel_vals_tmp[:, col_idx] / pixel_vals_tmp[2, col_idx]
+            )
 
         # Add pixel noise and record in provided array
         pixel_vals_tmp[:2, :] += np.random.randn(2, 4) * self._gen_params.obs_noise_var
         pixel_vals[:, :] = pixel_vals_tmp[:2, :]
 
         # Check if all pixel coordinates are within the sensor's bounds
-        if np.any(pixel_vals_tmp[0:2, :] < 0) or \
-                np.any(pixel_vals_tmp[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]) or \
-                np.any(pixel_vals_tmp[1, :] > GraphGenerator._double_camera_intrinsics[1, 2]):
+        if (
+            np.any(pixel_vals_tmp[0:2, :] < 0)
+            or np.any(
+                pixel_vals_tmp[0, :] > GraphGenerator._double_camera_intrinsics[0, 2]
+            )
+            or np.any(
+                pixel_vals_tmp[1, :] > GraphGenerator._double_camera_intrinsics[1, 2]
+            )
+        ):
             return False
 
         # Recompute the pose using solvePnP
         t_vec = np.expand_dims(tag_in_phone[:3, 3], 1)
         r_vec = cv2.Rodrigues(tag_in_phone[:3, :3])[0]
         success, r_vec, t_vec = cv2.solvePnP(
-            objectPoints=self._tag_corners_for_pnp, imagePoints=np.transpose(pixel_vals_tmp[:2, :]),
-            cameraMatrix=self.CAMERA_INTRINSICS, rvec=r_vec, tvec=t_vec,
-            distCoeffs=None, flags=cv2.SOLVEPNP_IPPE_SQUARE, useExtrinsicGuess=True)
+            objectPoints=self._tag_corners_for_pnp,
+            imagePoints=np.transpose(pixel_vals_tmp[:2, :]),
+            cameraMatrix=self.CAMERA_INTRINSICS,
+            rvec=r_vec,
+            tvec=t_vec,
+            distCoeffs=None,
+            flags=cv2.SOLVEPNP_IPPE_SQUARE,
+            useExtrinsicGuess=True,
+        )
         if not success:
             return False  # TODO: figure out why this doesn't work every time that it can reasonably be expected to
 
@@ -432,9 +549,11 @@ class GraphGenerator:
         new_transform = np.zeros((4, 4))
         # This operation reverses the effect that the incorrect* tag corner order has on solvePnP (*solvePnP expects
         # corners in a different order to compute the correct pose). However, the sparse bundle adjustment code expects
-        # a different tag corner order than solvePnP. Therefore, to maintain consistency in how the additive pixel noise 
+        # a different tag corner order than solvePnP. Therefore, to maintain consistency in how the additive pixel noise
         # is applied, the tag corner order SBA expects is used, thus necessitating this correction.
-        new_transform[:3, :3] = np.multiply(GraphGenerator.NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE, rot_mat)
+        new_transform[:3, :3] = np.multiply(
+            GraphGenerator.NEGATE_ONLY_YZ_BASIS_VECTORS_ELEMENTWISE, rot_mat
+        )
         new_transform[:3, 3] = t_vec.transpose()
         new_transform[3, 3] = 1
         tag_in_phone[:, :] = new_transform
@@ -443,8 +562,9 @@ class GraphGenerator:
     # -- Static methods --
 
     @staticmethod
-    def xz_path_ellipsis_four_by_two(t_vec: np.ndarray, path_args: Dict[str, Union[float, Tuple[float, float]]]) \
-            -> np.ndarray:
+    def xz_path_ellipsis_four_by_two(
+        t_vec: np.ndarray, path_args: Dict[str, Union[float, Tuple[float, float]]]
+    ) -> np.ndarray:
         """Defines a parameterized path that is a counterclockwise ellipses in a plane co-planar to the xz plane.
 
         Args:
@@ -461,22 +581,35 @@ class GraphGenerator:
         """
         try:
             cp: Tuple[float, float] = path_args["e_cp"]
-            return np.vstack((-(path_args["e_xw"] / 2) * np.sin(t_vec) + cp[0],
-                              np.ones(len(t_vec), ) * path_args["xzp"],
-                              -(path_args["e_zw"] / 2) * np.cos(t_vec) + cp[1]))
+            return np.vstack(
+                (
+                    -(path_args["e_xw"] / 2) * np.sin(t_vec) + cp[0],
+                    np.ones(
+                        len(t_vec),
+                    )
+                    * path_args["xzp"],
+                    -(path_args["e_zw"] / 2) * np.cos(t_vec) + cp[1],
+                )
+            )
         except KeyError:
-            raise ValueError("path_args argument did not contain the expected keys 'e_xw', 'e_zw', 'e_cp', and 'xzp' "
-                             "for an elliptical path")
+            raise ValueError(
+                "path_args argument did not contain the expected keys 'e_xw', 'e_zw', 'e_cp', and 'xzp' "
+                "for an elliptical path"
+            )
 
     # noinspection PyUnresolvedReferences
-    PARAMETERIZED_PATH_ALIAS_TO_CALLABLE: Dict[str, Callable[[np.ndarray, Dict[str, float]], np.ndarray]] = {
-        "e": xz_path_ellipsis_four_by_two.__func__
-    }
+    PARAMETERIZED_PATH_ALIAS_TO_CALLABLE: Dict[
+        str, Callable[[np.ndarray, Dict[str, float]], np.ndarray]
+    ] = {"e": xz_path_ellipsis_four_by_two.__func__}
 
     @staticmethod
-    def frenet_frames(t_vec: np.ndarray,
-                      ftg: Callable[[np.ndarray, Dict[str, Union[float, Tuple[float, float]]]], np.ndarray],
-                      path_args: Dict[str, Union[float, Tuple[float, float]]]) -> np.ndarray:
+    def frenet_frames(
+        t_vec: np.ndarray,
+        ftg: Callable[
+            [np.ndarray, Dict[str, Union[float, Tuple[float, float]]]], np.ndarray
+        ],
+        path_args: Dict[str, Union[float, Tuple[float, float]]],
+    ) -> np.ndarray:
         """Computes the provided curve's Frenet frames' basis vectors at given points in time.
 
         Args:
@@ -488,14 +621,20 @@ class GraphGenerator:
             Nx3x3 numpy array where, for each 3x3 sub-array, the columns from left to right are the T, N, and B basis
              vectors of unit magnitude.
         """
-        t_hat = GraphGenerator.d_curve_dt(t_vec, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args)  # 3xN
+        t_hat = GraphGenerator.d_curve_dt(
+            t_vec, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args
+        )  # 3xN
         t_hat = norm_array_cols(t_hat)
 
         # Approximate the derivative of t_hat to get n_hat
         dt_div_2 = GraphGenerator.PATH_LINEAR_DELTA_T / 2
-        t_hat_dt_upper = GraphGenerator.d_curve_dt(t_vec + dt_div_2, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args)
+        t_hat_dt_upper = GraphGenerator.d_curve_dt(
+            t_vec + dt_div_2, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args
+        )
         t_hat_dt_upper = norm_array_cols(t_hat_dt_upper)
-        t_hat_dt_lower = GraphGenerator.d_curve_dt(t_vec - dt_div_2, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args)
+        t_hat_dt_lower = GraphGenerator.d_curve_dt(
+            t_vec - dt_div_2, GraphGenerator.PATH_LINEAR_DELTA_T, ftg, path_args
+        )
         t_hat_dt_lower = norm_array_cols(t_hat_dt_lower)
         n_hat = (t_hat_dt_upper - t_hat_dt_lower) / GraphGenerator.PATH_LINEAR_DELTA_T
         n_hat = norm_array_cols(n_hat)
@@ -510,9 +649,14 @@ class GraphGenerator:
         return ret
 
     @staticmethod
-    def d_curve_dt(t_vec: np.ndarray, dt: float,
-                   path: Callable[[np.ndarray, Dict[str, Union[float, Tuple[float, float]]]], np.ndarray],
-                   path_args: Dict[str, Union[float, Tuple[float, float]]]) -> np.ndarray:
+    def d_curve_dt(
+        t_vec: np.ndarray,
+        dt: float,
+        path: Callable[
+            [np.ndarray, Dict[str, Union[float, Tuple[float, float]]]], np.ndarray
+        ],
+        path_args: Dict[str, Union[float, Tuple[float, float]]],
+    ) -> np.ndarray:
         """Approximates the derivative of a parameterized curve (using the centralized method) with respect to the
         parameter.
 

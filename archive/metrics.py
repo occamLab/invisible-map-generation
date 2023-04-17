@@ -5,7 +5,7 @@ from map_processing.graph_utils import optimizer_to_map
 import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 
-with open('converted-data/academic_center.pkl', 'rb') as data:
+with open("converted-data/academic_center.pkl", "rb") as data:
     graph = pickle.load(data)
 
 graph.generate_unoptimized_graph()
@@ -31,10 +31,10 @@ def compute_transformation(start, end):
 
 
 def generate_transformations(positions):
-    '''This may be difficult, as querying a transform a-> b in a
+    """This may be difficult, as querying a transform a-> b in a
     dictionary with the transform b->a must return the inverse of
     b->a. It may be useful to make a separate clone of optimize_to_map
-    which makes a hashmap of vertex uids.'''
+    which makes a hashmap of vertex uids."""
     transformations = dict()
     pairs = list(itertools.combinations(positions, 2))
     # transformations
@@ -44,44 +44,52 @@ def generate_transformations(positions):
     return transformations
 
 
-def compute_tags_transformations_diff_between_maps(optimized_tags_transformations, unoptimized_tags_transformations, ):
+def compute_tags_transformations_diff_between_maps(
+    optimized_tags_transformations,
+    unoptimized_tags_transformations,
+):
     transformation_differences = dict()
     for key in optimized_tags_transformations.keys():
         if key in unoptimized_tags_transformations.keys():
             transformation_differences[key] = compute_transformation(
-                optimized_tags_transformations[key], unoptimized_tags_transformations[key])
+                optimized_tags_transformations[key],
+                unoptimized_tags_transformations[key],
+            )
         else:
-            unoptimized_tags_transformations = unoptimized_tags_transformations[(
-                key[1], key[0])]
+            unoptimized_tags_transformations = unoptimized_tags_transformations[
+                (key[1], key[0])
+            ]
             inversed_unoptimized_tags_transformations = compute_transformation(
-                unoptimized_tags_transformations, np.array([0, 0, 0, 0, 0, 0, 1]))
-            transformation_differences[key] = compute_transformation(optimized_tags_transformations[key],
-                                                                     inversed_unoptimized_tags_transformations)
+                unoptimized_tags_transformations, np.array([0, 0, 0, 0, 0, 0, 1])
+            )
+            transformation_differences[key] = compute_transformation(
+                optimized_tags_transformations[key],
+                inversed_unoptimized_tags_transformations,
+            )
     return transformation_differences
 
 
 def plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map):
-    unoptimized_tags_transformations = generate_transformations(
-        unoptimized_map['tags'])
-    print("tag poses:", optimized_map['tags'])
-    print("number of tags:", len(optimized_map['tags']))
-    optimized_tags_transformations = generate_transformations(
-        optimized_map['tags'])
+    unoptimized_tags_transformations = generate_transformations(unoptimized_map["tags"])
+    print("tag poses:", optimized_map["tags"])
+    print("number of tags:", len(optimized_map["tags"]))
+    optimized_tags_transformations = generate_transformations(optimized_map["tags"])
     transformation_differences = compute_tags_transformations_diff_between_maps(
-        optimized_tags_transformations, unoptimized_tags_transformations)
+        optimized_tags_transformations, unoptimized_tags_transformations
+    )
     distances = []
     error = []
     for key in optimized_tags_transformations.keys():
-        distances.append(np.linalg.norm(
-            optimized_tags_transformations[key][:3]))
+        distances.append(np.linalg.norm(optimized_tags_transformations[key][:3]))
         error.append(np.linalg.norm(transformation_differences[key][:3]))
-    area = np.pi*3
+    area = np.pi * 3
     plt.scatter(distances, error, s=area)
-    plt.xlabel('distance magnitude')
-    plt.ylabel('error')
+    plt.xlabel("distance magnitude")
+    plt.ylabel("error")
     plt.show()
 
-#plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map)
+
+# plot_tags_distance_diff_in_maps(optimized_map, unoptimized_map)
 
 # fig = plt.figure()
 # ax = fig.add_subplot(111, projection='3d')
