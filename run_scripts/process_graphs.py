@@ -20,14 +20,12 @@ import os
 import sys
 from datetime import datetime
 
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 
 # Fetch the service account key JSON file contents
-cred = credentials.Certificate(
-    os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
+cred = credentials.Certificate(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
 cms = CacheManagerSingleton(cred)
 
 
@@ -38,7 +36,8 @@ def on_event(event):
     extract the unprocessed map json and run for_each_map_info on it.
     """
     cms.get_map_from_unprocessed_map_event(
-        event, for_each_map_info, ignore_dict=True, override_all=False)
+        event, for_each_map_info, ignore_dict=True, override_all=False
+    )
 
 
 def for_each_map_info(map_info: MapInfo) -> None:
@@ -56,7 +55,8 @@ def for_each_map_info(map_info: MapInfo) -> None:
     map_info.map_json_blob_name = f'{map_info.map_json_blob_name[:-5]} {datetime.now().strftime("%Y%m%d%H%M%S")}.json'
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
-        is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP])
+        is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
+    )
     opt_result = optimize_graph(graph=graph, oconfig=optimization_config)
     json_str = make_processed_map_json(opt_result.map_opt, calculate_intersections=True)
     cms.upload(map_info, json_str)

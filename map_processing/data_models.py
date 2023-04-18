@@ -21,7 +21,6 @@ Notes:
 
 import itertools
 from enum import Enum
-import pdb
 from typing import Union, Optional, Dict, List, Tuple, Any
 
 import numpy as np
@@ -30,23 +29,31 @@ from matplotlib import pyplot as plt
 from pydantic import BaseModel, conlist, Field, confloat, conint, validator
 
 from map_processing import VertexType, ASSUMED_TAG_SIZE
-from map_processing.transform_utils import NEGATE_Y_AND_Z_AXES, transform_matrix_to_vector, LEN_3_UNIT_VEC
+from map_processing.transform_utils import (
+    NEGATE_Y_AND_Z_AXES,
+    transform_matrix_to_vector,
+    LEN_3_UNIT_VEC,
+)
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-ARRAY_SUMMARIZATION_THRESHOLD = int(1e9)  # Arbitrarily high integer # TODO: Check what this does
+ARRAY_SUMMARIZATION_THRESHOLD = int(
+    1e9
+)  # Arbitrarily high integer # TODO: Check what this does
 
 
-def _is_arr_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False):
+def _is_arr_of_right_shape(
+    v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False
+):
     """
     Check if the array entered is of the shape specified
 
-    Args: 
+    Args:
         v: An optional numpy ndarray repesenting the array to check shape for
         shape: A tuple representing the shape of each dimension of the array to be expected
         is_optional: A boolean representing whether the check is optional or not
 
     Returns:
-        v_sqz: A numpy ndarray representing the result of np.squeeze on the array provided. 
+        v_sqz: A numpy ndarray representing the result of np.squeeze on the array provided.
 
     Raises:
         ValueError: When any NaN values are contained in the array
@@ -61,7 +68,9 @@ def _is_arr_of_right_shape(v: Optional[np.ndarray], shape: Tuple[int, ...], is_o
         if is_optional:
             return v
         else:
-            raise ValueError("Value provided that was marked as non-optionally None is None")
+            raise ValueError(
+                "Value provided that was marked as non-optionally None is None"
+            )
 
     # Check value in array is NaN
     if np.any(v == np.nan):
@@ -112,18 +121,20 @@ def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
     if v_sqz.ndim != 1:
         raise ValueError(
             f"field that should have been a vector was found to not have the right dimensions (number of dims found to "
-            f"be {v_sqz.ndim} after squeezing the array)")
+            f"be {v_sqz.ndim} after squeezing the array)"
+        )
 
     # Check if size of vector is right
     if v_sqz.size != length:
         raise ValueError(
-            f"Expected vector to be of length {length} but instead found the length to be {v_sqz.size}")
+            f"Expected vector to be of length {length} but instead found the length to be {v_sqz.size}"
+        )
     return v_sqz
 
 
 def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> np.ndarray:
     """
-    Convert any string based array 
+    Convert any string based array
 
     Args:
         v: A str or numpy array representing the array to be deserialized
@@ -136,7 +147,9 @@ def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> np.
     elif isinstance(v, str):
         return np.fromstring(v.strip("[").strip("]"), sep=" ")
     else:
-        raise ValueError(f"Attempted to parse value for an array-type field that is not handled: {type(v)}")
+        raise ValueError(
+            f"Attempted to parse value for an array-type field that is not handled: {type(v)}"
+        )
 
 
 class Weights(BaseModel):
@@ -160,6 +173,7 @@ class Weights(BaseModel):
         _deserialize_tag_vector_if_needed: A Validator for 'orig_tag' deserialization
         _deserialize_tag_sba_vector_if_needed: A Validator for 'orig_tag_sba' deserialization
     """
+
     orig_gravity: np.ndarray = Field(default_factory=lambda: np.ones(3))
     orig_odometry: np.ndarray = Field(default_factory=lambda: np.ones(6))
     orig_tag: np.ndarray = Field(default_factory=lambda: np.ones(6))
@@ -176,33 +190,46 @@ class Weights(BaseModel):
                 be used as fields.
             json_encoders: Encode array to string (used to write to json)
         """
-        arbitrary_types_allowed = True  
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+
+        arbitrary_types_allowed = True
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     # Vector validators
-    _check_gravity_is_correct_length_vector = validator("orig_gravity", allow_reuse=True)(
-        lambda v: _is_vector_of_right_length(v, 3))
-    _check_odometry_is_correct_length_vector = validator("orig_odometry", allow_reuse=True)(
-        lambda v: _is_vector_of_right_length(v, 6))
+    _check_gravity_is_correct_length_vector = validator(
+        "orig_gravity", allow_reuse=True
+    )(lambda v: _is_vector_of_right_length(v, 3))
+    _check_odometry_is_correct_length_vector = validator(
+        "orig_odometry", allow_reuse=True
+    )(lambda v: _is_vector_of_right_length(v, 6))
     _check_tag_is_correct_length_vector = validator("orig_tag", allow_reuse=True)(
-        lambda v: _is_vector_of_right_length(v, 6))
-    _check_tag_sba_is_correct_length_vector = validator("orig_tag_sba", allow_reuse=True)(
-        lambda v: _is_vector_of_right_length(v, 2))
-    _deserialize_gravity_vector_if_needed = validator("orig_gravity", allow_reuse=True, pre=True)(
-        _validator_for_numpy_array_deserialization)
-    _deserialize_odometry_vector_if_needed = validator("orig_odometry", allow_reuse=True, pre=True)(
-        _validator_for_numpy_array_deserialization)
-    _deserialize_tag_vector_if_needed = validator("orig_tag", allow_reuse=True, pre=True)(
-        _validator_for_numpy_array_deserialization)
-    _deserialize_tag_sba_vector_if_needed = validator("orig_tag_sba", allow_reuse=True, pre=True)(
-        _validator_for_numpy_array_deserialization)
+        lambda v: _is_vector_of_right_length(v, 6)
+    )
+    _check_tag_sba_is_correct_length_vector = validator(
+        "orig_tag_sba", allow_reuse=True
+    )(lambda v: _is_vector_of_right_length(v, 2))
+    _deserialize_gravity_vector_if_needed = validator(
+        "orig_gravity", allow_reuse=True, pre=True
+    )(_validator_for_numpy_array_deserialization)
+    _deserialize_odometry_vector_if_needed = validator(
+        "orig_odometry", allow_reuse=True, pre=True
+    )(_validator_for_numpy_array_deserialization)
+    _deserialize_tag_vector_if_needed = validator(
+        "orig_tag", allow_reuse=True, pre=True
+    )(_validator_for_numpy_array_deserialization)
+    _deserialize_tag_sba_vector_if_needed = validator(
+        "orig_tag_sba", allow_reuse=True, pre=True
+    )(_validator_for_numpy_array_deserialization)
 
     @property
     def odometry(self) -> np.ndarray:
         """
         If normalization True, normalized odometry provided, else orig_odometry
 
-        Returns: 
+        Returns:
         A numpy ndarray representing the calculated odometry
         """
         odom_mag = 1
@@ -217,7 +244,7 @@ class Weights(BaseModel):
         """
         If normalization True, normalized gravity provided, else orig_gravity
 
-        Returns: 
+        Returns:
             A numpy ndarray representing the calculated gravity
         """
         grav_mag = 1
@@ -278,12 +305,14 @@ class Weights(BaseModel):
         return Weights(**cls.legacy_weight_dict_from_array(array))
 
     @staticmethod
-    def legacy_weight_dict_from_array(array: Union[np.ndarray, List[float]]) -> Dict[str, Union[float, np.ndarray]]:
+    def legacy_weight_dict_from_array(
+        array: Union[np.ndarray, List[float]]
+    ) -> Dict[str, Union[float, np.ndarray]]:
         """
         Construct a normalized weight dictionary from a given array of values using the legacy approach.
 
-        Args: 
-            array: A np.ndarray or List of floats representing the array to create a normalized 
+        Args:
+            array: A np.ndarray or List of floats representing the array to create a normalized
                 weight dictionary from
 
         Returns:
@@ -302,48 +331,50 @@ class Weights(BaseModel):
         has_ratio = length % 2 == 1
 
         if length == 1:  # ratio
-            weights['orig_odom_tag_ratio'] = array[0]
+            weights["orig_odom_tag_ratio"] = array[0]
 
         elif length == 2:  # tag/odom pose:rot/tag-sba x:y, ratio
-            weights['orig_odometry'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['orig_tag'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['orig_tag_sba'] = np.array([array[0], 1])
-            weights['odom_tag_ratio'] = array[1]
+            weights["orig_odometry"] = np.array([array[0]] * 3 + [1] * 3)
+            weights["orig_tag"] = np.array([array[0]] * 3 + [1] * 3)
+            weights["orig_tag_sba"] = np.array([array[0], 1])
+            weights["odom_tag_ratio"] = array[1]
 
         elif length == 3:  # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
-            weights['orig_odometry'] = np.array([array[0]] * 3 + [1] * 3)
-            weights['orig_tag'] = np.array([array[1]] * 3 + [1] * 3)
-            weights['orig_tag_sba'] = np.array([array[1], 1])
-            weights['odom_tag_ratio'] = array[2]
+            weights["orig_odometry"] = np.array([array[0]] * 3 + [1] * 3)
+            weights["orig_tag"] = np.array([array[1]] * 3 + [1] * 3)
+            weights["orig_tag_sba"] = np.array([array[1], 1])
+            weights["odom_tag_ratio"] = array[2]
 
-        elif half_len == 2:  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
-            weights['orig_odometry'] = np.array([array[0]] * 3 + [array[1]] * 3)
-            weights['orig_tag'] = np.array([array[2]] * 3 + [array[3]] * 3)
-            weights['orig_tag_sba'] = np.array(array[2:])
-            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+        elif (
+            half_len == 2
+        ):  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
+            weights["orig_odometry"] = np.array([array[0]] * 3 + [array[1]] * 3)
+            weights["orig_tag"] = np.array([array[2]] * 3 + [array[3]] * 3)
+            weights["orig_tag_sba"] = np.array(array[2:])
+            weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
 
         elif half_len == 3:  # odom x y z qx qy, tag-sba x, (ratio)
-            weights['orig_odometry'] = np.array(array[:5])
-            weights['orig_tag_sba'] = np.array([array[5]])
-            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+            weights["orig_odometry"] = np.array(array[:5])
+            weights["orig_tag_sba"] = np.array([array[5]])
+            weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
 
         elif length == 4:  # odom, tag-sba, (ratio)
-            weights['orig_odometry'] = np.array(array[:6])
-            weights['orig_tag_sba'] = np.array(array[6:])
-            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+            weights["orig_odometry"] = np.array(array[:6])
+            weights["orig_tag_sba"] = np.array(array[6:])
+            weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
 
         elif length == 5:  # odom x y z qx qy, tag x y z qx qy, (ratio)
-            weights['orig_odometry'] = np.array(array[:5])
-            weights['orig_tag'] = np.array(array[5:])
-            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+            weights["orig_odometry"] = np.array(array[:5])
+            weights["orig_tag"] = np.array(array[5:])
+            weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
 
         elif length == 6:  # odom, tag, (ratio)
-            weights['orig_odometry'] = np.array(array[:6])
-            weights['orig_tag'] = np.array(array[6:])
-            weights['odom_tag_ratio'] = array[-1] if has_ratio else 1
+            weights["orig_odometry"] = np.array(array[:6])
+            weights["orig_tag"] = np.array(array[6:])
+            weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
 
         else:
-            raise Exception(f'Weight length of {length} is not supported')
+            raise Exception(f"Weight length of {length} is not supported")
 
         weights["normalize"] = True
         w = Weights(**weights)
@@ -380,14 +411,15 @@ class UGPoseDatum(BaseModel):
     Represents a single pose datum.
 
     Attributes:
-        pose: Pose as a tuple of floats where reshaping into a 4x4 array using Fortran-like index 
-            order results in the transform matrix. For more information on Fortran-like indexing 
+        pose: Pose as a tuple of floats where reshaping into a 4x4 array using Fortran-like index
+            order results in the transform matrix. For more information on Fortran-like indexing
             from the numpy documentation: "...means to read / write the elements using Fortran-like
             index order, with the first index changing fastest, and the last index changing slowest.
         timestamp: A float representing the time of the pose datum being recorded
         planes: A list representing the plane of the datum (*CURRENTLY SKIPPED IN GRAPH GENERATION*)
         id: An int representing the id of the pose datum
     """
+
     pose: conlist(Union[float, int], min_items=16, max_items=16)
     timestamp: float
     planes: List = []
@@ -399,7 +431,7 @@ class UGPoseDatum(BaseModel):
         Converts pose to array
 
         Returns:
-            np.ndarray representing the current pose as a 4x4 array 
+            np.ndarray representing the current pose as a 4x4 array
         """
         return np.reshape(np.array(self.pose), (4, 4), order="F")
 
@@ -442,16 +474,22 @@ class UGTagDatum(BaseModel):
     camera_intrinsics: conlist(Union[float, int], min_items=4, max_items=4)
     timestamp: float
     tag_pose: conlist(Union[float, int], min_items=16, max_items=16)
-    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [0, ] * 3
-    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [0, ] * 4
-    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = list(np.eye(7).flatten())
+    tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [
+        0,
+    ] * 3
+    tag_orientation_variance: conlist(Union[float, int], min_items=4, max_items=4) = [
+        0,
+    ] * 4
+    joint_covar: conlist(Union[float, int], min_items=49, max_items=49) = list(
+        np.eye(7).flatten()
+    )
 
     @property
     def tag_pose_as_matrix(self) -> np.ndarray:
         """
         Converts tag pose to matrix form
 
-        Returns: 
+        Returns:
             A np.ndarray representing the pose of the tag as a 4x4 matrix
         """
         return np.reshape(np.array(self.tag_pose), (4, 4), order="F")
@@ -461,7 +499,7 @@ class UGTagDatum(BaseModel):
         """
         Finds distance from origin of tag (Euclidean)
 
-        Returns: 
+        Returns:
             A float representing the Euclidean distance of the position of the tag
         """
         return np.linalg.norm(self.tag_pose_as_matrix[:3, 3])
@@ -484,6 +522,7 @@ class UGLocationDatum(BaseModel):
         timestamp: A float representing the timestamp of the observation
         pose_id: An int representing the id of the pose associated with the observation.
     """
+
     transform: conlist(Union[float, int], min_items=16, max_items=16)
 
     # TODO: validate assumption that this transform actually uses C-like indexing
@@ -530,6 +569,7 @@ class GenerateParams(BaseModel):
         """
         Ordering for odom noise dimensions
         """
+
         X = "x"
         Y = "y"
         Z = "z"
@@ -537,13 +577,18 @@ class GenerateParams(BaseModel):
 
         @staticmethod
         def ordering() -> List:
-            return [GenerateParams.OdomNoiseDims.X, GenerateParams.OdomNoiseDims.Y, GenerateParams.OdomNoiseDims.Z,
-                    GenerateParams.OdomNoiseDims.RVERT]
+            return [
+                GenerateParams.OdomNoiseDims.X,
+                GenerateParams.OdomNoiseDims.Y,
+                GenerateParams.OdomNoiseDims.Z,
+                GenerateParams.OdomNoiseDims.RVERT,
+            ]
 
     class GenerateParamsEnum(str, Enum):
         """
         Enumeration for GenerateParams
         """
+
         ODOMETRY_NOISE_VAR_X = "odometry_noise_var_x"
         ODOMETRY_NOISE_VAR_Y = "odometry_noise_var_y"
         ODOMETRY_NOISE_VAR_Z = "odometry_noise_var_z"
@@ -556,6 +601,7 @@ class GenerateParams(BaseModel):
         LIN_TO_ANG_VEL_VAR: Defines the ratio between the magnitude of the linear velocity variance
             vector and the angular velocity variance.
         """
+
         OBS_NOISE_VAR = "obs_noise_var"
         LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
 
@@ -564,16 +610,20 @@ class GenerateParams(BaseModel):
     dist_threshold: confloat(ge=0) = 3.7
     aoa_threshold: confloat(ge=0, le=np.pi) = np.pi / 4
     tag_size: confloat(gt=0) = ASSUMED_TAG_SIZE
-    odometry_noise_var: Dict[OdomNoiseDims, float] = Field(default_factory=lambda: {
+    odometry_noise_var: Dict[OdomNoiseDims, float] = Field(
+        default_factory=lambda: {
             GenerateParams.OdomNoiseDims.X: 0,
             GenerateParams.OdomNoiseDims.Y: 0,
             GenerateParams.OdomNoiseDims.Z: 0,
             GenerateParams.OdomNoiseDims.RVERT: 0,
-        })
+        }
+    )
     obs_noise_var: confloat(ge=0) = 0.0
     t_max: Optional[confloat(gt=0)] = None
     n_poses: Optional[conint(ge=2)] = None
-    parameterized_path_args: Optional[Dict[str, Union[float, Tuple[float, float]]]] = None
+    parameterized_path_args: Optional[
+        Dict[str, Union[float, Tuple[float, float]]]
+    ] = None
 
     # noinspection PyMethodParameters
     @validator("parameterized_path_args")
@@ -588,10 +638,14 @@ class GenerateParams(BaseModel):
         t_max_is_none = values["t_max"] is None
         n_poses_is_none = values["n_poses"] is None
 
-        if not ((v_is_none and t_max_is_none and n_poses_is_none) or
-                (not v_is_none and not t_max_is_none and not n_poses_is_none)):
-            raise ValueError("tag_poses_for_parameterized, t_max, n_poses, and \
-                parameterized_path_args members must both be None or not None.")
+        if not (
+            (v_is_none and t_max_is_none and n_poses_is_none)
+            or (not v_is_none and not t_max_is_none and not n_poses_is_none)
+        ):
+            raise ValueError(
+                "tag_poses_for_parameterized, t_max, n_poses, and \
+                parameterized_path_args members must both be None or not None."
+            )
         return v
 
     @property
@@ -610,20 +664,27 @@ class GenerateParams(BaseModel):
         """
         Finds norm of X, Y, Z and divide by rvert
         """
-        return np.linalg.norm(
-            np.array([
-                self.odometry_noise_var[GenerateParams.OdomNoiseDims.X],
-                self.odometry_noise_var[GenerateParams.OdomNoiseDims.Y],
-                self.odometry_noise_var[GenerateParams.OdomNoiseDims.Z],
-            ])
-        ) / self.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
+        return (
+            np.linalg.norm(
+                np.array(
+                    [
+                        self.odometry_noise_var[GenerateParams.OdomNoiseDims.X],
+                        self.odometry_noise_var[GenerateParams.OdomNoiseDims.Y],
+                        self.odometry_noise_var[GenerateParams.OdomNoiseDims.Z],
+                    ]
+                )
+            )
+            / self.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
+        )
 
     # noinspection DuplicatedCode
     @classmethod
     def generate_params_generator(
-            cls, param_multiplicands: Dict[GenerateParamsEnum, np.ndarray],
-            param_order: List[GenerateParamsEnum], base_generate_params: "GenerateParams") -> \
-            Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
+        cls,
+        param_multiplicands: Dict[GenerateParamsEnum, np.ndarray],
+        param_order: List[GenerateParamsEnum],
+        base_generate_params: "GenerateParams",
+    ) -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
         """
         Generator yielding instances of this class according to the cartesian product of the
         provided parameters.
@@ -643,7 +704,9 @@ class GenerateParams(BaseModel):
         """
         included_params = set(param_order)
         if set(param_multiplicands.keys()) != included_params:
-            raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
+            raise ValueError(
+                "The sets of param_multiplicands keys and param_order items must be equal"
+            )
 
         product_args = []
         sweep_param_to_product_idx: Dict[GenerateParams.GenerateParamsEnum, int] = {}
@@ -662,33 +725,69 @@ class GenerateParams(BaseModel):
             value stored in base_generate_params."""
 
             odometry_noise_var = {}
-            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X in included_params:
+            if (
+                GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                in included_params
+            ):
                 odometry_noise_var[GenerateParams.OdomNoiseDims.X] = this_product[
-                    sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]]
+                    sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                    ]
+                ]
             else:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.X] = \
-                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.X]
+                odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.X
+                ] = base_generate_params.odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.X
+                ]
 
-            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y in included_params:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
-                    this_product[sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y]]
+            if (
+                GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y
+                in included_params
+            ):
+                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = this_product[
+                    sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y
+                    ]
+                ]
             else:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.Y] = \
-                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Y]
+                odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.Y
+                ] = base_generate_params.odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.Y
+                ]
 
-            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z in included_params:
+            if (
+                GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z
+                in included_params
+            ):
                 odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = this_product[
-                    sweep_param_to_product_idx[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z]]
+                    sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z
+                    ]
+                ]
             else:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.Z] = \
-                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.Z]
+                odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.Z
+                ] = base_generate_params.odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.Z
+                ]
 
-            if GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT in included_params:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = this_product[sweep_param_to_product_idx[
-                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT]]
+            if (
+                GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT
+                in included_params
+            ):
+                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = this_product[
+                    sweep_param_to_product_idx[
+                        GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT
+                    ]
+                ]
             else:
-                odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT] = \
-                    base_generate_params.odometry_noise_var[GenerateParams.OdomNoiseDims.RVERT]
+                odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.RVERT
+                ] = base_generate_params.odometry_noise_var[
+                    GenerateParams.OdomNoiseDims.RVERT
+                ]
 
             generate_params.append(
                 GenerateParams(
@@ -697,23 +796,30 @@ class GenerateParams(BaseModel):
                     aoa_threshold=base_generate_params.aoa_threshold,
                     tag_size=base_generate_params.tag_size,
                     odometry_noise_var=odometry_noise_var,
-                    obs_noise_var=this_product[sweep_param_to_product_idx[
-                        GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR]] if
-                    GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR in included_params else
-                    base_generate_params.obs_noise_var,
+                    obs_noise_var=this_product[
+                        sweep_param_to_product_idx[
+                            GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR
+                        ]
+                    ]
+                    if GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR
+                    in included_params
+                    else base_generate_params.obs_noise_var,
                     t_max=base_generate_params.t_max,
                     n_poses=base_generate_params.n_poses,
-                    parameterized_path_args=base_generate_params.parameterized_path_args
+                    parameterized_path_args=base_generate_params.parameterized_path_args,
                 )
             )
         return products, generate_params
 
     # noinspection DuplicatedCode
     @classmethod
-    def alt_generate_params_generator(cls, alt_param_multiplicands: Dict[AltGenerateParamsEnum, 
-        np.ndarray], base_generate_params: "GenerateParams", hold_rvert_at: float,
-        ratio_xz_to_y_lin_vel_var: float = 1) -> Tuple[List[Tuple[Any, ...]], 
-        List["GenerateParams"]]:
+    def alt_generate_params_generator(
+        cls,
+        alt_param_multiplicands: Dict[AltGenerateParamsEnum, np.ndarray],
+        base_generate_params: "GenerateParams",
+        hold_rvert_at: float,
+        ratio_xz_to_y_lin_vel_var: float = 1,
+    ) -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
         """
         Acts as a wrapper around the generate_params_generator class method that utilizes a
         parameter sweeping space defined by the parameters in the AltGenerateParamsEnum enumeration.
@@ -744,26 +850,51 @@ class GenerateParams(BaseModel):
 
         for key, values in alt_param_multiplicands.items():
             if key == cls.AltGenerateParamsEnum.OBS_NOISE_VAR:
-                param_multiplicands[GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR] = values
+                param_multiplicands[
+                    GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR
+                ] = values
 
             elif key == cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR:
                 # Ignore the values provided in alt_param_multiplicands because we are not
                 # interested in the cartesian product between each of the X, Y, Z, and rvert
                 # elements of the linear and angular velocity variance. Instead, the values provided
                 # in alt_param_multiplicands are applied to the result of the cartesian product.
-                lin_vel_var_unit = np.ones(3) * np.array([ratio_xz_to_y_lin_vel_var, 1,
-                    ratio_xz_to_y_lin_vel_var])
+                lin_vel_var_unit = np.ones(3) * np.array(
+                    [ratio_xz_to_y_lin_vel_var, 1, ratio_xz_to_y_lin_vel_var]
+                )
                 lin_vel_var_unit /= np.linalg.norm(lin_vel_var_unit)
-                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X] = np.array(
-                    [hold_rvert_at * lin_vel_var_unit[0], ])
-                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y] = np.array(
-                    [hold_rvert_at * lin_vel_var_unit[1], ])
-                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z] = np.array(
-                    [hold_rvert_at * lin_vel_var_unit[2], ])
-                param_multiplicands[GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT] = np.array(
-                    [hold_rvert_at, ])
+                param_multiplicands[
+                    GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                ] = np.array(
+                    [
+                        hold_rvert_at * lin_vel_var_unit[0],
+                    ]
+                )
+                param_multiplicands[
+                    GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Y
+                ] = np.array(
+                    [
+                        hold_rvert_at * lin_vel_var_unit[1],
+                    ]
+                )
+                param_multiplicands[
+                    GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_Z
+                ] = np.array(
+                    [
+                        hold_rvert_at * lin_vel_var_unit[2],
+                    ]
+                )
+                param_multiplicands[
+                    GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_RVERT
+                ] = np.array(
+                    [
+                        hold_rvert_at,
+                    ]
+                )
             else:
-                raise NotImplementedError("Encountered unhandled parameter: " + str(key))
+                raise NotImplementedError(
+                    "Encountered unhandled parameter: " + str(key)
+                )
 
         param_order = sorted(list(param_multiplicands.keys()))
         param_to_param_order_idx: Dict[GenerateParams.GenerateParamsEnum, int] = {}
@@ -771,33 +902,66 @@ class GenerateParams(BaseModel):
         for i, param in enumerate(param_order):
             param_to_param_order_idx[param] = i
 
-        products_intermediate, generate_params_intermediate = GenerateParams.generate_params_generator(
-            param_multiplicands=param_multiplicands, param_order=param_order, base_generate_params=base_generate_params)
+        (
+            products_intermediate,
+            generate_params_intermediate,
+        ) = GenerateParams.generate_params_generator(
+            param_multiplicands=param_multiplicands,
+            param_order=param_order,
+            base_generate_params=base_generate_params,
+        )
 
         # Apply the linear and angular velocity variance values provided in alt_param_multiplicands.
         products_orig_space: List[Tuple[Any, ...]] = []
         generate_params_objects: List[GenerateParams] = []
 
-        for product_pre, generate_param_pre in zip(products_intermediate, generate_params_intermediate):
-            for value in alt_param_multiplicands[cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR]:
+        for product_pre, generate_param_pre in zip(
+            products_intermediate, generate_params_intermediate
+        ):
+            for value in alt_param_multiplicands[
+                cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR
+            ]:
                 new_generate_param: GenerateParams = cls.copy(generate_param_pre)
                 new_generate_param.odometry_noise_var = {
-                    cls.OdomNoiseDims.X: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.X] * value,
-                    cls.OdomNoiseDims.Y: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.Y] * value,
-                    cls.OdomNoiseDims.Z: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.Z] * value,
-                    cls.OdomNoiseDims.RVERT: generate_param_pre.odometry_noise_var[cls.OdomNoiseDims.RVERT],
+                    cls.OdomNoiseDims.X: generate_param_pre.odometry_noise_var[
+                        cls.OdomNoiseDims.X
+                    ]
+                    * value,
+                    cls.OdomNoiseDims.Y: generate_param_pre.odometry_noise_var[
+                        cls.OdomNoiseDims.Y
+                    ]
+                    * value,
+                    cls.OdomNoiseDims.Z: generate_param_pre.odometry_noise_var[
+                        cls.OdomNoiseDims.Z
+                    ]
+                    * value,
+                    cls.OdomNoiseDims.RVERT: generate_param_pre.odometry_noise_var[
+                        cls.OdomNoiseDims.RVERT
+                    ],
                 }
                 generate_params_objects.append(new_generate_param)
 
                 new_product = list(product_pre)
-                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
-                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
-                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
-                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
-                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
-                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
-                new_product[param_to_param_order_idx[cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X]] = \
-                    new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[
+                    param_to_param_order_idx[
+                        cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                    ]
+                ] = new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[
+                    param_to_param_order_idx[
+                        cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                    ]
+                ] = new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[
+                    param_to_param_order_idx[
+                        cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                    ]
+                ] = new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
+                new_product[
+                    param_to_param_order_idx[
+                        cls.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
+                    ]
+                ] = new_generate_param.odometry_noise_var[cls.OdomNoiseDims.X]
                 products_orig_space.append(tuple(new_product))
         return products_orig_space, generate_params_objects
 
@@ -822,6 +986,7 @@ class UGDataSet(BaseModel):
         datasets generated by the client app. The `generated_from` attribute is only used when the
         data set generated is synthetic.
     """
+
     location_data: List[UGLocationDatum] = []
     map_id: str
     plane_data: List = []
@@ -851,8 +1016,10 @@ class UGDataSet(BaseModel):
         return len(self.tag_data)
 
     def __repr__(self):
-        return f"<{UGDataSet.__name__} map_id={self.map_id} pose_data_len={self.pose_data_len} " \
-               f"tag_data_len={self.tag_data_len}>"
+        return (
+            f"<{UGDataSet.__name__} map_id={self.map_id} pose_data_len={self.pose_data_len} "
+            f"tag_data_len={self.tag_data_len}>"
+        )
 
     @property
     def frame_ids_to_timestamps(self) -> Dict[int, float]:
@@ -860,7 +1027,9 @@ class UGDataSet(BaseModel):
 
     @property
     def pose_matrices(self) -> np.ndarray:
-        return np.array([pose_datum.pose for pose_datum in self.pose_data]).reshape((-1, 4, 4), order="F")
+        return np.array([pose_datum.pose for pose_datum in self.pose_data]).reshape(
+            (-1, 4, 4), order="F"
+        )
 
     @property
     def poses_by_pose_ids(self) -> Dict[int, np.ndarray]:
@@ -874,9 +1043,19 @@ class UGDataSet(BaseModel):
     def tag_edge_measurements_matrix(self) -> np.ndarray:
         # The camera axis used to get tag measurements is flipped relative to the phone frame used for odom
         # measurements. Additionally, note that the matrix here is recorded in row-major format.
-        return np.zeros((0, 4, 4)) if len(self.tag_data) == 0 else \
-            np.matmul(NEGATE_Y_AND_Z_AXES, np.vstack([[x.tag_pose for x in tags_from_frame] for tags_from_frame in
-                                                      self.tag_data]).reshape([-1, 4, 4], order="C"))
+        return (
+            np.zeros((0, 4, 4))
+            if len(self.tag_data) == 0
+            else np.matmul(
+                NEGATE_Y_AND_Z_AXES,
+                np.vstack(
+                    [
+                        [x.tag_pose for x in tags_from_frame]
+                        for tags_from_frame in self.tag_data
+                    ]
+                ).reshape([-1, 4, 4], order="C"),
+            )
+        )
 
     @property
     def timestamps(self) -> np.ndarray:
@@ -905,25 +1084,49 @@ class UGDataSet(BaseModel):
                 # For some reason, the linter thinks that sort_indices is an integer
                 # noinspection PyUnresolvedReferences
                 ret[tag_id] = poses_by_pose_ids[corresponding_pose_id].dot(
-                    tag_edge_measurements_matrix[sort_indices[i]])
+                    tag_edge_measurements_matrix[sort_indices[i]]
+                )
         return ret
 
     @property
     def camera_intrinsics_for_tag(self) -> np.ndarray:
-        return np.zeros((0, 4)) if len(self.tag_data) == 0 else \
-            np.vstack([[x.camera_intrinsics for x in tags_from_frame] for tags_from_frame in self.tag_data])
+        return (
+            np.zeros((0, 4))
+            if len(self.tag_data) == 0
+            else np.vstack(
+                [
+                    [x.camera_intrinsics for x in tags_from_frame]
+                    for tags_from_frame in self.tag_data
+                ]
+            )
+        )
 
     @property
     def tag_corners(self) -> np.ndarray:
-        return np.zeros((0, 8)) if len(self.tag_data) == 0 else \
-            np.vstack([[x.tag_corners_pixel_coordinates for x in tags_from_frame] for tags_from_frame in
-                       self.tag_data])
+        return (
+            np.zeros((0, 8))
+            if len(self.tag_data) == 0
+            else np.vstack(
+                [
+                    [x.tag_corners_pixel_coordinates for x in tags_from_frame]
+                    for tags_from_frame in self.tag_data
+                ]
+            )
+        )
 
     @property
     def tag_joint_covar(self) -> np.ndarray:
         # Note that the variance deviation of qw since we use a compact quaternion parameterization of orientation
-        return np.zeros((0, 49), dtype=np.double) if len(self.tag_data) == 0 else \
-            np.vstack([[x.joint_covar for x in tags_from_frame] for tags_from_frame in self.tag_data])
+        return (
+            np.zeros((0, 49), dtype=np.double)
+            if len(self.tag_data) == 0
+            else np.vstack(
+                [
+                    [x.joint_covar for x in tags_from_frame]
+                    for tags_from_frame in self.tag_data
+                ]
+            )
+        )
 
     @property
     def tag_joint_covar_matrices(self) -> np.ndarray:
@@ -931,25 +1134,63 @@ class UGDataSet(BaseModel):
 
     @property
     def tag_position_variances(self) -> np.ndarray:
-        return np.zeros((0, 3), dtype=np.double) if len(self.tag_data) == 0 else \
-            np.vstack([[x.tag_position_variance for x in tags_from_frame] for tags_from_frame in self.tag_data])
+        return (
+            np.zeros((0, 3), dtype=np.double)
+            if len(self.tag_data) == 0
+            else np.vstack(
+                [
+                    [x.tag_position_variance for x in tags_from_frame]
+                    for tags_from_frame in self.tag_data
+                ]
+            )
+        )
 
     @property
     def tag_orientation_variances(self) -> np.ndarray:
-        return np.zeros((0, 4), dtype=np.double) if len(self.tag_data) == 0 else \
-            np.vstack([[x.tag_orientation_variance for x in tags_from_frame] for tags_from_frame in self.tag_data])
+        return (
+            np.zeros((0, 4), dtype=np.double)
+            if len(self.tag_data) == 0
+            else np.vstack(
+                [
+                    [x.tag_orientation_variance for x in tags_from_frame]
+                    for tags_from_frame in self.tag_data
+                ]
+            )
+        )
 
     @property
     def tag_ids(self) -> np.ndarray:
-        return np.zeros((0, 1), dtype=np.int64) if len(self.tag_data) == 0 else \
-            np.vstack(list(itertools.chain(*[[x.tag_id for x in tags_from_frame] for tags_from_frame in
-                                             self.tag_data])))
+        return (
+            np.zeros((0, 1), dtype=np.int64)
+            if len(self.tag_data) == 0
+            else np.vstack(
+                list(
+                    itertools.chain(
+                        *[
+                            [x.tag_id for x in tags_from_frame]
+                            for tags_from_frame in self.tag_data
+                        ]
+                    )
+                )
+            )
+        )
 
     @property
     def pose_ids(self) -> np.ndarray:
-        return np.zeros((0, 1), dtype=np.int64) if len(self.tag_data) == 0 else \
-            np.vstack(list(itertools.chain(*[[x.pose_id for x in tags_from_frame] for tags_from_frame in
-                                             self.tag_data])))
+        return (
+            np.zeros((0, 1), dtype=np.int64)
+            if len(self.tag_data) == 0
+            else np.vstack(
+                list(
+                    itertools.chain(
+                        *[
+                            [x.pose_id for x in tags_from_frame]
+                            for tags_from_frame in self.tag_data
+                        ]
+                    )
+                )
+            )
+        )
 
     @property
     def waypoint_names(self) -> List[str]:
@@ -957,10 +1198,16 @@ class UGDataSet(BaseModel):
 
     @property
     def waypoint_edge_measurements_matrix(self) -> np.ndarray:
-        return np.zeros((0, 4, 4)) if len(self.location_data) == 0 else \
-            np.concatenate(
-                [np.asarray(location_data.transform).reshape((-1, 4, 4)) for location_data in self.location_data]
+        return (
+            np.zeros((0, 4, 4))
+            if len(self.location_data) == 0
+            else np.concatenate(
+                [
+                    np.asarray(location_data.transform).reshape((-1, 4, 4))
+                    for location_data in self.location_data
+                ]
             )
+        )
 
     @property
     def waypoint_frame_ids(self) -> List[int]:
@@ -984,11 +1231,15 @@ class GTDataSet(BaseModel):
     """
     TODO
     """
+
     poses: List[GTTagPose] = []
 
     @property
     def sorted_poses_as_se3quat_list(self) -> List[SE3Quat]:
-        return [pose.pose_as_se3quat for pose in sorted(self.poses, key=lambda pose: pose.tag_id)]
+        return [
+            pose.pose_as_se3quat
+            for pose in sorted(self.poses, key=lambda pose: pose.tag_id)
+        ]
 
     @property
     def pose_ids_as_list(self) -> List[int]:
@@ -1017,18 +1268,15 @@ class GTDataSet(BaseModel):
         new_dict: Dict[int, np.ndarray] = {}
         for item in dct.items():
             if item[1].shape == (4, 4):
-                new_dict[item[0]] = SE3Quat(transform_matrix_to_vector(item[1])).to_vector()
+                new_dict[item[0]] = SE3Quat(
+                    transform_matrix_to_vector(item[1])
+                ).to_vector()
             else:
                 new_dict[item[0]] = item[1]
 
         ground_truth_tags = []
         for item in new_dict.items():
-            ground_truth_tags.append(
-                GTTagPose(
-                    tag_id=item[0],
-                    pose=item[1].tolist()
-                )
-            )
+            ground_truth_tags.append(GTTagPose(tag_id=item[0], pose=item[1].tolist()))
         return GTDataSet(poses=ground_truth_tags)
 
 
@@ -1080,8 +1328,14 @@ class OComputeInfParams(BaseModel):
     tag_var: confloat(gt=0) = 1.0
 
     class Config:
-        arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        arbitrary_types_allowed = (
+            True  # Needed to allow numpy arrays to be used as fields
+        )
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     # noinspection PyMethodParameters
     @validator("lin_vel_var")
@@ -1090,10 +1344,12 @@ class OComputeInfParams(BaseModel):
             raise ValueError("lin_vel_var must contain all positive values")
         return v
 
-    _check_lin_vel_var_is_correct_length_vector = validator("lin_vel_var", allow_reuse=True)(
-        lambda v: _is_vector_of_right_length(v, 3))
-    _deserialize_lin_vel_var_vector_if_needed = validator("lin_vel_var", allow_reuse=True, pre=True)(
-        _validator_for_numpy_array_deserialization)
+    _check_lin_vel_var_is_correct_length_vector = validator(
+        "lin_vel_var", allow_reuse=True
+    )(lambda v: _is_vector_of_right_length(v, 3))
+    _deserialize_lin_vel_var_vector_if_needed = validator(
+        "lin_vel_var", allow_reuse=True, pre=True
+    )(_validator_for_numpy_array_deserialization)
 
     def __hash__(self):
         # TODO: there are more efficient ways to do this, but this works for now
@@ -1124,7 +1380,11 @@ class OConfig(BaseModel):
     chi2_plot_title: str = ""
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     class OConfigEnum(str, Enum):
         ODOM_TAG_RATIO = "odom_tag_ratio"
@@ -1146,8 +1406,12 @@ class OConfig(BaseModel):
 
     # noinspection DuplicatedCode
     @classmethod
-    def oconfig_generator(cls, param_multiplicands: Dict[OConfigEnum, np.ndarray], param_order: List[OConfigEnum],
-                          base_oconfig: "OConfig") -> Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
+    def oconfig_generator(
+        cls,
+        param_multiplicands: Dict[OConfigEnum, np.ndarray],
+        param_order: List[OConfigEnum],
+        base_oconfig: "OConfig",
+    ) -> Tuple[List[Tuple[Any, ...]], List["OConfig"]]:
         """Generator yielding instances of this class according to the cartesian product of the provided parameters.
 
         Args:
@@ -1165,7 +1429,9 @@ class OConfig(BaseModel):
         """
         included_params = set(param_order)
         if set(param_multiplicands.keys()) != included_params:
-            raise ValueError("The sets of param_multiplicands keys and param_order items must be equal")
+            raise ValueError(
+                "The sets of param_multiplicands keys and param_order items must be equal"
+            )
 
         product_args = []
         sweep_param_to_product_idx: Dict[OConfig.OConfigEnum, int] = {}
@@ -1183,27 +1449,50 @@ class OConfig(BaseModel):
                     is_sba=base_oconfig.is_sba,
                     obs_chi2_filter=base_oconfig.obs_chi2_filter,
                     compute_inf_params=OComputeInfParams(
-                        lin_vel_var=(this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.LIN_VEL_VAR]] if OConfig.OConfigEnum.LIN_VEL_VAR in
-                            included_params else base_oconfig.compute_inf_params.lin_vel_var) * np.ones(3) * np.sqrt(3),
-                        ang_vel_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.ANG_VEL_VAR]] if OConfig.OConfigEnum.ANG_VEL_VAR in
-                        included_params else base_oconfig.compute_inf_params.ang_vel_var,
-                        tag_sba_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.TAG_SBA_VAR]] if OConfig.OConfigEnum.TAG_SBA_VAR in
-                        included_params else base_oconfig.compute_inf_params.tag_sba_var,
-                        tag_var=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.TAG_VAR]] if OConfig.OConfigEnum.TAG_VAR in
-                        included_params else base_oconfig.compute_inf_params.tag_var,
+                        lin_vel_var=(
+                            this_product[
+                                sweep_param_to_product_idx[
+                                    OConfig.OConfigEnum.LIN_VEL_VAR
+                                ]
+                            ]
+                            if OConfig.OConfigEnum.LIN_VEL_VAR in included_params
+                            else base_oconfig.compute_inf_params.lin_vel_var
+                        )
+                        * np.ones(3)
+                        * np.sqrt(3),
+                        ang_vel_var=this_product[
+                            sweep_param_to_product_idx[OConfig.OConfigEnum.ANG_VEL_VAR]
+                        ]
+                        if OConfig.OConfigEnum.ANG_VEL_VAR in included_params
+                        else base_oconfig.compute_inf_params.ang_vel_var,
+                        tag_sba_var=this_product[
+                            sweep_param_to_product_idx[OConfig.OConfigEnum.TAG_SBA_VAR]
+                        ]
+                        if OConfig.OConfigEnum.TAG_SBA_VAR in included_params
+                        else base_oconfig.compute_inf_params.tag_sba_var,
+                        tag_var=this_product[
+                            sweep_param_to_product_idx[OConfig.OConfigEnum.TAG_VAR]
+                        ]
+                        if OConfig.OConfigEnum.TAG_VAR in included_params
+                        else base_oconfig.compute_inf_params.tag_var,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
-                        orig_gravity=(this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.GRAV_MAG]] if OConfig.OConfigEnum.GRAV_MAG in
-                            included_params else base_oconfig.weights.orig_gravity) * LEN_3_UNIT_VEC,
-                        odom_tag_ratio=this_product[sweep_param_to_product_idx[
-                            OConfig.OConfigEnum.ODOM_TAG_RATIO]] if OConfig.OConfigEnum.ODOM_TAG_RATIO
-                        in included_params else base_oconfig.weights.odom_tag_ratio,
+                        orig_gravity=(
+                            this_product[
+                                sweep_param_to_product_idx[OConfig.OConfigEnum.GRAV_MAG]
+                            ]
+                            if OConfig.OConfigEnum.GRAV_MAG in included_params
+                            else base_oconfig.weights.orig_gravity
+                        )
+                        * LEN_3_UNIT_VEC,
+                        odom_tag_ratio=this_product[
+                            sweep_param_to_product_idx[
+                                OConfig.OConfigEnum.ODOM_TAG_RATIO
+                            ]
+                        ]
+                        if OConfig.OConfigEnum.ODOM_TAG_RATIO in included_params
+                        else base_oconfig.weights.odom_tag_ratio,
                     ),
                     graph_plot_title=base_oconfig.graph_plot_title,
                     chi2_plot_title=base_oconfig.chi2_plot_title,
@@ -1213,18 +1502,25 @@ class OConfig(BaseModel):
 
     @classmethod
     def alt_oconfig_generator_param_multiplicands(
-            cls, alt_param_multiplicands: Dict[AltOConfigEnum, np.ndarray]) -> Dict[OConfigEnum, np.ndarray]:
+        cls, alt_param_multiplicands: Dict[AltOConfigEnum, np.ndarray]
+    ) -> Dict[OConfigEnum, np.ndarray]:
         param_multiplicands_for_opt: Dict[OConfig.OConfigEnum, np.ndarray] = {}
         for key, values in alt_param_multiplicands.items():
             if key == cls.AltOConfigEnum.LIN_TO_ANG_VEL_VAR:
                 param_multiplicands_for_opt[cls.OConfigEnum.LIN_VEL_VAR] = values
-                param_multiplicands_for_opt[cls.OConfigEnum.ANG_VEL_VAR] = np.array([1, ])
+                param_multiplicands_for_opt[cls.OConfigEnum.ANG_VEL_VAR] = np.array(
+                    [
+                        1,
+                    ]
+                )
             elif key == cls.AltOConfigEnum.ODOM_TAG_RATIO:
                 param_multiplicands_for_opt[cls.OConfigEnum.ODOM_TAG_RATIO] = values
             elif key == cls.AltOConfigEnum.TAG_SBA_VAR:
                 param_multiplicands_for_opt[cls.OConfigEnum.TAG_SBA_VAR] = values
             else:
-                raise NotImplementedError("Encountered unhandled parameter: " + str(key))
+                raise NotImplementedError(
+                    "Encountered unhandled parameter: " + str(key)
+                )
         return param_multiplicands_for_opt
 
     def __hash__(self):
@@ -1261,40 +1557,69 @@ class OG2oOptimizer(BaseModel):
     visibleTagsCount: Optional[np.ndarray] = None
 
     class Config:
-        arbitrary_types_allowed = True  # Needed to allow numpy arrays to be used as fields
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr.flatten(order="C"),
-                                                                 threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        arbitrary_types_allowed = (
+            True  # Needed to allow numpy arrays to be used as fields
+        )
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr.flatten(order="C"), threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     _check_locations_is_correct_shape_matrix = validator("locations", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 9)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 9))
+    )
     _check_tags_is_correct_shape_matrix = validator("tags", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 8)))
+        lambda v: _is_arr_of_right_shape(v, (-1, 8))
+    )
     _check_tagpoints_is_correct_shape_matrix = validator("tagpoints", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 3)))
-    _check_waypoints_arr_is_correct_shape_matrix = validator("waypoints_arr", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 8)))
-    _check_locationsAdjChi2_is_correct_shape_matrix = validator("locationsAdjChi2", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
-    _check_visibleTagsCount_is_correct_shape_matrix = validator("visibleTagsCount", allow_reuse=True)(
-        lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
+        lambda v: _is_arr_of_right_shape(v, (-1, 3))
+    )
+    _check_waypoints_arr_is_correct_shape_matrix = validator(
+        "waypoints_arr", allow_reuse=True
+    )(lambda v: _is_arr_of_right_shape(v, (-1, 8)))
+    _check_locationsAdjChi2_is_correct_shape_matrix = validator(
+        "locationsAdjChi2", allow_reuse=True
+    )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
+    _check_visibleTagsCount_is_correct_shape_matrix = validator(
+        "visibleTagsCount", allow_reuse=True
+    )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
 
-    _deserialize_locations_matrix_if_needed = validator("locations", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 9]))
+    _deserialize_locations_matrix_if_needed = validator(
+        "locations", allow_reuse=True, pre=True
+    )(lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 9]))
     _deserialize_tags_matrix_if_needed = validator("tags", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]))
-    _deserialize_tagpoints_matrix_if_needed = validator("tagpoints", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 3]))
-    _deserialize_waypoints_arr_matrix_if_needed = validator("waypoints_arr", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8]) if v is not None else None)
-    _deserialize_locations_adj_chi2_matrix_if_needed = validator("locationsAdjChi2", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
-    _deserialize_visibleTagsCount_matrix_if_needed = validator("visibleTagsCount", allow_reuse=True, pre=True)(
-        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1]) if v is not None else None)
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8])
+    )
+    _deserialize_tagpoints_matrix_if_needed = validator(
+        "tagpoints", allow_reuse=True, pre=True
+    )(lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 3]))
+    _deserialize_waypoints_arr_matrix_if_needed = validator(
+        "waypoints_arr", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8])
+        if v is not None
+        else None
+    )
+    _deserialize_locations_adj_chi2_matrix_if_needed = validator(
+        "locationsAdjChi2", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1])
+        if v is not None
+        else None
+    )
+    _deserialize_visibleTagsCount_matrix_if_needed = validator(
+        "visibleTagsCount", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1])
+        if v is not None
+        else None
+    )
 
 
 class OResultFitnessMetrics(BaseModel):
-    """Container to store the chi2 values
-    """
+    """Container to store the chi2 values"""
+
     chi2_all_before: np.float64
     alpha_all_before: Optional[float]
     se3_not_gravity_before: np.float64
@@ -1320,7 +1645,13 @@ class OResultFitnessMetrics(BaseModel):
             else:
                 lines_after.append(line_txt)
         longest_line = max([len(line) for line in lines_before + lines_after])
-        return "\n".join(lines_before) + "\n" + "-" * longest_line + "\n" + "\n".join(lines_after)
+        return (
+            "\n".join(lines_before)
+            + "\n"
+            + "-" * longest_line
+            + "\n"
+            + "\n".join(lines_after)
+        )
 
 
 class OResult(BaseModel):
@@ -1370,21 +1701,35 @@ class OResult(BaseModel):
 
     @property
     def find_max_gt_idx(self):
-        return np.where(list(self.gt_per_anchor_tag_opt.keys()) == self.find_max_gt_tag)[0][0]
+        return np.where(
+            list(self.gt_per_anchor_tag_opt.keys()) == self.find_max_gt_tag
+        )[0][0]
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
+
 
 class OSGPairResult(BaseModel):
     sg1_oresult: OResult
     sg2_oresult: OResult
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     @property
     def alpha_diff(self) -> float:
-        return self.sg2_oresult.fitness_metrics.alpha_all_after - self.sg1_oresult.fitness_metrics.alpha_all_after
+        return (
+            self.sg2_oresult.fitness_metrics.alpha_all_after
+            - self.sg1_oresult.fitness_metrics.alpha_all_after
+        )
 
     @property
     def alpha_ratio_change(self) -> float:
@@ -1392,14 +1737,17 @@ class OSGPairResult(BaseModel):
 
     @property
     def chi2_diff(self) -> float:
-        return self.sg2_oresult.fitness_metrics.chi2_all_after - self.sg1_oresult.fitness_metrics.chi2_all_after
+        return (
+            self.sg2_oresult.fitness_metrics.chi2_all_after
+            - self.sg1_oresult.fitness_metrics.chi2_all_after
+        )
 
     @property
     def chi2_ratio_change(self) -> float:
         return self.chi2_diff / self.sg1_oresult.fitness_metrics.chi2_all_after
 
 
-class  OSweepResults(BaseModel):
+class OSweepResults(BaseModel):
     """Used to store the results of a parameter sweep.
 
     Notes:
@@ -1422,7 +1770,11 @@ class  OSweepResults(BaseModel):
     sweep_args: List
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     # noinspection PyMethodParameters
     @validator("sweep_config")
@@ -1431,8 +1783,10 @@ class  OSweepResults(BaseModel):
             try:
                 OConfig.OConfigEnum(key)
             except ValueError:
-                raise ValueError(f"Invalid key in sweep_config dictionary (it is not a member of the "
-                                 f"{OConfig.OConfigEnum.__name__} enumeration): {key}")
+                raise ValueError(
+                    f"Invalid key in sweep_config dictionary (it is not a member of the "
+                    f"{OConfig.OConfigEnum.__name__} enumeration): {key}"
+                )
         return v
 
     # noinspection PyMethodParameters
@@ -1441,10 +1795,14 @@ class  OSweepResults(BaseModel):
         sweep_config = values["sweep_config"]
         for key in v:
             if key not in sweep_config:
-                raise ValueError("sweep_config_keys_order contains a string that is not a key in the sweep_config dict")
+                raise ValueError(
+                    "sweep_config_keys_order contains a string that is not a key in the sweep_config dict"
+                )
         if len(sweep_config) != len(v):
-            raise ValueError("the number of items in the sweep_config dictionary must be the same as the number of "
-                             "items in the sweep_config_keys_order list")
+            raise ValueError(
+                "the number of items in the sweep_config dictionary must be the same as the number of "
+                "items in the sweep_config_keys_order list"
+            )
         return v
 
     @property
@@ -1461,12 +1819,14 @@ class  OSweepResults(BaseModel):
 
     @property
     def gt_results_arr(self) -> np.ndarray:
-        return np.array(self.gt_results_list).reshape(self.gt_results_arr_shape, order="C")
+        return np.array(self.gt_results_list).reshape(
+            self.gt_results_arr_shape, order="C"
+        )
 
     @property
     def alpha_results_arr(self) -> np.ndarray:
         return np.array(self.alpha_results_list).reshape(self.gt_results_arr_shape)
-    
+
     @property
     def shift_results_arr(self) -> np.ndarray:
         return np.array(self.shift_metric_list).reshape(self.gt_results_arr_shape)
@@ -1495,12 +1855,14 @@ class  OSweepResults(BaseModel):
 
     @property
     def alpha_results_list(self):
-        return [oresult.fitness_metrics.alpha_all_after for oresult in self.oresults_list]
+        return [
+            oresult.fitness_metrics.alpha_all_after for oresult in self.oresults_list
+        ]
 
     @property
     def min_alpha_result(self) -> float:
         return np.min(self.alpha_results_list)
-    
+
     @property
     def min_shift_result(self) -> float:
         return np.min(self.shift_metric_list)
@@ -1525,23 +1887,29 @@ class  OSweepResults(BaseModel):
 
     @property
     def where_min(self) -> Tuple[int, ...]:
-    # Where minimum gt_metric
+        # Where minimum gt_metric
         # noinspection PyTypeChecker
-        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(self.gt_results_arr == self.min_gt_result)
-        return tuple([arr[0] for arr in where_min_pre])  # Select first result if there are multiple
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
+            self.gt_results_arr == self.min_gt_result
+        )
+        return tuple(
+            [arr[0] for arr in where_min_pre]
+        )  # Select first result if there are multiple
 
     @property
     def where_min_alpha(self) -> Tuple[int, ...]:
-    # Where minimum alpha metric
-        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = \
-            np.where(self.alpha_results_arr == self.min_alpha_result)
+        # Where minimum alpha metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
+            self.alpha_results_arr == self.min_alpha_result
+        )
         return tuple([arr[0] for arr in where_min_pre])
-    
+
     @property
     def where_min_shift(self) -> Tuple[int, ...]:
-    # Where minimum shift metric
-        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = \
-            np.where(self.shift_results_arr == self.min_shift_result)
+        # Where minimum shift metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
+            self.shift_results_arr == self.min_shift_result
+        )
         return tuple([arr[0] for arr in where_min_pre])
 
     @property
@@ -1549,7 +1917,9 @@ class  OSweepResults(BaseModel):
     def args_producing_min(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
-            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min[i]]
+            args_producing_min[key] = np.array(self.sweep_config[key])[
+                self.where_min[i]
+            ]
         return args_producing_min
 
     @property
@@ -1557,15 +1927,19 @@ class  OSweepResults(BaseModel):
     def args_producing_min_alpha(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
-            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_alpha[i]]
+            args_producing_min[key] = np.array(self.sweep_config[key])[
+                self.where_min_alpha[i]
+            ]
         return args_producing_min
-    
+
     @property
     # Parameters to produce min alpha metric
     def args_producing_min_shift(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
-            args_producing_min[key] = np.array(self.sweep_config[key])[self.where_min_shift[i]]
+            args_producing_min[key] = np.array(self.sweep_config[key])[
+                self.where_min_shift[i]
+            ]
         return args_producing_min
 
     @property
@@ -1600,7 +1974,9 @@ class  OSweepResults(BaseModel):
                     closest_swept_value_idx = i
                     closest_swept_value_diff = value_diff
             query_at_quantized[key] = closest_swept_value_idx
-        query_at_tuple = tuple([query_at_quantized[key] for key in self.sweep_config_keys_order])
+        query_at_tuple = tuple(
+            [query_at_quantized[key] for key in self.sweep_config_keys_order]
+        )
         return self.gt_results_arr[query_at_tuple]
 
     def visualize_results_heatmap(self) -> plt.Figure:
@@ -1611,7 +1987,9 @@ class  OSweepResults(BaseModel):
             Exception: If the number of dimensions swept is <2.
         """
         if len(self.sweep_config_keys_order) < 2:
-            raise Exception("Cannot create heatmap of results as implemented when <2 variables are swept.")
+            raise Exception(
+                "Cannot create heatmap of results as implemented when <2 variables are swept."
+            )
 
         # Generate all possible combinations of slices
         num_vars = len(self.sweep_config_keys_order)
@@ -1630,47 +2008,77 @@ class  OSweepResults(BaseModel):
         where_min = self.where_min
         fig, axs = plt.subplots(subplot_height, subplot_width)
         fig.subplots_adjust(wspace=1.9, hspace=0.5)
-        fs=10
-        plt.rcParams.update({'font.size': fs})
+        fs = 10
+        plt.rcParams.update({"font.size": fs})
 
         label_mapping_dct = {
             "ang_vel_var": "Angular Velocity Variance",
             "lin_vel_var": "Linear Velocity Variance",
-            "tag_var": "Tag Pose Variance"
+            "tag_var": "Tag Pose Variance",
         }
 
-        for i, ax in enumerate(axs.flat) if num_possible_slice_comb != 1 else [(0, axs), ]:
+        for i, ax in (
+            enumerate(axs.flat)
+            if num_possible_slice_comb != 1
+            else [
+                (0, axs),
+            ]
+        ):
             if i == num_possible_slice_comb:
                 break
             idcs_plot_against = idcs_plot_against_list[i]
-            x_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[0]]]
-            y_vec = self.sweep_config[self.sweep_config_keys_order[idcs_plot_against[1]]]
+            x_vec = self.sweep_config[
+                self.sweep_config_keys_order[idcs_plot_against[0]]
+            ]
+            y_vec = self.sweep_config[
+                self.sweep_config_keys_order[idcs_plot_against[1]]
+            ]
             xx, yy = np.meshgrid(x_vec, y_vec)
-            remove_dims = sorted(list(set(range(len(self.sweep_config_keys_order))).difference(
-                set(idcs_plot_against))))
+            remove_dims = sorted(
+                list(
+                    set(range(len(self.sweep_config_keys_order))).difference(
+                        set(idcs_plot_against)
+                    )
+                )
+            )
             zz = self.gt_results_arr
             for ith_dim, remove_dim in enumerate(remove_dims):
                 zz = zz.take(indices=where_min[remove_dim], axis=remove_dim - ith_dim)
             c = ax.pcolormesh(xx, yy, zz.T, shading="auto")
 
             # Annotate the heatmap with a red dot indicating the coordinates that produce the minimum value
-            ax.plot(x_vec[where_min[idcs_plot_against[0]]], y_vec[where_min[idcs_plot_against[1]]], "ro")
+            ax.plot(
+                x_vec[where_min[idcs_plot_against[0]]],
+                y_vec[where_min[idcs_plot_against[1]]],
+                "ro",
+            )
 
             # Add a colorbar to the axis
             divider = make_axes_locatable(ax)
-            cax = divider.append_axes('right', size='15%', pad=0.05)
-            fig.colorbar(c, cax=cax, orientation='vertical', label="Ground Truth Metric")
+            cax = divider.append_axes("right", size="15%", pad=0.05)
+            fig.colorbar(
+                c, cax=cax, orientation="vertical", label="Ground Truth Metric"
+            )
 
-            ax.set_xlabel(label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[0]]], fontsize=fs)
+            ax.set_xlabel(
+                label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[0]]],
+                fontsize=fs,
+            )
             ax.set_xscale("log")
             ax.set_xlim(left=np.min(x_vec), right=np.max(x_vec))
-            ax.set_ylabel(label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[1]]], fontsize=fs)
+            ax.set_ylabel(
+                label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[1]]],
+                fontsize=fs,
+            )
             ax.set_yscale("log")
             ax.set_ylim(bottom=np.min(y_vec), top=np.max(y_vec))
 
-        fig.suptitle(f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
-                     f"\n(red dot{'s' if num_possible_slice_comb > 1 else ''} show"
-                     f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)", fontsize=fs)
+        fig.suptitle(
+            f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
+            f"\n(red dot{'s' if num_possible_slice_comb > 1 else ''} show"
+            f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)",
+            fontsize=fs,
+        )
         return fig
 
 
@@ -1689,11 +2097,16 @@ class OMultiSweepResult(BaseModel):
         if len(v) != len(generate_params_list):
             raise ValueError(
                 f"sweep_results_list (of length {len(v)}) and generate_params_list (of length "
-                f"{len(generate_params_list)}) must be of the same length")
+                f"{len(generate_params_list)}) must be of the same length"
+            )
         return v
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     def plot_scatter_of_lin_to_ang_var_ratios(self) -> plt.Figure:
         """Generate (but do not show) a scatter plot where the x-axis is the ratio of linear to angular velocity
@@ -1703,44 +2116,76 @@ class OMultiSweepResult(BaseModel):
         scatter_x: List[float] = []
         scatter_y: List[float] = []
         gt_range: List[float] = []
-        for gen_params, sweep_results_per_gen_params in zip(self.generate_params_list, self.sweep_results_list):
+        for gen_params, sweep_results_per_gen_params in zip(
+            self.generate_params_list, self.sweep_results_list
+        ):
             opt_lin_to_ang_var_ratio_per_gen_params: List[float] = []
             gt_range_per_gen_params: List[float] = []
             for sweep_results in sweep_results_per_gen_params:
                 opt_lin_to_ang_var_ratio_per_gen_params.append(
-                    sweep_results.args_producing_min[OConfig.OConfigEnum.LIN_VEL_VAR.value] /
-                    sweep_results.args_producing_min[OConfig.OConfigEnum.ANG_VEL_VAR.value])
+                    sweep_results.args_producing_min[
+                        OConfig.OConfigEnum.LIN_VEL_VAR.value
+                    ]
+                    / sweep_results.args_producing_min[
+                        OConfig.OConfigEnum.ANG_VEL_VAR.value
+                    ]
+                )
                 scatter_x.append(gen_params.lin_to_ang_var)
-                gt_range_per_gen_params.append(sweep_results.max_gt_result - sweep_results.min_gt_result)
+                gt_range_per_gen_params.append(
+                    sweep_results.max_gt_result - sweep_results.min_gt_result
+                )
             scatter_y.extend(sorted(opt_lin_to_ang_var_ratio_per_gen_params))
-            gt_range.extend([x for _, x in sorted(zip(opt_lin_to_ang_var_ratio_per_gen_params,
-                                                      gt_range_per_gen_params))])
+            gt_range.extend(
+                [
+                    x
+                    for _, x in sorted(
+                        zip(
+                            opt_lin_to_ang_var_ratio_per_gen_params,
+                            gt_range_per_gen_params,
+                        )
+                    )
+                ]
+            )
 
         fig, ax = plt.subplots(figsize=(6, 5), layout="constrained")
         sc = ax.scatter(scatter_x, scatter_y, c=gt_range)
         ax.set_xlabel("lin:ang Variance Ratio for Generation")
-        ax.set_xscale('log')
+        ax.set_xscale("log")
         ax.set_ylabel("Best lin:ang Variance Ratio for Optimization")
-        ax.set_yscale('log')
+        ax.set_yscale("log")
         fig.colorbar(sc, label="Range of GT Values from Sweep")
         return fig
 
     def plot_scatter_of_obs_noise_params(self) -> plt.Figure:
-        """TODO: Documentation
-        """
+        """TODO: Documentation"""
         scatter_y: List[float] = []
         scatter_x: List[float] = []
         gt_range: List[float] = []
-        for gen_params, sweep_results_per_gen_params in zip(self.generate_params_list, self.sweep_results_list):
+        for gen_params, sweep_results_per_gen_params in zip(
+            self.generate_params_list, self.sweep_results_list
+        ):
             opt_tag_to_lvv_ratio_per_gen_params: List[float] = []
             gt_range_per_gen_params: List[float] = []
             for sweep_results in sweep_results_per_gen_params:
-                opt_tag_var_ratio = sweep_results.args_producing_min[OConfig.OConfigEnum.TAG_SBA_VAR.value]
+                opt_tag_var_ratio = sweep_results.args_producing_min[
+                    OConfig.OConfigEnum.TAG_SBA_VAR.value
+                ]
                 opt_tag_to_lvv_ratio_per_gen_params.append(opt_tag_var_ratio)
                 scatter_x.append(gen_params.obs_noise_var)
-                gt_range_per_gen_params.append(sweep_results.max_gt_result - sweep_results.min_gt_result)
+                gt_range_per_gen_params.append(
+                    sweep_results.max_gt_result - sweep_results.min_gt_result
+                )
             scatter_y.extend(sorted(opt_tag_to_lvv_ratio_per_gen_params))
-            gt_range.extend([x for _, x in sorted(zip(opt_tag_to_lvv_ratio_per_gen_params, gt_range_per_gen_params))])
+            gt_range.extend(
+                [
+                    x
+                    for _, x in sorted(
+                        zip(
+                            opt_tag_to_lvv_ratio_per_gen_params, gt_range_per_gen_params
+                        )
+                    )
+                ]
+            )
 
         fig, ax = plt.subplots(figsize=(6, 5), layout="constrained")
         sc = ax.scatter(scatter_x, scatter_y, c=gt_range)
@@ -1751,8 +2196,7 @@ class OMultiSweepResult(BaseModel):
 
 
 class OResultPseudoGTMetricValidation(BaseModel):
-    """Used to store the results of optimizations run to validate the pseudo ground truth metric
-    """
+    """Used to store the results of optimizations run to validate the pseudo ground truth metric"""
 
     class ScatterYAxisOptions(str, Enum):
         CHI2 = "chi2"
@@ -1764,7 +2208,11 @@ class OResultPseudoGTMetricValidation(BaseModel):
         ANG_VEL_VAR = "ang_vel_var"
 
     class Config:
-        json_encoders = {np.ndarray: lambda arr: np.array2string(arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD)}
+        json_encoders = {
+            np.ndarray: lambda arr: np.array2string(
+                arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
+            )
+        }
 
     results_list: List[Tuple[OConfig, OResult, OSGPairResult]]
     """
@@ -1773,14 +2221,17 @@ class OResultPseudoGTMetricValidation(BaseModel):
 
     generate_params: GenerateParams
 
-    def plot_scatter(self, fitness_metric: ScatterYAxisOptions, colorbar_variable: ScatterColorbarOptions) \
-            -> plt.Figure:
+    def plot_scatter(
+        self,
+        fitness_metric: ScatterYAxisOptions,
+        colorbar_variable: ScatterColorbarOptions,
+    ) -> plt.Figure:
         """Make an array of scatter plots with the specified fitness metrics plotted against the ground truth metric.
 
         Args:
             fitness_metric: Selects which set of the fitness metrics to plot the data of.
             colorbar_variable: Selects which optimization variable is used to color the points in the scatter plot.
-        
+
         Raises:
             ValueError - If either of the positional arguments are an enumeration value that is not handled.
         """
@@ -1794,8 +2245,12 @@ class OResultPseudoGTMetricValidation(BaseModel):
         fig: plt.Figure
         fig, axs = plt.subplots(2, 2, figsize=(10, 6))
         fig.subplots_adjust(wspace=0.5, hspace=0.5)
-        y_axis_order: List[str] = [r"$|\%_\mathrm{sg2} - \%_\mathrm{sg1}|$", r"$|\%_\mathrm{orig. graph}|^{-1}$",
-                                   r"$|\%_\mathrm{sg1}|^{-1}$", r"$|\%_\mathrm{sg2}|^{-1}$"]
+        y_axis_order: List[str] = [
+            r"$|\%_\mathrm{sg2} - \%_\mathrm{sg1}|$",
+            r"$|\%_\mathrm{orig. graph}|^{-1}$",
+            r"$|\%_\mathrm{sg1}|^{-1}$",
+            r"$|\%_\mathrm{sg2}|^{-1}$",
+        ]
         for i in range(len(y_axis_order)):
             y_axis_order[i] = y_axis_order[i].replace("%", greek_letter_str)
 
@@ -1804,26 +2259,57 @@ class OResultPseudoGTMetricValidation(BaseModel):
         c = []
         for result_idx, result_tuple in enumerate(self.results_list):
             gt_values.append(result_tuple[1].gt_metric_opt)
-            if fitness_metric == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2:
+            if (
+                fitness_metric
+                == OResultPseudoGTMetricValidation.ScatterYAxisOptions.CHI2
+            ):
                 y_ax_values[0, result_idx] = np.abs(result_tuple[2].chi2_diff)
-            elif fitness_metric == OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA:
+            elif (
+                fitness_metric
+                == OResultPseudoGTMetricValidation.ScatterYAxisOptions.ALPHA
+            ):
                 y_ax_values[0, result_idx] = np.abs(result_tuple[2].alpha_diff)
             else:
-                raise ValueError(f"Unhandled option for fitness_metric argument: {fitness_metric.value}")
+                raise ValueError(
+                    f"Unhandled option for fitness_metric argument: {fitness_metric.value}"
+                )
 
-            y_ax_values[1, result_idx] = 1 / np.abs(result_tuple[1].fitness_metrics.dict()[
-                                                        f"{metric_str}_all_after"])
-            y_ax_values[2, result_idx] = 1 / np.abs(result_tuple[2].sg1_oresult.fitness_metrics.dict()[
-                                                        f"{metric_str}_all_after"])
-            y_ax_values[3, result_idx] = 1 / np.abs(result_tuple[2].sg2_oresult.fitness_metrics.dict()[
-                                                        f"{metric_str}_all_after"])
+            y_ax_values[1, result_idx] = 1 / np.abs(
+                result_tuple[1].fitness_metrics.dict()[f"{metric_str}_all_after"]
+            )
+            y_ax_values[2, result_idx] = 1 / np.abs(
+                result_tuple[2].sg1_oresult.fitness_metrics.dict()[
+                    f"{metric_str}_all_after"
+                ]
+            )
+            y_ax_values[3, result_idx] = 1 / np.abs(
+                result_tuple[2].sg2_oresult.fitness_metrics.dict()[
+                    f"{metric_str}_all_after"
+                ]
+            )
 
-            if colorbar_variable == OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR:
-                c.append(result_tuple[0].compute_inf_params.dict()[colorbar_variable.value])
-            elif colorbar_variable == OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR:
-                c.append(np.linalg.norm(result_tuple[0].compute_inf_params.dict()[colorbar_variable.value]))
+            if (
+                colorbar_variable
+                == OResultPseudoGTMetricValidation.ScatterColorbarOptions.TAG_SBA_VAR
+            ):
+                c.append(
+                    result_tuple[0].compute_inf_params.dict()[colorbar_variable.value]
+                )
+            elif (
+                colorbar_variable
+                == OResultPseudoGTMetricValidation.ScatterColorbarOptions.LIN_VEL_VAR
+            ):
+                c.append(
+                    np.linalg.norm(
+                        result_tuple[0].compute_inf_params.dict()[
+                            colorbar_variable.value
+                        ]
+                    )
+                )
             else:
-                raise ValueError(f"Unhandled option for colorbar variable: {colorbar_variable.value}")
+                raise ValueError(
+                    f"Unhandled option for colorbar variable: {colorbar_variable.value}"
+                )
 
         for i, ax in enumerate(axs.flat):
             ax: plt.Axes
@@ -1832,8 +2318,14 @@ class OResultPseudoGTMetricValidation(BaseModel):
             ax.set_xlabel("GT Metric")
 
             divider = make_axes_locatable(ax)
-            cax = divider.append_axes('right', size='5%', pad=0.05)
-            fig.colorbar(sc, cax=cax, orientation='vertical', label=r"$\ln\left(\mathrm{%}\right)$".replace(
-                "%", r"\/".join(colorbar_variable.split("_"))))
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(
+                sc,
+                cax=cax,
+                orientation="vertical",
+                label=r"$\ln\left(\mathrm{%}\right)$".replace(
+                    "%", r"\/".join(colorbar_variable.split("_"))
+                ),
+            )
 
         return fig

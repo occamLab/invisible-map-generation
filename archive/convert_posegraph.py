@@ -16,23 +16,26 @@ def convert_vertex(vertex):
         A vertex of the new type with the same information as the
         input vertex.
     """
-    if vertex.type == 'tag':
+    if vertex.type == "tag":
         vertextype = VertexType.TAG
-    elif vertex.type == 'odometry':
+    elif vertex.type == "odometry":
         if vertex.fix_status:
             vertextype = VertexType.DUMMY
         else:
             vertextype = VertexType.ODOMETRY
-    elif vertex.type == 'waypoint':
+    elif vertex.type == "waypoint":
         vertextype = VertexType.WAYPOINT
     else:
         raise Exception("Vertex type {} not recognized".format(vertex.type))
 
-    return (vertex.id, Vertex(mode=vertextype,
-                              estimate=np.concatenate
-                              ([vertex.translation, (vertex.rotation)]),
-                              fixed=vertex.fix_status
-                              ))
+    return (
+        vertex.id,
+        Vertex(
+            mode=vertextype,
+            estimate=np.concatenate([vertex.translation, (vertex.rotation)]),
+            fixed=vertex.fix_status,
+        ),
+    )
 
 
 def convert_edge(edge):
@@ -45,13 +48,15 @@ def convert_edge(edge):
         An edge of the new type with the same information as the input
         edge.
     """
-    return Edge(startuid=edge.start.id, enduid=edge.end.id,
-                information=edge.importance_matrix,
-                information_prescaling=None,
-                measurement=np.concatenate
-                ([edge.translation, edge.rotation]),
-                corner_ids=None,
-                camera_intrinsics=None)
+    return Edge(
+        startuid=edge.start.id,
+        enduid=edge.end.id,
+        information=edge.importance_matrix,
+        information_prescaling=None,
+        measurement=np.concatenate([edge.translation, edge.rotation]),
+        corner_ids=None,
+        camera_intrinsics=None,
+    )
 
 
 def convert(posegraph):
@@ -93,9 +98,10 @@ def convert(posegraph):
                 vertices[uid] = converted
 
             converted_edge = convert_edge(edge)
-            if not (vertices[converted_edge.startuid].mode == VertexType.DUMMY
-                    or vertices[converted_edge.enduid].mode
-                    == VertexType.DUMMY):
+            if not (
+                vertices[converted_edge.startuid].mode == VertexType.DUMMY
+                or vertices[converted_edge.enduid].mode == VertexType.DUMMY
+            ):
                 edges[edge_uid] = convert_edge(edge)
                 edge_uid += 1
 
@@ -109,9 +115,10 @@ def convert(posegraph):
                 vertices[uid] = converted
 
             converted_edge = convert_edge(edge)
-            if not (vertices[converted_edge.startuid].mode == VertexType.DUMMY
-                    or vertices[converted_edge.enduid].mode
-                    == VertexType.DUMMY):
+            if not (
+                vertices[converted_edge.startuid].mode == VertexType.DUMMY
+                or vertices[converted_edge.enduid].mode == VertexType.DUMMY
+            ):
                 edges[edge_uid] = convert_edge(edge)
                 edge_uid += 1
 

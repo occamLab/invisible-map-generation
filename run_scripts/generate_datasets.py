@@ -7,8 +7,7 @@ efficiency, allowing for the analysis of how dataset parameters impact optimizat
 import os
 import sys
 
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 from map_processing.cache_manager import CacheManagerSingleton
@@ -21,6 +20,7 @@ import datetime
 from typing import Tuple, Dict, Union
 import re
 import argparse
+
 
 def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -248,9 +248,7 @@ if __name__ == "__main__":
     elif (
         args.p == "d"
     ):  # d specifies a data set-based path, so get a CacheManagerSingleton instance ready
-        matching_maps = CacheManagerSingleton.find_maps(
-            args.d_p, search_restriction=0
-        )
+        matching_maps = CacheManagerSingleton.find_maps(args.d_p, search_restriction=0)
         if len(matching_maps) == 0:
             print(
                 f"No matches for {args.d_p} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
@@ -265,12 +263,10 @@ if __name__ == "__main__":
                 odometry_noise_var=odom_noise,
                 obs_noise_var=args.obs_noise,
             )
-            gg = GraphGenerator(path_from=data_set_parsed,
-                                gen_params=gen_params)
+            gg = GraphGenerator(path_from=data_set_parsed, gen_params=gen_params)
             if args.v:
                 gg.visualize()
 
             gg.export_to_map_processing_cache()
     else:
-        raise Exception(
-            "Encountered unhandled value for the '-p' parameter: " + args.p)
+        raise Exception("Encountered unhandled value for the '-p' parameter: " + args.p)

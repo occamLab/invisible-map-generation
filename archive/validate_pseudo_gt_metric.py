@@ -28,8 +28,7 @@ import argparse
 import os
 import sys
 
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 
@@ -60,7 +59,7 @@ else:
             GenerateParams.OdomNoiseDims.Z: 1e-4,
             GenerateParams.OdomNoiseDims.RVERT: 1e-5,
         },
-        dataset_name=f"3line",
+        dataset_name="3line",
         t_max=6 * np.pi,
         n_poses=300,
         parameterized_path_args={
@@ -100,7 +99,6 @@ def make_parser() -> argparse.ArgumentParser:
 
 # noinspection DuplicatedCode
 def validate_pseudo_gt_metric():
-
     # Acquire the data set from which the generated maps are parsed
     matching_maps = CacheManagerSingleton.find_maps(
         PATH_FROM, search_only_unprocessed=True
@@ -123,16 +121,13 @@ def validate_pseudo_gt_metric():
     map_info = matching_maps.pop()
     data_set_generate_from = UGDataSet(**map_info.map_dct)
 
-    alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {
-    }
+    alt_param_multiplicands_for_opt: Dict[OConfig.AltOConfigEnum, np.ndarray] = {}
     for opt_key, opt_value in ALT_OPT_CONFIG.items():
-
         # You can either pass in a numpy array or a function to determine noise.
         if isinstance(opt_value, np.ndarray):
             alt_param_multiplicands_for_opt[opt_key] = opt_value
         else:
-            alt_param_multiplicands_for_opt[opt_key] = opt_value[0](
-                *opt_value[1])
+            alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
 
     param_multiplicands_for_opt = OConfig.alt_oconfig_generator_param_multiplicands(
         alt_param_multiplicands=alt_param_multiplicands_for_opt
@@ -161,8 +156,7 @@ def validate_pseudo_gt_metric():
                 tag_poses_for_parameterized=GT_TAG_DATASETS["3line"],
             )
         mi = gg.export_to_map_processing_cache(file_name_suffix=f"_{i}")
-        gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(
-            mi)
+        gt_data_set = CacheManagerSingleton.find_ground_truth_data_from_map_info(mi)
         mi_and_gt_data_set_list.append((mi, gt_data_set))
 
     total_num_optimizations = NUM_REPEAT_GENERATE * len(oconfig_list)

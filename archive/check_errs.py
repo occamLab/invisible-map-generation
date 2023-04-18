@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 if len(sys.argv) < 2:
-    FILENAME = '../converted-data/academic_center.pkl'
+    FILENAME = "../converted-data/academic_center.pkl"
 else:
     FILENAME = sys.argv[1]
 
-with open(FILENAME, 'rb') as data:
+with open(FILENAME, "rb") as data:
     GRAPH = pickle.load(data)
 
 
@@ -31,15 +31,15 @@ def margin(confidence_interval):
     Returns:
         A variance corresponding to the input confidence interval.
     """
-    return np.log((confidence_interval / 3)**2)
+    return np.log((confidence_interval / 3) ** 2)
 
 
 # Set the variance of all the errors and set the edge weights
 # accordingly.
 GRAPH.weights = np.zeros(18)
-GRAPH.weights[:3] = margin(.8)
+GRAPH.weights[:3] = margin(0.8)
 GRAPH.weights[3:6] = margin(20)
-GRAPH.weights[6:9] = margin(.4)
+GRAPH.weights[6:9] = margin(0.4)
 GRAPH.weights[9:12] = margin(5)
 GRAPH.update_edges()
 
@@ -53,16 +53,19 @@ def plot_errs(errs):
     """
     fig, (translation_ax, rotation_ax) = plt.subplots(2, 3, sharex=True)
     for i, (title, axes) in enumerate(zip(["x", "y", "z"], translation_ax)):
-        axes.set_title(r'{} Translation Error $(m)$, $\mu = {:.4g}$,'
-                       r'$\sigma^2={:.4g}$'
-                       .format(title, errs[:, i].mean(), errs[:, i].var()))
+        axes.set_title(
+            r"{} Translation Error $(m)$, $\mu = {:.4g}$,"
+            r"$\sigma^2={:.4g}$".format(title, errs[:, i].mean(), errs[:, i].var())
+        )
         axes.plot(errs[:, i])
 
     for i, (title, axes) in enumerate(zip(["qx", "qy", "qz"], rotation_ax)):
-        axes.set_title(r'{} Translation Error $(m)$, $\mu = {:.4g}$,'
-                       r'$\sigma^2={:.4g}$'
-                       .format(title, errs[:, i + 3].mean(),
-                               errs[:, i + 3].var()))
+        axes.set_title(
+            r"{} Translation Error $(m)$, $\mu = {:.4g}$,"
+            r"$\sigma^2={:.4g}$".format(
+                title, errs[:, i + 3].mean(), errs[:, i + 3].var()
+            )
+        )
         axes.plot(errs[:, i + 3])
     return fig
 
@@ -88,7 +91,7 @@ def errs_cov(errs, winsz):
     samples = [np.reshape([], (0, winsz)) for _ in range(6)]
     for i in range(winsz, errs.shape[0] - winsz):
         for j in range(6):
-            samples[j] = np.vstack([samples[j], errs[i:i+winsz, j]])
+            samples[j] = np.vstack([samples[j], errs[i : i + winsz, j]])
     covs = [np.cov(sample.T) for sample in samples]
     return covs
 
@@ -105,7 +108,7 @@ def plot_covs(covs):
         axes.imshow(covs[i])
 
     for i, axes in enumerate(rotation_ax):
-        axes.imshow(covs[i+3])
+        axes.imshow(covs[i + 3])
     return fig
 
 
@@ -134,11 +137,9 @@ def main():
     print(GRAPH.weights)
     edges = GRAPH.get_ordered_odometry_edges()
     errs = np.reshape([], [0, 6])
-    edge_lookup = {x.id(): x.error()[:6]
-                   for x in GRAPH.optimized_graph.edges()}
+    edge_lookup = {x.id(): x.error()[:6] for x in GRAPH.optimized_graph.edges()}
     for uid in edges[0]:
         errs = np.vstack([errs, edge_lookup[uid]])
-
 
     plot_errs(errs)
 
@@ -148,5 +149,5 @@ def main():
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

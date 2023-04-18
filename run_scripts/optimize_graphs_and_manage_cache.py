@@ -17,15 +17,13 @@ Notes:
   and cannot be-loaded for further processing.
 """
 import os
-import pdb
 import sys
-repository_root = os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), os.pardir)
+
+repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 from map_processing import throw_out_bad_tags as tag_filter
 from map_processing.sweep import sweep_params
-from map_processing.graph_opt_utils import rotation_metric
 from map_processing.graph_opt_hl_interface import (
     holistic_optimize,
     WEIGHTS_DICT,
@@ -73,14 +71,6 @@ def make_parser() -> argparse.ArgumentParser:
         "directory is searched recursively, and '**/' is automatically prepended to the pattern.",
     )
     p.add_argument(
-        "-u",
-        action="store_true",
-        help="Specifies the recursive search (with the pattern given by the -p argument) to be"
-        "rooted in the cache folder's root (default is to be rooted in the unprocessed_maps/"
-        "sub-directory of the cache).",
-        default=True,
-    )
-    p.add_argument(
         "--pso",
         type=int,
         required=False,
@@ -93,13 +83,6 @@ def make_parser() -> argparse.ArgumentParser:
         default=0,
         choices={0, 1, 2, 3},
     )
-    p.add_argument(
-        "-nsb",
-        action="store_true",
-        help="Flag to run no SBA baseline against SBA to test SBA effectiveness. Must be done with"
-        "--pso 0 (SBA) and a parameter sweep.",
-        default=False,
-    )
 
     weights_options = [
         f"{weight_option.value}-'{str(weight_option)[len(WeightSpecifier.__name__) + 1:]}'"
@@ -110,8 +93,8 @@ def make_parser() -> argparse.ArgumentParser:
         type=int,
         required=False,
         help="Specifies which weight vector to be used (maps to a weight vector which is stored as"
-        "a class attribute of the GraphManager class). Viable options are: " +
-        ", ".join(weights_options),
+        "a class attribute of the GraphManager class). Viable options are: "
+        + ", ".join(weights_options),
         default=0,
         choices={weight_option.value for weight_option in WEIGHTS_DICT.keys()},
     )
@@ -244,10 +227,6 @@ if __name__ == "__main__":
         print("Mutually exclusive flags with -c used")
         exit(-1)
 
-    if args.pso != 0 and args.nsb or args.nsb and not args.s:
-        print("No SBA Baseline must be run with SBA (pso 0) and a parameter sweep.")
-        exit(-1)
-
     # Fetch the service account key JSON file contents
     env_variable = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if env_variable is None:
@@ -275,8 +254,7 @@ if __name__ == "__main__":
 
     # Remove tag observations that are bad
     if args.t:
-        this_path = cms.find_maps(
-            map_pattern, search_restriction=0, paths=True)
+        this_path = cms.find_maps(map_pattern, search_restriction=0, paths=True)
         print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
 
     compute_inf_params = OComputeInfParams(
@@ -301,13 +279,10 @@ if __name__ == "__main__":
                 ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                 verbose=True,
                 generate_plot=True,
-                visualize_best_map=True,
-                show_plot=args.v,
+                show_plots=args.v,
                 num_processes=args.np,
-                no_sba_baseline=args.nsb,
                 upload_best=args.F,
                 cms=cms,
-                simple_metrics=True
             )
 
         # If you simply want to run the optimizer with specified weights
@@ -335,16 +310,3 @@ if __name__ == "__main__":
                 if gt_data is not None
                 else None,
             )
-
-            # Get rotational metrics
-            pre_optimized_tags = opt_result.map_pre.tags
-            optimized_tags = opt_result.map_opt.tags
-            (
-                rot_metric,
-                max_rot_diff,
-                max_rot_diff_tag_id,
-                max_rot_diff_idx,
-            ) = rotation_metric(pre_optimized_tags, optimized_tags)
-            print(f"Rotation metric: {rot_metric}")
-            print(
-                f"Maximum rotation: {max_rot_diff} (tag id: {max_rot_diff_idx})")
