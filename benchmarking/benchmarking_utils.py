@@ -16,8 +16,15 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 import benchmarking.repeat_detection_evaluator as rde
 
-TAG_SIZE = 0.152
-MATRIX_SIZE_CONVERTER = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])
+TAG_SIZE = 0.152 # meters
+MATRIX_SIZE_CONVERTER = np.array(
+    [
+        [1, 0, 0, 0], 
+        [0, 1, 0, 0], 
+        [0, 0, 1, 0]
+        ]
+)
+
 CAMERA_POSE_FLIPPER = np.array(
     [[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]
 )
