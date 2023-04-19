@@ -21,3 +21,5 @@ venv
 **/.ipynb_checkpoints/
 
 /saved_sweeps/**/*sweep.*
+
+.vscode/
