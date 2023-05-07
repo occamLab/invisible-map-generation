@@ -101,7 +101,7 @@ class CacheManagerSingleton:
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
     GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
     GROUND_TRUTH_MAPPING_PATH = os.path.join(
-        CONFIG_PATH, GROUND_TRUTH_MAPPING_FILE_NAME
+        GROUND_TRUTH_PATH, GROUND_TRUTH_MAPPING_FILE_NAME
     )
     SWEEP_RESULTS_PATH: str = os.path.join(CACHE_PATH, SWEEP_RESULTS_PARENT)
     PGT_VALIDATION_RESULTS_PATH: str = os.path.join(
@@ -197,10 +197,8 @@ class CacheManagerSingleton:
     def upload(
         self, map_info: MapInfo, json_string: str, verbose: bool = False
     ) -> None:
-        """
-        Uploads the map json string into the Firebase __bucket under the path
-        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate
-        database reference.
+        """Uploads the map json string into the Firebase __bucket under the path
+        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
         Notes:
             - Acquires the __synch_mutex (calling from another thread will block until this
@@ -394,7 +392,11 @@ class CacheManagerSingleton:
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH,
-                os.path.join(search_dirs[search_restriction], "**", pattern),
+                os.path.join(
+                    search_dirs[search_restriction],
+                    "**",
+                    pattern,
+                ),
             ),
             recursive=recursive,
         )

@@ -23,7 +23,6 @@ from datetime import datetime
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
-
 # Fetch the service account key JSON file contents
 cred = credentials.Certificate(os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
 cms = CacheManagerSingleton(cred)
@@ -52,7 +51,10 @@ def for_each_map_info(map_info: MapInfo) -> None:
     """
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
-    map_info.map_json_blob_name = f'{map_info.map_json_blob_name[:-5]} {datetime.now().strftime("%Y%m%d%H%M%S")}.json'
+    map_info.map_json_blob_name = (
+        f"{map_info.map_json_blob_name[:-5]} "
+        + f'{datetime.now().strftime("%Y%m%d%H%M%S")}.json'
+    )
     graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]

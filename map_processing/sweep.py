@@ -76,8 +76,9 @@ def run_param_sweep(
     if len(set([oconfig.__hash__() for oconfig in oconfigs])) != len(oconfigs):
         raise Exception("Non-unique set of optimization configurations generated")
 
-    # Create these mappings so that the ordering of the arguments to the cartesian product in
-    # `OConfig.oconfig_sweep_generator` is arbitrary with respect to the ordering of ORDERED_SWEEP_CONFIG_KEYS
+    # Create these mappings so that the ordering of the arguments to the cartesian
+    # product in `OConfig.oconfig_sweep_generator` is arbitrary with respect to the
+    # ordering of ORDERED_SWEEP_CONFIG_KEYS
     sweep_param_to_result_idx_mappings: Dict[str, Dict[float, int]] = {}
     for key in ordered_sweep_config_keys:
         sweep_param_to_result_idx_mappings[key] = {
@@ -109,7 +110,8 @@ def run_param_sweep(
     else:
         if verbose:
             print(
-                f"Starting multi-process optimization parameter sweep (with {num_processes} processes)..."
+                "Starting multi-process optimization parameter sweep (with "
+                f"{num_processes} processes)..."
             )
         with mp.Pool(processes=num_processes) as pool:
             total_task_num = len(sweep_args)
@@ -307,11 +309,13 @@ def _sweep_target(
     *****NOTE: This function is what individually optimizes each of the parameters provided through the sweep.
 
     Args:
-        sweep_args_tuple: In order, contains: (1) The graph object to optimize (which is deep-copied before being passed
-            sweep_args_tuple[3][0]: Int representing the index of the sweep parameter
-            oresult: OResult representing the result of GraphManager.optimize_graph
+        sweep_args_tuple: In order, contains: (1) The graph object to optimize (which
+         is deep-copied before being passed as the argument), (2) the optimization
+         configuration, and (3) the ground truth tags dictionary.
+
+    Returns:
+        Return value from GraphManager.optimize_graph
     """
-    # Same workflow as holistic_optimize from graph_opt_hl_interface
     oresult = optimize_graph(
         graph=deepcopy(sweep_args_tuple[0]),
         oconfig=sweep_args_tuple[1],

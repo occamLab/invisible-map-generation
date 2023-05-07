@@ -36,24 +36,31 @@ class Vertex:
         self.meta_data: Dict = {} if meta_data is None else dict(meta_data)
 
     def __repr__(self):
-        return f"<{'Fixed' if self.fixed else ''}{str(self.mode)[len(VertexType.__name__) + 1:]} Vertex>"
+        return (
+            f"<{'Fixed' if self.fixed else ''}"
+            + f"{str(self.mode)[len(VertexType.__name__) + 1:]} Vertex>"
+        )
 
 
 class Edge:
     """A class for graph edges.
 
-    It encodes UIDs for the start and end vertices, the transform_vector, and the information matrix.
+    It encodes UIDs for the start and end vertices, the transform_vector, and the
+    information matrix.
 
     Args:
-        startuid: The UID of the starting vertex. This can be any hashable such as an int.
+        startuid: The UID of the starting vertex. This can be any hashable such as an
+         int.
         enduid: The UID of the ending vertex. This can be any hashable such as an int.
-        corner_verts: an array of UIDs for each of the tag corner vertices. This only applies in the SBA case
-        information_prescaling: A 6 element numpy array encoding the diagonal of a matrix that pre-multiplies the
-         edge information matrix specified by the weights. If None is past, then the 6 element vector is assumed to
-         be all ones
+        corner_verts: an array of UIDs for each of the tag corner vertices. This only
+         applies in the SBA case
+        information_prescaling: A 6 element numpy array encoding the diagonal of a
+         matrix that pre-multiplies the edge information matrix specified by the
+         weights. If None is past, then the 6 element vector is assumed to be all ones
         camera_intrinsics: [fx, fy, cx, cy] (only applies to tag edges)
-        measurement: A 7 element numpy array encoding the measured transform from the start vertex to the end vertex
-         in the start vertex's coordinate frame. The format is [x, y, z, qx, qy, qz, qw].
+        measurement: A 7 element numpy array encoding the measured transform from the
+         start vertex to the end vertex in the start vertex's coordinate frame. The
+         format is [x, y, z, qx, qy, qz, qw].
         start_end: A tuple containing the start and end vertices of this edge.
 
     Attributes:
@@ -96,25 +103,33 @@ class Edge:
         """Computes the information matrix for the edge.
 
         Notes:
-            Depending on the modes indicated in the vertices in the `start_end` and `corner_verts` instance attributes,
-             the corresponding method is called. If the corner_verts instance attribute is not None, then it is inferred
-             that the edge is to a tag whose corner pixel values are known and being used for sba; the
-             `_compute_information_sba` method is subsequently called. If the start and end vertices are both of the
-             odometry type, then `_compute_information_se3_nonzero_delta_t` is used. Otherwise, it is assumed that the
-             edge is some observation (i.e., both the start and end vertices were sampled at the same time), so the
+            Depending on the modes indicated in the vertices in the `start_end` and
+             `corner_verts` instance attributes, the corresponding method is called.
+             If the corner_verts instance attribute is not None, then it is
+             inferredthat the edge is to a tag whose corner pixel values are known and
+             being used for sba; the`_compute_information_sba` method is subsequently
+             called. If the start and end vertices are both of theodometry type, then
+             `_compute_information_se3_nonzero_delta_t` is used. Otherwise, it is
+             assumed that theedge is some observation (i.e., both the start and end
+             vertices were sampled at the same time), so the
              `_compute_information_se3_obs` method is called.
 
         Args:
-            weights_vec: A vector of weights that is used to scale the information matrix. Passed as the argument to the
-             corresponding downstream `compute_information*` method.
-            compute_inf_params: Contains parameters for edge information computation. If both the start
-             and end vertices of the edge are odometry vertices, then 'ang_vel_var' and 'lin_vel_var' fields is used
-             to specify the angular velocity variance and linear velocity variance, respectively, for the
-             `_compute_information_se3_nonzero_delta_t` method. See that method for more information.
-            using_sba: True if SBA is used (relevant for the fact that odometry poses are inverted when using SBA)
+            weights_vec: A vector of weights that is used to scale the information
+             matrix. Passed as the argument to the corresponding downstream
+             `compute_information*` method.
+            compute_inf_params: Contains parameters for edge information computation.
+             If both the start and end vertices of the edge are odometry vertices, then
+             'ang_vel_var' and 'lin_vel_var' fields is used to specify the angular
+             velocity variance and linear velocity variance, respectively, for the
+             `_compute_information_se3_nonzero_delta_t` method. See that method for
+             more information.
+            using_sba: True if SBA is used (relevant for the fact that odometry poses
+             are inverted when using SBA)
 
         Raises:
-            ValueError: If the weights_vec argument or resulting information matrix contain any negative values.
+            ValueError: If the weights_vec argument or resulting information matrix
+             contain any negative values.
         """
         if np.any(weights_vec < 0):
             raise ValueError(
@@ -144,9 +159,9 @@ class Edge:
             )
         if len(self.information.shape) != 2:
             raise ValueError(
-                f"The information matrix was computed to be an array with {len(self.information.shape)} "
-                f"dimensions instead of 2 (weights vector argument was an array of shape "
-                f"{weights_vec.shape}"
+                "The information matrix was computed to be an array with "
+                f"{len(self.information.shape)} dimensions instead of 2 (weights "
+                f"vector argument was an array of shape {weights_vec.shape}"
             )
 
     def _compute_information_se3_nonzero_delta_t(
@@ -156,13 +171,15 @@ class Edge:
         ang_vel_var: float = 1.0,
         lin_vel_var: np.array = np.ones(3),
     ) -> None:
-        """Compute the 6x6 information matrix for the edges that represent a transform over some nonzero time span.
+        """Compute the 6x6 information matrix for the edges that represent a transform
+        over some nonzero time span.
 
         Args:
-            weights_vec: Length-6 vector used to scale the diagonal of the information matrix.
+            weights_vec: Length-6 vector used to scale the diagonal of the information
+             matrix.
             ang_vel_var: Scalar used as the angular velocity variance.
-            lin_vel_var: Length-3 vector where the elements correspond to the x, y, and z-direction's linear velocity
-             variance, respectively.
+            lin_vel_var: Length-3 vector where the elements correspond to the x, y, and
+             z-direction's linear velocity variance, respectively.
         """
         self.information = np.diag(weights_vec)
         delta_t_sq = (
@@ -170,8 +187,9 @@ class Edge:
             - self.start_end[0].meta_data["timestamp"]
         ) ** 2
 
-        # Assume rotational noise can be modeled as a normally-distributed rotational error about the gravity axis.
-        # Acquire the gravity axis by selecting the y basis vector of the inverted pose
+        # Assume rotational noise can be modeled as a normally-distributed rotational
+        # error about the gravity axis. Acquire the gravity axis by selecting the y
+        # basis vector of the inverted pose
         if using_sba:  # Poses are inverted when using SBA
             gravity_axis_in_phone_frame = (
                 SE3Quat(self.start_end[1].estimate).Quaternion().R[:3, 1]
@@ -192,7 +210,8 @@ class Edge:
                 * delta_t_sq
             )
         )
-        # self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * delta_t_sq * ang_vel_var ** 2))
+        # self.information[3:, 3:] *= np.diag(1 / (np.ones(3) * delta_t_sq *
+        # ang_vel_var ** 2))
 
         # Translation component
         self.information[:3, :3] *= np.diag(

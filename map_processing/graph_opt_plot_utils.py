@@ -2,7 +2,7 @@
 Plotting utilities for graph optimization.
 """
 
-from typing import *
+from typing import Union, List, Optional, Tuple
 
 import numpy as np
 from g2o import SE3Quat
@@ -303,8 +303,10 @@ def axis_equal(ax: plt.Axes, three_dimensional: bool):
     Args:
         ax: Matplotlib Axes object
     """
+
     def axis_range_from_limits(limits):
         return limits[1] - limits[0]
+
     max_range = np.max(
         np.array(
             [

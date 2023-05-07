@@ -20,9 +20,9 @@ class PrescalingOptEnum(Enum):
 
     Class attributes:
         USE_SBA: Do not use sparse bundle adjustment
-        FULL_COV: When creating the tag edge prescaling matrix, compute it from
-            the covariance matrix calculated to account for the reliability of
-            the tag pose estimate.
+        FULL_COV: When creating the tag edge prescaling matrix, compute it from the
+         covariance matrix calculated to account for the reliability of the tag pose
+         estimate.
         DIAG_COV: Same as `FULL_COV`, except only the matrix diagonal is used.
         ONES: Prescaling matrix is set to a matrix of 1s.
     """
@@ -56,10 +56,11 @@ GT_TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
         2: np.array([[1, 0, 0, 3], [0, 1, 0, 0], [0, 0, 1, -4], [0, 0, 0, 1]]),
     },
     "occam": {
-        # The ground truth tags for the 6-17-21 OCCAM Room. Keyed by tag ID. Measurements in meters (measurements
-        # were taken in inches and converted to meters by multiplying by 0.0254). Measurements are in a right-handed
-        # coordinate system with its origin at the floor beneath tag id=0 (+Z pointing out of the wall and +X
-        # pointing to the right).
+        # The ground truth tags for the 6-17-21 OCCAM Room. Keyed by tag ID.
+        # Measurements in meters (measurements were taken in inches and converted
+        # to meters by multiplying by 0.0254). Measurements are in a right-handed
+        # coordinate system with its origin at the floor beneath tag id=0 (+Z pointing
+        # out of the wall and +X pointing to the right).
         0: transform_vector_to_matrix(
             SE3Quat([0, 63.25 * 0.0254, 0, 0, 0, 0, 1]).to_vector()
         ),
@@ -132,7 +133,7 @@ GROUND_TRUTH_MAPPING_STARTING_PT: Dict[str, List[str]] = {
     ]
 }
 """
-This dictionary is used as the default ground truth dataset-to-map-name mapping when one does not already exist in the
-ground_truth/ sub-directory of the cache.
+This dictionary is used as the default ground truth dataset-to-map-name mapping when
+one does not already exist in the ground_truth/ sub-directory of the cache.
 """
 TIME_FORMAT = "%y-%m-%d-%H-%M-%S"
