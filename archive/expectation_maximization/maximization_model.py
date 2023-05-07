@@ -34,8 +34,7 @@ def likelihood(weights, *args):
         The log likelihood of the errors given the input weights.
     """
     observations, errors = args
-    return -norm.logpdf(errors,
-                        scale=np.sqrt(np.exp(observations.dot(weights)))).sum()
+    return -norm.logpdf(errors, scale=np.sqrt(np.exp(observations.dot(weights)))).sum()
 
 
 def loglikelihood_gradient(weights, *args):
@@ -44,8 +43,10 @@ def loglikelihood_gradient(weights, *args):
     """
 
     observations, errors = args
-    return -(np.square(errors) * np.exp(-observations.dot(weights)) - 1
-             ).dot(observations) / 2
+    return (
+        -(np.square(errors) * np.exp(-observations.dot(weights)) - 1).dot(observations)
+        / 2
+    )
 
 
 def maxweights(observations, errors, weights):
@@ -71,5 +72,6 @@ def maxweights(observations, errors, weights):
             odometry z weights, and the last one is the gravity edge qz
             weight.
     """
-    return minimize(likelihood, weights, (observations, errors),
-                    jac=loglikelihood_gradient)
+    return minimize(
+        likelihood, weights, (observations, errors), jac=loglikelihood_gradient
+    )

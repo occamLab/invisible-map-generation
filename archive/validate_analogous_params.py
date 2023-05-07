@@ -1,8 +1,10 @@
 """
-This script exists to validate whether there exists a monotonic and positive relationship between metrics based on a
-subset of analogous parameters between data set generation and optimization. Specifically, this script looks for a
-monotonic and positive relationship between the ratio of linear to angular velocity variance for a generated data set
-and the ratio of the optimal linear and angular velocity variance values for optimizing the data set.
+This script exists to validate whether there exists a monotonic and positive
+relationship between metrics based on a subset of analogous parameters between
+data set generation and optimization. Specifically, this script looks for a
+monotonic and positive relationship between the ratio of linear to angular velocity
+variance for a generated data set and the ratio of the optimal linear and angular
+velocity variance values for optimizing the data set.
 """
 
 from map_processing.sweep import sweep_params
@@ -21,9 +23,25 @@ import datetime
 import numpy as np
 import os
 import sys
+import numpy as np
+import datetime
+from typing import List, Dict, Callable, Iterable, Any, Tuple
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
+
+
+from map_processing import TIME_FORMAT
+from map_processing.data_models import (
+    GenerateParams,
+    UGDataSet,
+    OConfig,
+    OSweepResults,
+    OMultiSweepResult,
+)
+from map_processing.cache_manager import CacheManagerSingleton
+from map_processing.graph_generator import GraphGenerator
+from map_processing.sweep import sweep_params
 
 
 NUM_PROCESSES = 10
@@ -85,7 +103,8 @@ def validate_analogous_params(
         else:
             alt_param_multiplicands_for_opt[opt_key] = opt_value[0](*opt_value[1])
 
-    # Get the data necessary to batch generate data sets and configure the parameter sweep over each of them
+    # Get the data necessary to batch generate data sets and configure the parameter
+    # sweep over each of them
     _, generate_params_list = GenerateParams.alt_generate_params_generator(
         alt_param_multiplicands=alt_param_multiplicands_for_generation,
         base_generate_params=base_generate_params,
@@ -98,8 +117,8 @@ def validate_analogous_params(
         alt_param_multiplicands=alt_param_multiplicands_for_opt
     )
 
-    # For each set of data generation parameters, generate NUM_REPEAT_GENERATE data sets and, for each of them, run an
-    # optimization parameter sweep.
+    # For each set of data generation parameters, generate NUM_REPEAT_GENERATE data sets
+    # and, for each of them, run an optimization parameter sweep.
     num_to_generate = len(generate_params_list) * num_repeat_generate
     max_num_prefix_digits = int(np.log10(num_to_generate))
     now_str = datetime.datetime.now().strftime(TIME_FORMAT)
@@ -112,7 +131,10 @@ def validate_analogous_params(
             num_zeros_to_prefix = max_num_prefix_digits - int(
                 np.log10(gen_param_idx + 1)
             )  # For printing messages
-            generate_param.map_id = f"batch_generated_{now_str}_{'0' * num_zeros_to_prefix}{gen_param_idx + 1}"
+            generate_param.map_id = (
+                f"batch_generated_{now_str}_{'0' * num_zeros_to_prefix}"
+            )
+            f"{gen_param_idx + 1}"
             gg = GraphGenerator(
                 path_from=data_set_generate_from, gen_params=generate_param
             )
@@ -135,7 +157,8 @@ def validate_analogous_params(
             )
             if verbose:
                 print(
-                    f"Generated and swept optimizations for {'0' * num_zeros_to_prefix}{gen_param_idx + 1}/"
+                    f"Generated and swept optimizations for "
+                    f"{'0' * num_zeros_to_prefix}{gen_param_idx + 1}/"
                     f"{num_to_generate}: {generate_param.dataset_name}"
                 )
         sweep_results_list.append(sweep_results_list_per_gen_params)
@@ -153,13 +176,15 @@ if __name__ == "__main__":
     )
     if len(matching_maps) == 0:
         print(
-            f"No matches for {PATH_FROM} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
+            f"No matches for {PATH_FROM} in recursive search of "
+            f"{CacheManagerSingleton.CACHE_PATH}"
         )
         exit(0)
     elif len(matching_maps) > 1:
         print(
-            f"More than one match for {PATH_FROM} found in recursive search of {CacheManagerSingleton.CACHE_PATH}. "
-            f"Will not batch-generate unless only one path is found."
+            f"More than one match for {PATH_FROM} found in recursive search of "
+            f"{CacheManagerSingleton.CACHE_PATH}. Will not batch-generate unless only "
+            "one path is found."
         )
         exit(0)
     # Acquire the data set from which the generated data sets are derived from

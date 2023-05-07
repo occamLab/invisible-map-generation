@@ -332,19 +332,16 @@ class Weights(BaseModel):
 
         if length == 1:  # ratio
             weights["orig_odom_tag_ratio"] = array[0]
-
         elif length == 2:  # tag/odom pose:rot/tag-sba x:y, ratio
             weights["orig_odometry"] = np.array([array[0]] * 3 + [1] * 3)
             weights["orig_tag"] = np.array([array[0]] * 3 + [1] * 3)
             weights["orig_tag_sba"] = np.array([array[0], 1])
             weights["odom_tag_ratio"] = array[1]
-
         elif length == 3:  # odom pose:rot, tag pose:rot/tag-sba x:y, ratio
             weights["orig_odometry"] = np.array([array[0]] * 3 + [1] * 3)
             weights["orig_tag"] = np.array([array[1]] * 3 + [1] * 3)
             weights["orig_tag_sba"] = np.array([array[1], 1])
             weights["odom_tag_ratio"] = array[2]
-
         elif (
             half_len == 2
         ):  # odom pose, odom rot, tag pose/tag-sba x, tag rot/tag-sba y, (ratio)
@@ -352,27 +349,22 @@ class Weights(BaseModel):
             weights["orig_tag"] = np.array([array[2]] * 3 + [array[3]] * 3)
             weights["orig_tag_sba"] = np.array(array[2:])
             weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
-
         elif half_len == 3:  # odom x y z qx qy, tag-sba x, (ratio)
             weights["orig_odometry"] = np.array(array[:5])
             weights["orig_tag_sba"] = np.array([array[5]])
             weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
-
         elif length == 4:  # odom, tag-sba, (ratio)
             weights["orig_odometry"] = np.array(array[:6])
             weights["orig_tag_sba"] = np.array(array[6:])
             weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
-
         elif length == 5:  # odom x y z qx qy, tag x y z qx qy, (ratio)
             weights["orig_odometry"] = np.array(array[:5])
             weights["orig_tag"] = np.array(array[5:])
             weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
-
         elif length == 6:  # odom, tag, (ratio)
             weights["orig_odometry"] = np.array(array[:6])
             weights["orig_tag"] = np.array(array[6:])
             weights["odom_tag_ratio"] = array[-1] if has_ratio else 1
-
         else:
             raise Exception(f"Weight length of {length} is not supported")
 
@@ -901,7 +893,6 @@ class GenerateParams(BaseModel):
 
         for i, param in enumerate(param_order):
             param_to_param_order_idx[param] = i
-
         (
             products_intermediate,
             generate_params_intermediate,
@@ -914,7 +905,6 @@ class GenerateParams(BaseModel):
         # Apply the linear and angular velocity variance values provided in alt_param_multiplicands.
         products_orig_space: List[Tuple[Any, ...]] = []
         generate_params_objects: List[GenerateParams] = []
-
         for product_pre, generate_param_pre in zip(
             products_intermediate, generate_params_intermediate
         ):
@@ -1804,6 +1794,19 @@ class OSweepResults(BaseModel):
                 "items in the sweep_config_keys_order list"
             )
         return v
+
+    # noinspection PyMethodParameters
+    # TODO: Inspect Issue with Validator
+    # @validator("gt_results_list")
+    # def validate_length_of_gt_results_list(cls, v, values):
+    #     gt_results_arr_shape = values["gt_results_arr_shape"]
+    #     expected_length = np.product(gt_results_arr_shape)
+    #     if len(v) != expected_length:
+    #         raise ValueError(
+    #             f"gt_results_list cannot be of length {len(v)} if gt_results_arr_shape is "
+    #             f"{gt_results_arr_shape} (expected length is {expected_length})"
+    #         )
+    #     return v
 
     @property
     def gt_results_list(self):

@@ -27,3 +27,5 @@ venv
 
 # Ignore rucha
 *.rucha
+
+.vscode/

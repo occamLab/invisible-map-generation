@@ -197,10 +197,8 @@ class CacheManagerSingleton:
     def upload(
         self, map_info: MapInfo, json_string: str, verbose: bool = False
     ) -> None:
-        """
-        Uploads the map json string into the Firebase __bucket under the path
-        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate
-        database reference.
+        """Uploads the map json string into the Firebase __bucket under the path
+        <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
         Notes:
             - Acquires the __synch_mutex (calling from another thread will block until this
@@ -394,7 +392,11 @@ class CacheManagerSingleton:
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH,
-                os.path.join(search_dirs[search_restriction], "**", pattern),
+                os.path.join(
+                    search_dirs[search_restriction],
+                    "**",
+                    pattern,
+                ),
             ),
             recursive=recursive,
         )
