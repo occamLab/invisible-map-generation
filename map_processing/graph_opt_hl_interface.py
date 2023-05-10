@@ -392,6 +392,8 @@ def optimize_graph(
             orig_odometry=before_opt_map.locations,
             opt_tag_verts=opt_result_map.tags,
             opt_tag_corners=opt_result_map.tagpoints,
+            orig_cloud_anchor=opt_result_map.cloud_anchors,
+            opt_cloud_anchor=before_opt_map.cloud_anchors,
             opt_waypoint_verts=(
                 opt_result_map.waypoints_metadata,
                 opt_result_map.waypoints_arr,

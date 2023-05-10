@@ -40,6 +40,7 @@ class VertexType(Enum):
     TAG = 1
     TAGPOINT = 2
     WAYPOINT = 3
+    CLOUD_ANCHOR = 4
 
 
 # noinspection GrazieInspection

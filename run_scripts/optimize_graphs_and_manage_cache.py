@@ -120,6 +120,12 @@ def make_parser() -> argparse.ArgumentParser:
         default=False,
     )
     p.add_argument(
+        "-ca",
+        action="store_true",
+        help="Optimize Graph with Cloud Anchors",
+        default=False,
+    )
+    p.add_argument(
         "-c",
         action="store_true",
         help="Compare graph optimizations by computing two different optimizations for two"
@@ -224,8 +230,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.c and (args.F or args.s):
-        print("Mutually exclusive flags with -c used")
-        exit(-1)
+        raise ValueError("Mutually exclusive flags with -c used")
+
+    if args.ca and (args.pso == PrescalingOptEnum.USE_SBA.value or not args.s):
+        raise ValueError(
+            "Cloud Anchors are currently only supported in no SBA parameter sweeps"
+        )
 
     # Fetch the service account key JSON file contents
     env_variable = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -283,6 +293,7 @@ if __name__ == "__main__":
                 num_processes=args.np,
                 upload_best=args.F,
                 cms=cms,
+                use_cloud_anchors=args.ca,
             )
 
         # If you simply want to run the optimizer with specified weights

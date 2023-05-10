@@ -107,6 +107,8 @@ def plot_optimization_result(
     orig_odometry: np.ndarray,
     opt_tag_verts: np.ndarray,
     opt_tag_corners: np.ndarray,
+    opt_cloud_anchor: np.ndarray,
+    orig_cloud_anchor: np.ndarray,
     opt_waypoint_verts: Tuple[List, np.ndarray],
     orig_tag_verts: Optional[np.ndarray] = None,
     ground_truth_tags: Optional[List[SE3Quat]] = None,
@@ -264,7 +266,7 @@ def plot_optimization_result(
         )
         plt.plot(
             opt_odometry[:, 0],
-            orig_odometry[:, 1],
+            opt_odometry[:, 1],
             opt_odometry[:, 2],
             "-",
             label="Optimized Odom Vertices",
@@ -288,6 +290,40 @@ def plot_optimization_result(
             linewidth=0.75,
             c="b",
         )
+
+    if three_dimensional:
+        plt.scatter(
+            opt_cloud_anchor[:, 0],
+            opt_cloud_anchor[:, 1],
+            opt_cloud_anchor[:, 2],
+            facecolors="none",
+            edgecolors="r",
+            label="Optimized Cloud Anchors",
+        )
+        plt.scatter(
+            orig_cloud_anchor[:, 0],
+            orig_cloud_anchor[:, 1],
+            orig_cloud_anchor[:, 2],
+            facecolors="none",
+            edgecolors="y",
+            label="Raw Cloud Anchors",
+        )
+    else:
+        plt.scatter(
+            opt_cloud_anchor[:, 0],
+            opt_cloud_anchor[:, 2],
+            facecolors="none",
+            edgecolors="r",
+            label="Optimized Cloud Anchors",
+        )
+        plt.scatter(
+            orig_cloud_anchor[:, 0],
+            orig_cloud_anchor[:, 2],
+            facecolors="none",
+            edgecolors="y",
+            label="Raw Cloud Anchors",
+        )
+
     plt.legend(bbox_to_anchor=(1.05, 1), fontsize="small")
     axis_equal(ax, three_dimensional)
     plt.gcf().set_dpi(300)
@@ -303,8 +339,10 @@ def axis_equal(ax: plt.Axes, three_dimensional: bool):
     Args:
         ax: Matplotlib Axes object
     """
+
     def axis_range_from_limits(limits):
         return limits[1] - limits[0]
+
     max_range = np.max(
         np.array(
             [

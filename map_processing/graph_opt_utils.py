@@ -55,6 +55,7 @@ def optimizer_to_map(
     tagpoints = []
     tags = []
     waypoints = []
+    cloud_anchors = []
     waypoint_metadata = []
     exaggerate_tag_corners = True
     for i in optimizer.vertices():
@@ -96,6 +97,9 @@ def optimizer_to_map(
                 pose_with_metadata = np.concatenate([pose, [i]])
                 waypoints.append(pose_with_metadata)
                 waypoint_metadata.append(vertices[i].meta_data)
+            elif mode == VertexType.CLOUD_ANCHOR:
+                pose_with_metadata = np.concatenate([pose, [i]])
+                cloud_anchors.append(pose_with_metadata)
     locations_arr = np.array(locations)
     locations_arr = (
         locations_arr[locations_arr[:, -1].argsort()]
@@ -105,12 +109,16 @@ def optimizer_to_map(
     tags_arr = np.array(tags) if len(tags) > 0 else np.zeros((0, 8))
     tagpoints_arr = np.array(tagpoints) if len(tagpoints) > 0 else np.zeros((0, 3))
     waypoints_arr = np.array(waypoints) if len(waypoints) > 0 else np.zeros((0, 8))
+    cloud_anchors_arr = (
+        np.array(cloud_anchors) if len(cloud_anchors) > 0 else np.zeros((0, 8))
+    )
     return OG2oOptimizer(
         locations=locations_arr,
         tags=tags_arr,
         tagpoints=tagpoints_arr,
         waypoints_arr=waypoints_arr,
         waypoints_metadata=waypoint_metadata,
+        cloud_anchors=cloud_anchors_arr,
     )
 
 
