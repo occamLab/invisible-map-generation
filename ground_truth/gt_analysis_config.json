@@ -1,44 +1,7 @@
 {
-    "mac_full":
-    {
-        "RTABMAP_DATA_PATH" : "MAC_2_3_FULL_RPY.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_MAC_2_3.json",
-        "PROCESSED_GRAPH_DATA_PATH": ""
-    },
-    "desnat":
-    {
-        "RTABMAP_DATA_PATH" : "DESNAT_RPY.txt",
+    "desnat": {
+        "RTABMAP_DATA_PATH": "DESNAT_RPY.txt",
         "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_desnat.json",
         "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/desnat_test 877155274903541.json"
-    },
-    "occam":
-    {
-        "RTABMAP_DATA_PATH" : "OCCAM_RPY.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_occam_rtab.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/pmgcjnDP0DfvDiwwlKdp9KIM2cC3/occa-no-0 1731960600836333.json"
-    },
-    "mac_1_2":
-    {
-        "RTABMAP_DATA_PATH" : "mac_1_2.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_1_2.json",
-        "PROCESSED_GRAPH_DATA_PATH": ""
-    },
-    "robolab":
-    {
-        "RTABMAP_DATA_PATH" : "mac_1_2.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_1_2.json",
-        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/rcoUcRDVoKf0y5ahbK6jMLtMYx72/robolab_straight_on.json"
-    },
-    "wh4":
-    {
-        "RTABMAP_DATA_PATH" : "wh_4.txt",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_wh4.json",
-        "PROCESSED_GRAPH_DATA_PATH": ""
-    },
-    "mac_2":
-    {
-        "RTABMAP_DATA_PATH" : "mac_2.g2o",
-        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_mac_2.json",
-        "PROCESSED_GRAPH_DATA_PATH": ""
     }
 }
