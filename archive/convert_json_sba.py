@@ -217,10 +217,10 @@ def as_graph(dct, fix_tag_vertices=False):
             )
             # TODO: create proper subclasses
             for k, point in enumerate(true_3d_points):
-                SE3Quat(tag_edge_measurements[tag_index]) * (
+                point_in_camera_frame = SE3Quat(tag_edge_measurements[tag_index]) * (
                     point - np.array([0, 0, 1])
                 )
-                CameraParameters(
+                cam = CameraParameters(
                     camera_intrinsics_for_tag[tag_index][0],
                     camera_intrinsics_for_tag[tag_index][2:],
                     0,

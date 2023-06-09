@@ -1,5 +1,6 @@
 """
-Utilities for manipulating transformations and providing other helpful matrix operations.
+Utilities for manipulating transformations and providing other helpful matrix
+operations.
 """
 
 from typing import List
@@ -91,8 +92,8 @@ def quat_to_angle_axis(quat: Quaternion) -> Tuple[float, np.ndarray]:
         quat: A Quaternion object.
 
     Returns:
-        A tuple whose first element contains the angle of rotation and the second element contains the axis of the
-         rotation as a 3-element numpy array.
+        A tuple whose first element contains the angle of rotation and the second
+         element contains the axis of the rotation as a 3-element numpy array.
     """
     half_theta = np.arccos(quat.w())
     if half_theta == 0:
@@ -116,7 +117,8 @@ def transform_vector_to_matrix(transform_vector: np.ndarray) -> np.ndarray:
     """Convert a vectorized transform into a transform matrix.
 
     Args:
-        transform_vector: 7-element vector in the form of [x_trans, y_trans, z_trans, rot_x, rot_y, rot_z, rot_w]
+        transform_vector: 7-element vector in the form of
+         [x_trans, y_trans, z_trans, rot_x, rot_y, rot_z, rot_w]
 
     Returns:
         4x4 matrix containing the corresponding homogenous transform.
@@ -146,9 +148,11 @@ def pose_to_isometry(pose: np.ndarray) -> g2o.Isometry3d:
     """Convert a pose vector to a g2o.Isometry3d object.
 
     Args:
-        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
+        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw
+         respectively.
     Returns:
-        A :class: g2o.Isometry3d instance encoding the same information as the input pose.
+        A :class: g2o.Isometry3d instance encoding the same information as the input
+         pose.
     """
     return g2o.Isometry3d(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
@@ -157,9 +161,11 @@ def pose_to_se3quat(pose: np.ndarray) -> g2o.Isometry3d:
     """Convert a pose vector to a g2o.Isometry3d object.
 
     Args:
-        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw respectively.
+        pose: A 7 element 1-d numpy array encoding x, y, z, qx, qy, qz, and qw
+         respectively.
     Returns:
-        A :class: g2o.Isometry3d instance encoding the same information as the input pose.
+        A :class: g2o.Isometry3d instance encoding the same information as the input
+         pose.
     """
     return g2o.SE3Quat(g2o.Quaternion(*np.roll(pose[3:7], 1)), pose[:3])
 
@@ -178,10 +184,12 @@ def isometry_to_pose(isometry: g2o.Isometry3d) -> np.ndarray:
 def global_yaw_effect_basis(
     rotation: scipy.spatial.transform.Rotation, gravity_axis: str = "z"
 ):
-    """Form a basis which describes the effect of a change in global yaw on a local transform_vector's qx, qy, and qz.
+    """Form a basis which describes the effect of a change in global yaw on a local
+    transform_vector's qx, qy, and qz.
 
-    Since the accelerometer measures gravitational acceleration, it can accurately measure the global z-axis but its
-    transform_vector of the orthogonal axis are less reliable.
+    Since the accelerometer measures gravitational acceleration, it can accurately
+     measure the global z-axis but its transform_vector of the orthogonal axis are
+     less reliable.
 
     Args:
         rotation: A :class: scipy.spatial.transform.Rotation encoding a local rotation.
@@ -199,9 +207,10 @@ def invert_array_of_se3_vectors(array_of_se3_vectors: np.ndarray) -> np.ndarray:
     """Invert the transforms contained in the input.
 
     Args:
-        array_of_se3_vectors: Expected to be a nx7+ array of n transforms. The first 7 elements of each row are treated
-         as a vectorized SE3 transform, which is to be inverted. Any additional elements beyond the first 7 in each row
-         are not modified.
+        array_of_se3_vectors: Expected to be a nx7+ array of n transforms. The first
+         7 elements of each row are treated as a vectorized SE3 transform, which is to
+         be inverted. Any additional elements beyond the first 7 in each row are not
+         modified.
 
     Returns:
         The modified input array.
@@ -214,13 +223,16 @@ def invert_array_of_se3_vectors(array_of_se3_vectors: np.ndarray) -> np.ndarray:
 
 
 def transform_matrix_to_vector(pose: np.ndarray, invert=False) -> np.ndarray:
-    """Convert a pose/multiple poses in homogenous transform matrix form to [x, y, z, qx, qy, qz, qw].
+    """Convert a pose/multiple poses in homogenous transform matrix form to
+    [x, y, z, qx, qy, qz, qw].
 
     Args:
-        pose (np.ndarray): Pose or array of poses in matrix form. The poses are converted along the last two axes.
-        invert (bool): If inverted, then the return enum_value will be inverted
+        pose (np.ndarray): Pose or array of poses in matrix form. The poses are
+         converted along the last two axes. invert (bool): If inverted, then the
+         return enum_value will be inverted
     Returns:
-      Converted pose or array of poses (the output has one fewer dimensions than the input)
+      Converted pose or array of poses (the output has one fewer dimensions than the
+       input)
     """
     translation = pose[..., :3, 3]
     if pose.shape[0] != 0:
@@ -257,16 +269,17 @@ def pose2diffs(poses):
 
 
 def make_sba_tag_arrays(tag_size) -> Tuple[np.ndarray, np.ndarray]:
-    """Generate tag coordinates given a specified tag size (assuming relative to a reference frame 1 m in front of the
-    tag).
+    """Generate tag coordinates given a specified tag size (assuming relative to a
+    reference frame 1 m in front of the tag).
 
     Args:
         tag_size: Size of the square tag's side length.
 
     Returns:
-        true_3d_tag_points: A 4x3 array of the tag's 4 xyz coordinates in the reference frame that is offset from the
-         center of the tag by -1 in the Z axis. Order of tags is bottom-left, bottom-right, top-right, and top-left.
-        true_tag_center: The length-3 vector containing (0, 0, 1).
+        true_3d_tag_points: A 4x3 array of the tag's 4 xyz coordinates in the reference
+         frame that is offset from the center of the tag by -1 in the Z axis. Order of
+         tags is bottom-left, bottom-right, top-right, and top-left. true_tag_center:
+         The length-3 vector containing (0, 0, 1).
     """
     pos_tag_sz_div_2 = tag_size / 2
     neg_tag_sz_div_2 = -pos_tag_sz_div_2
@@ -326,9 +339,10 @@ def transform_gt_to_have_common_reference(
          T
           b
 
-        to give the transform to b in the reference frame of a (i.e., the above can be read as a matrix T with left-
-        superscript denoting the reference frame that the transform to b is in, with b being a subscript). The
-        following denotes an inversion of the above matrix:
+        to give the transform to b in the reference frame of a (i.e., the above can
+        be read as a matrix T with left-superscript denoting the reference frame that
+        the transform to b is in, with b being a subscript). The following denotes an
+        inversion of the above matrix:
 
         a -1
          T
@@ -343,15 +357,17 @@ def transform_gt_to_have_common_reference(
 
         # Finding the Ground Truth Data in the Global Reference Frame
 
-        To find the transform of each ith ground truth tag in the global reference frame, we need to compute:
+        To find the transform of each ith ground truth tag in the global reference
+        frame, we need to compute:
 
         G       G      ta      G'
          T    =  T   *   T   *   T
           t*i     ta      G'       t*i
 
-        We do so by specifying that the transform from ta to G' is the identity. This requires the ground truth data
-        to be transformed such that t*a is at the origin of G'. Therefore, we define a new set of ground truth tag
-        transforms, where the ith transform is:
+        We do so by specifying that the transform from ta to G' is the identity. This
+        requires the ground truth data to be transformed such that t*a is at the origin
+        of G'. Therefore, we define a new set of ground truth tag transforms, where the
+        ith transform is:
 
         G'         G' -1    G'
           T'    :=   T    *   T

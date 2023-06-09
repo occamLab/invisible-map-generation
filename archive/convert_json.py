@@ -56,13 +56,13 @@ def as_graph(dct):
             ]
         )
 
-        np.vstack(
+        tag_position_variances = np.vstack(
             [
                 [x["tagPositionVariance"] for x in tagsFromFrame]
                 for tagsFromFrame in dct["tag_data"]
             ]
         )
-        np.vstack(
+        tag_orientation_variances = np.vstack(
             [
                 [x["tagOrientationVariance"] for x in tagsFromFrame]
                 for tagsFromFrame in dct["tag_data"]
@@ -74,8 +74,8 @@ def as_graph(dct):
         pose_ids = np.zeros((0, 1), type=np.int)
         tag_joint_covar = np.zeros((0, 49), type=np.double)
 
-        np.zeros((0, 3), type=np.double)
-        np.zeros((0, 4), type=np.double)
+        tag_position_variances = np.zeros((0, 3), type=np.double)
+        tag_orientation_variances = np.zeros((0, 4), type=np.double)
 
     tag_edge_measurements_matrix = np.matmul(
         camera_to_odom_transform, tag_pose_flat.reshape(-1, 4, 4)

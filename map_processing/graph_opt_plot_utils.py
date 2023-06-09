@@ -2,7 +2,7 @@
 Plotting utilities for graph optimization.
 """
 
-from typing import *
+from typing import Union, List, Optional, Tuple
 
 import numpy as np
 from g2o import SE3Quat

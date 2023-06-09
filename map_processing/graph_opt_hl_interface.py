@@ -11,7 +11,8 @@ from enum import Enum
 from typing import Optional, Dict, Union, Tuple, Set
 
 import numpy as np
-from geneticalgorithm import geneticalgorithm as ga
+
+# from geneticalgorithm import geneticalgorithm as ga
 
 from . import PrescalingOptEnum, VertexType, graph_opt_utils, graph_opt_plot_utils
 from .cache_manager import CacheManagerSingleton, MapInfo
@@ -268,28 +269,28 @@ def optimize_weights(map_json_path: str, verbose: bool = True) -> np.ndarray:
         "This function has not been updated to work with the new way that ground truth data"
         "is being handled"
     )
-    map_dct = self._cms.map_info_from_path(map_json_path).map_dct
-    Graph.as_graph(map_dct)
+    # map_dct = self._cms.map_info_from_path(map_json_path).map_dct
+    # Graph.as_graph(map_dct)
 
-    # Use a genetic algorithm
-    model = ga(
-        function=lambda x: 0.0,  # TODO: replace this placeholder with invocation of the ground truth metric
-        dimension=8,
-        variable_type="real",
-        variable_boundaries=np.array([[-10, 10]] * 8),
-        algorithm_parameters={
-            "max_num_iteration": 2000,
-            "population_size": 50,
-            "mutation_probability": 0.1,
-            "elit_ratio": 0.01,
-            "crossover_probability": 0.5,
-            "parents_portion": 0.3,
-            "crossover_type": "uniform",
-            "max_iteration_without_improv": None,
-        },
-    )
-    model.run()
-    return model.report
+    # # Use a genetic algorithm
+    # model = ga(
+    #     function=lambda x: 0.0,  # TODO: replace this placeholder with invocation of the ground truth metric
+    #     dimension=8,
+    #     variable_type="real",
+    #     variable_boundaries=np.array([[-10, 10]] * 8),
+    #     algorithm_parameters={
+    #         "max_num_iteration": 2000,
+    #         "population_size": 50,
+    #         "mutation_probability": 0.1,
+    #         "elit_ratio": 0.01,
+    #         "crossover_probability": 0.5,
+    #         "parents_portion": 0.3,
+    #         "crossover_type": "uniform",
+    #         "max_iteration_without_improv": None,
+    #     },
+    # )
+    # model.run()
+    # return model.report
 
 
 def create_subgraphs_for_subgraph_chi2_comparison(

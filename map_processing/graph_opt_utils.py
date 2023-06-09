@@ -246,7 +246,7 @@ def get_chi2_of_edge(
 def sum_optimizer_edges_chi2(
     optimizer: g2o.SparseOptimizer,
     edge_type_filter: Optional[
-        Set[Type[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]]
+        Set[Union[Type[Union[EdgeProjectPSI2UV, EdgeSE3Expmap, EdgeSE3Gravity]]]]
     ] = None,
 ) -> Tuple[float, float]:
     """Iterates through edges in the g2o sparse optimizer object and sums the chi2 values for all the edges.

@@ -21,8 +21,7 @@ def locations_from_transforms(locations):
 
 def axis_equal(ax):
     # Create cubic bounding box to simulate equal aspect ratio
-    def axis_range_from_limits(limits):
-        return limits[1] - limits[0]
+    axis_range_from_limits = lambda limits: limits[1] - limits[0]
     max_range = np.array(
         [
             axis_range_from_limits(ax.get_xlim()),
@@ -71,7 +70,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
         ]
     )
 
-    np.array(
+    trust_odom = np.array(
         [
             -3.0,
             -3.0,
@@ -94,7 +93,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
         ]
     )
 
-    np.array(
+    trust_tags = np.array(
         [
             10,
             10,
@@ -227,7 +226,7 @@ def optimize_map(x, tune_weights=False, visualize=False):
             ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
         # plt.plot(all_tags[:, 0], all_tags[:, 1], all_tags[:, 2], '.', c='g', label='All Tag Edges')
         # plt.plot(all_tags_original[:, 0], all_tags_original[:, 1], all_tags_original[:, 2], '.', c='m', label='All Tag Edges Original')
-        compare_std_dev(all_tags, all_tags_original)
+        tag_edge_std_dev_before_and_after = compare_std_dev(all_tags, all_tags_original)
         tag_vertex_shift = original_tag_verts - tag_verts
         print("tag_vertex_shift", tag_vertex_shift)
         plt.legend()
