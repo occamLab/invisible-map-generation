@@ -1,0 +1,7 @@
+{
+    "desnat": {
+        "RTABMAP_DATA_PATH": "DESNAT_RPY.txt",
+        "OUTPUTTED_JSON_PATH": "../.cache/ground_truth/gt_desnat.json",
+        "PROCESSED_GRAPH_DATA_PATH": "../.cache/TestProcessed/rawMapData/oPhkk9oH94eXuwyBeDu07Xsoofj1/desnat_test 877155274903541.json"
+    }
+}

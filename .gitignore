@@ -1,4 +1,5 @@
 *.pyc
+__pycache__
 math.tex
 *adminsdk*.json
 
@@ -22,4 +23,10 @@ venv
 
 /saved_sweeps/**/*sweep.*
 
+*debug.txt
+
+# Ignore rucha
+*.rucha
+
 .vscode/
+.ruff_cache/

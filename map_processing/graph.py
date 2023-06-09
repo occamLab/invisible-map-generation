@@ -252,19 +252,21 @@ class Graph:
         opt_gravity_chi2 = graph_opt_utils.sum_optimizer_edges_chi2(
             self.optimized_graph, edge_type_filter={EdgeSE3Gravity}
         )[0]
-
-        chi2_result = OResultFitnessMetrics(
-            chi2_all_before=pre_opt_chi2,
-            alpha_all_before=pre_opt_alpha,
-            se3_not_gravity_before=pre_opt_se3_chi2,
-            psi2uv_before=pre_opt_psi2uv_chi2,
-            gravity_before=pre_opt_gravity_chi2,
-            chi2_all_after=opt_chi2,
-            alpha_all_after=opt_alpha,
-            se3_not_gravity_after=opt_se3_chi2,
-            psi2uv_after=opt_psi2uv_chi2,
-            gravity_after=opt_gravity_chi2,
-        )
+        try:
+            chi2_result = OResultFitnessMetrics(
+                chi2_all_before=pre_opt_chi2,
+                alpha_all_before=pre_opt_alpha,
+                se3_not_gravity_before=pre_opt_se3_chi2,
+                psi2uv_before=pre_opt_psi2uv_chi2,
+                gravity_before=pre_opt_gravity_chi2,
+                chi2_all_after=opt_chi2,
+                alpha_all_after=opt_alpha,
+                se3_not_gravity_after=opt_se3_chi2,
+                psi2uv_after=opt_psi2uv_chi2,
+                gravity_after=opt_gravity_chi2,
+            )
+        except pydantic.ValidationError:
+            raise RuntimeError("Pydantic Validation Error")
         return chi2_result
 
     def graph_to_optimizer(self) -> SparseOptimizer:
@@ -571,7 +573,7 @@ class Graph:
 
         num_odom_edges = 0
         num_tag_edges = 0
-        for edge_id, edge in self.edges.items():
+        for edge in self.edges.values():
             if edge.get_end_vertex_type(self.vertices) == VertexType.ODOMETRY:
                 num_odom_edges += 1
             elif edge.get_end_vertex_type(self.vertices) in (
@@ -1159,6 +1161,7 @@ class Graph:
                         SE3Quat(vertices[waypoint_vertex_id].estimate)
                         * SE3Quat(vertices[current_odom_vertex_uid].estimate).inverse()
                     ).to_vector()
+                    data_set.tag_corners = tag_corners
                 else:
                     measurement_arg = waypoint_edge_measurements[waypoint_index]
                 edges[edge_counter] = Edge(
@@ -1232,6 +1235,8 @@ class Graph:
         resulting_graph = Graph(
             edges, is_sba=use_sba, use_huber=False, huber_delta=None
         )
+
+        # Create file with sba optimized pixel corners per tag
         return resulting_graph
 
     @staticmethod

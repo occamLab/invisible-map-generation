@@ -49,33 +49,36 @@ class MapInfo:
 
 class CacheManagerSingleton:
     """
-    Handles caching for graphs (primarily though downloading/uploading to/from Firebase and local caching of
-    synthetically generated graphs).
+    Handles caching for graphs (primarily though downloading/uploading to/from Firebase and local
+    caching of synthetically generated graphs).
 
     Notes:
         Implemented as a singleton
 
     Class Attributes:
-        UNPROCESSED_MAPS_PARENT: Simultaneously specifies database reference to listen to in the firebase_listen
-         method and the cache location of any maps associated with that database reference.
-        PROCESSED_UPLOAD_TO: Simultaneously specifies Firebase bucket path to upload processed graphs to and the
-         cache location of processed graphs.
+        UNPROCESSED_MAPS_PARENT: Simultaneously specifies database reference to listen to in the
+            firebase_listen method and the cache location of any maps associated with that database
+            reference.
+        PROCESSED_UPLOAD_TO: Simultaneously specifies Firebase bucket path to upload processed
+            graphs to and the cache location of processed graphs.
         __app_initialize_dict: Used for initializing the app attribute
-        CACHE_PATH: String representing the absolute path to the cache folder. The cache path is evaluated to
-         always be located at <path to this file>.cache/
+        CACHE_PATH: String representing the absolute path to the cache folder. The cache path is
+            evaluated to always be located at <path to this file>.cache/
 
     Attributes:
-        __app: Firebase App initialized with a service account, granting admin privileges. Shared across all instances
-         of this class (only initialized once).
+        __app: Firebase App initialized with a service account, granting admin privileges. Shared
+            across all instances of this class (only initialized once).
         __bucket: Handle to the Google Cloud Storage __bucket
-        __db_ref: Database reference representing the node as specified by the GraphManager._unprocessed_listen_to
-         class attribute selected_weights (np.ndarray): Vector selected from the GraphManager.WEIGHTS_DICT
-        __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every time an event is raised
-         by the listener.
-        __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one thread to access the
-         timer resetting code at a time.
-        __max_listen_wait: Amount of time to set the _listen_kill_timer. Any non-positive value results in indefinite
-         listening (i.e., the timer not being set).
+        __db_ref: Database reference representing the node as specified by the
+            GraphManager._unprocessed_listen_to
+        class attribute selected_weights (np.ndarray): Vector selected from the
+            GraphManager.WEIGHTS_DICT
+        __listen_kill_timer: Timer that, when expires, exits the firebase listening. Reset every
+            time an event is raised by the listener.
+        __timer_mutex: Semaphore used in _firebase_get_and_cache_unprocessed_map to only allow one
+            thread to access the timer resetting code at a time.
+        __max_listen_wait: Amount of time to set the _listen_kill_timer. Any non-positive value
+            results in indefinite listening (i.e., the timer not being set).
     """
 
     __instance = None
@@ -85,21 +88,26 @@ class CacheManagerSingleton:
     }
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
+    GENERATED_MAPS_PARENTS: str = "generated"
     PROCESSED_UPLOAD_TO: str = "TestProcessed"
+    SWEEP_PROCESSED_UPLOAD_TO: str = "SweepProcessed"
     GROUND_TRUTH_PARENT: str = "ground_truth"
     SWEEP_RESULTS_PARENT: str = "sweep_results"
     PGT_VALIDATION_RESULTS_PARENT: str = "pgt_validation_results"
     GROUND_TRUTH_MAPPING_FILE_NAME = "ground_truth_mapping.json"
+    FIREBASE_CONFIG_FILE_NAME = "firebase_device_config.json"
+    CONFIG_PATH = "configs"
 
     CACHE_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "../.cache")
     GROUND_TRUTH_PATH = os.path.join(CACHE_PATH, GROUND_TRUTH_PARENT)
     GROUND_TRUTH_MAPPING_PATH = os.path.join(
-        GROUND_TRUTH_PATH, GROUND_TRUTH_MAPPING_FILE_NAME
+        CONFIG_PATH, GROUND_TRUTH_MAPPING_FILE_NAME
     )
     SWEEP_RESULTS_PATH: str = os.path.join(CACHE_PATH, SWEEP_RESULTS_PARENT)
     PGT_VALIDATION_RESULTS_PATH: str = os.path.join(
         CACHE_PATH, PGT_VALIDATION_RESULTS_PARENT
     )
+    FIREBASE_CONFIG_PATH = os.path.join(CONFIG_PATH, FIREBASE_CONFIG_FILE_NAME)
 
     def __init__(
         self,
@@ -108,10 +116,12 @@ class CacheManagerSingleton:
     ):
         """
         Args:
-            firebase_creds: Firebase credentials. If not set in the initializer, then later functionality that depends
-             on communication with Firebase will break until the credentials are
-            max_listen_wait: Sets the timer to this amount every time listener produces an event. When the timer
-             expires, the firebase listening function exits. If negative, then it listens indefinitely.
+            firebase_creds: Firebase credentials. If not set in the initializer, then later
+                functionality that depends on communication with Firebase will break until the
+                credentials are
+            max_listen_wait: Sets the timer to this amount every time listener produces an event.
+                When the timer expires, the firebase listening function exits. If negative, then it
+                listens indefinitely.
         """
         self.__synch_mutex: Semaphore = Semaphore()
 
@@ -152,8 +162,9 @@ class CacheManagerSingleton:
 
         Args:
             max_wait_override: Sets the __max_listen_wait attribute if not none.
-            callback: Callback function for when a firebase event occurs (through the listen method). If none is
-             provided, then the default map_info_callback of get_map_from_unprocessed_map_event is used.
+            callback: Callback function for when a firebase event occurs (through the listen
+                method). If none is provided, then the default map_info_callback of
+                get_map_from_unprocessed_map_event is used.
         """
         with self.__synch_mutex:
             if isinstance(max_wait_override, int):
@@ -190,7 +201,8 @@ class CacheManagerSingleton:
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
         Notes:
-            - Acquires the __synch_mutex (calling from another thread will block until this completes).
+            - Acquires the __synch_mutex (calling from another thread will block until this
+              completes).
             - Note that no exception catching is implemented.
 
         Args:
@@ -207,7 +219,8 @@ class CacheManagerSingleton:
             )
             if verbose:
                 print(
-                    f"Attempting to upload {map_info.map_json_blob_name} to the __bucket blob {processed_map_full_path}"
+                    f"Attempting to upload {map_info.map_name} to the __bucket blob \
+                     {processed_map_full_path}"
                 )
 
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
@@ -244,10 +257,10 @@ class CacheManagerSingleton:
         """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
 
         Arguments:
-            event: A firebase event corresponding a single unprocessed map (event.data is a string) or to a dictionary
-             of unprocessed maps (event.data is a dictionary).
-            map_info_callback: For every MapInfo object created, invoke this callback and pass the MapInfo object as the
-             argument.
+            event: A firebase event corresponding a single unprocessed map (event.data is a string)
+                or to a dictionary of unprocessed maps (event.data is a dictionary).
+            map_info_callback: For every MapInfo object created, invoke this callback and pass the
+                MapInfo object as the argument.
             ignore_dict: If true, no action is taken if `event.data` is a dictionary.
             override_all: If true, reprocess every map in firebase.
         """
@@ -311,8 +324,9 @@ class CacheManagerSingleton:
         Parses a json file into a MapInfo instance.
 
         Args:
-            map_json_path: Path to the json file. If the path is not an absolute path, then the cache directory is
-             prepended. If this path does not end with ".json", then ".json" is appended.
+            map_json_path: Path to the json file. If the path is not an absolute path, then the
+                cache directory is prepended. If this path does not end with ".json", then ".json"
+                is appended.
 
         Returns:
             MapInfo instance if the specified file exists and is a json file (and None otherwise)
@@ -348,7 +362,9 @@ class CacheManagerSingleton:
         return MapInfo(map_name, map_json_blob_name, map_dct, last_folder)
 
     @staticmethod
-    def find_maps(pattern: str, search_only_unprocessed: bool = True) -> Set[MapInfo]:
+    def find_maps(
+        pattern: str, search_restriction: int = 0, paths: bool = False
+    ) -> Set[MapInfo]:
         """Returns a set MapInfo objects matching the provided pattern through a recursive search of the cache
         directory.
 
@@ -357,25 +373,36 @@ class CacheManagerSingleton:
 
         Args:
             pattern: Pattern to match map file paths in any subdirectory of the cache to.
-            search_only_unprocessed: Only search in the cache subdirectory specified by the UNPROCESSED_MAPS_PARENT
-             class attribute.
+            search_restriction: Determines which directory to search within.
+                0: UNPROCESSED_MAPS_PARENT
+                1: Entire cache folder
+                2: GENERATED_MAPS_PARENT
 
         Returns:
             Set of matched files as absolute file paths
         """
+        recursive = True
+
+        search_dirs = {
+            0: CacheManagerSingleton.UNPROCESSED_MAPS_PARENT,
+            1: "",
+            2: CacheManagerSingleton.GENERATED_MAPS_PARENTS,
+        }
+
         matching_filepaths = glob.glob(
             os.path.join(
                 CacheManagerSingleton.CACHE_PATH,
                 os.path.join(
-                    CacheManagerSingleton.UNPROCESSED_MAPS_PARENT
-                    if search_only_unprocessed
-                    else "",
+                    search_dirs[search_restriction],
                     "**",
                     pattern,
                 ),
             ),
-            recursive=True,
+            recursive=recursive,
         )
+
+        if paths:
+            return matching_filepaths
 
         matches: Set[MapInfo] = set()
         for match in matching_filepaths:
@@ -604,6 +631,9 @@ class CacheManagerSingleton:
         if not os.path.exists(CacheManagerSingleton.SWEEP_RESULTS_PATH):
             os.mkdir(CacheManagerSingleton.SWEEP_RESULTS_PATH)
 
+        if sr.sweep_args is not None:
+            sr.sweep_args = None
+
         with open(
             os.path.join(CacheManagerSingleton.SWEEP_RESULTS_PATH, file_name), "w"
         ) as f:
@@ -741,6 +771,18 @@ class CacheManagerSingleton:
             self.__bucket = storage.bucket(app=self.__app)
             self.__db_ref = db.reference(f"/{self.UNPROCESSED_MAPS_PARENT}")
             self.__were_credentials_set = True
+
+    def download_maps_for_device(self, device_id_name: str):
+        """Download all maps for firebase for the specified device_id_name"""
+        device_config_file = open(self.FIREBASE_CONFIG_PATH, "r")
+        device_config = json.loads(device_config_file.read())
+        if device_id_name not in device_config.keys():
+            raise KeyError(
+                "User specified device_id_name that is not in firebase_device_config"
+            )
+        device_id = device_config[device_id_name]
+        map_info = db.reference(f"{self.UNPROCESSED_MAPS_PARENT}/{device_id}").get()
+        return self._download_all_maps_recur(map_info=map_info)
 
     def _download_all_maps_recur(
         self, map_info: Union[Dict[str, Dict], None] = None, uid: str = None

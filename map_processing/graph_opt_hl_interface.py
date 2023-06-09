@@ -31,6 +31,7 @@ class WeightSpecifier(Enum):
     TRUST_GRAVITY = 7
 
 
+# Testing dicts for different weight defaults
 WEIGHTS_DICT: Dict[WeightSpecifier, Weights] = {  # TODO: revisit these
     WeightSpecifier.SENSIBLE_DEFAULT_WEIGHTS: Weights(
         orig_odometry=np.array([-6.0, -6.0, -6.0, -6.0, -6.0, -6.0]),
@@ -38,9 +39,9 @@ WEIGHTS_DICT: Dict[WeightSpecifier, Weights] = {  # TODO: revisit these
         orig_tag_sba=np.array([18, 18]),
     ),
     WeightSpecifier.TRUST_ODOM: Weights(
-        orig_odometry=np.array([-3.0, -3.0, -3.0, -3.0, -3.0, -3.0]),
+        orig_odometry=np.array([1.0, 1.0, 1.0, 0.01, 0.01, 0.01]),
         orig_tag=np.array([10.6, 10.6, 10.6, 10.6, 10.6, 10.6]),
-        orig_tag_sba=np.array([10.6, 10.6]),
+        orig_tag_sba=np.array([10**7, 10**7]),
     ),
     WeightSpecifier.TRUST_TAGS: Weights(
         orig_odometry=np.array([10, 10, 10, 10, 10, 10]),
@@ -76,10 +77,10 @@ def holistic_optimize(
 
     Args:
         map_info: Graph to process.
-        pso: TODO
-        oconfig: TODO
+        pso: determines if you're using a sparse optimizer or not, if no, takes in a covariance matrix
+        oconfig: the "optimization configuration" that dictates the mechanics and cosmetic qualities of the optimization graph. CONTAINS THE WEIGHTS
         fixed_vertices: Parameter to pass to the Graph.as_graph class method (see more there)
-        cms: TODO
+        cms: Handles downloading and uploading to/from Firebase.
         gt_data: If provided, used in the downstream optimization visualization and in ground truth metric
          computation.
         verbose: Toggles print statements within this function and passed as the verbose argument to called
@@ -87,7 +88,7 @@ def holistic_optimize(
          functions where applicable.
         compare: Invokes the subgraph graph comparison routine (see notes section for more information).
         upload: Value passed as the upload argument to the invocation of the _process_map method.
-        generate_plot_titles: TODO
+        generate_plot_titles: Generates a plot title from a template.
 
     Notes:
         The subgraph comparison routine is as follows:
@@ -145,43 +146,103 @@ def holistic_optimize(
         osg_pair_result = subgraph_pair_optimize(
             subgraphs=(g1sg, g2sg), oconfig_1=oconfig, oconfig_2=oconfig, pso=pso
         )
+
+        # Find metrics for the two OResults to be compared
         for oresult in [osg_pair_result.sg1_oresult, osg_pair_result.sg2_oresult]:
             if gt_data_as_dict_of_se3_arrays is not None:
-                oresult.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
+                (
+                    gt_metric_pre,
+                    max_diff_pre,
+                    max_diff_idx_pre,
+                    _,
+                    _,
+                    _,
+                ) = ground_truth_metric_with_tag_id_intersection(
                     optimized_tags=tag_pose_array_with_metadata_to_map(
                         oresult.map_pre.tags
                     ),
                     ground_truth_tags=gt_data_as_dict_of_se3_arrays,
                 )
-                oresult.gt_metric_opt = ground_truth_metric_with_tag_id_intersection(
+                oresult.gt_metric_pre = gt_metric_pre
+                oresult.max_pre = max_diff_pre
+                oresult.max_idx_pre = max_diff_idx_pre
+                (
+                    gt_metric,
+                    max_diff,
+                    max_diff_idx,
+                    _,
+                    _,
+                    gt_per_anchor,
+                ) = ground_truth_metric_with_tag_id_intersection(
                     optimized_tags=tag_pose_array_with_metadata_to_map(
                         oresult.map_opt.tags
                     ),
                     ground_truth_tags=gt_data_as_dict_of_se3_arrays,
                 )
+                oresult.gt_metric_opt = gt_metric
+                oresult.max_opt = max_diff
+                oresult.max_idx_opt = max_diff_idx
+                oresult.gt_per_anchor_tag_opt = gt_per_anchor
+
         return osg_pair_result
+
     opt_result = optimize_graph(
         graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data
     )
-    processed_map_json = graph_opt_utils.make_processed_map_json(opt_result.map_opt)
+    processed_map_json = graph_opt_utils.make_processed_map_json(
+        opt_result.map_opt, calculate_intersections=upload
+    )
 
     if verbose:
         print(f"Optimized {map_info.map_name}.\nResulting chi2 metrics:")
         print(opt_result.fitness_metrics.repr_as_list())
 
     if gt_data_as_dict_of_se3_arrays is not None:
-        opt_result.gt_metric_pre = ground_truth_metric_with_tag_id_intersection(
+        # Find metrics translational
+        intersection = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_pre.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays,
         )
-        opt_result.gt_metric_opt = ground_truth_metric_with_tag_id_intersection(
+        (
+            gt_metric_pre,
+            max_diff_pre,
+            max_diff_idx_pre,
+            _,
+            _,
+            _,
+        ) = intersection
+        opt_result.gt_metric_pre = gt_metric_pre
+        opt_result.max_pre = max_diff_pre
+        opt_result.max_idx_pre = max_diff_idx_pre
+
+        (
+            gt_metric,
+            max_diff,
+            max_diff_idx,
+            _,
+            _,
+            gt_per_anchor,
+        ) = ground_truth_metric_with_tag_id_intersection(
             optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
             ground_truth_tags=gt_data_as_dict_of_se3_arrays,
         )
+        opt_result.gt_metric_opt = gt_metric
+        opt_result.max_opt = max_diff
+        opt_result.max_idx_opt = max_diff_idx
+        opt_result.gt_per_anchor_tag_opt = gt_per_anchor
+
+        # Print results
         if verbose:
+            print(f"Pre-optimization metric: {opt_result.gt_metric_pre:.3f}")
             print(
-                f"Ground truth metric: {opt_result.gt_metric_opt:.3f} (delta of "
-                f"{opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)"
+                f"Ground truth metric: {opt_result.gt_metric_opt:.3f} ("
+                f"delta of {opt_result.gt_metric_opt - opt_result.gt_metric_pre:.3f} from pre-optimization)"
+            )
+            print(
+                f"Maximum difference metric (pre-optimized): {opt_result.max_pre:.3f} (tag id: {opt_result.max_idx_pre})"
+            )
+            print(
+                f"Maximum difference metric (optimized): {opt_result.max_opt:.3f} (tag id: {opt_result.max_idx_opt})"
             )
 
     CacheManagerSingleton.cache_map(
@@ -209,7 +270,7 @@ def optimize_weights(map_json_path: str, verbose: bool = True) -> np.ndarray:
         "is being handled"
     )
     # map_dct = self._cms.map_info_from_path(map_json_path).map_dct
-    # graph = Graph.as_graph(map_dct)
+    # Graph.as_graph(map_dct)
 
     # # Use a genetic algorithm
     # model = ga(
@@ -278,6 +339,7 @@ def optimize_graph(
     oconfig: OConfig,
     visualize: bool = False,
     gt_data: Optional[GTDataSet] = None,
+    anchor_tag_id: float = None,
 ) -> OResult:
     """Optimizes the input graph.
 
@@ -295,6 +357,7 @@ def optimize_graph(
         visualize: A boolean for whether the `visualize` static method of this class is called.
         oconfig: Configures the optimization.
         gt_data: If provided, only used for the downstream optimization visualization.
+        anchor_tag_id: Tag to anchor off of
 
     Returns:
         A tuple containing in the following order: (1) The total chi2 value of the optimized graph as returned by
@@ -335,10 +398,9 @@ def optimize_graph(
                 opt_result_map.waypoints_arr,
             ),
             orig_tag_verts=before_opt_map.tags,
-            ground_truth_tags=gt_data.sorted_poses_as_se3quat_list
-            if gt_data is not None
-            else None,
+            ground_truth_tags=gt_data if gt_data is not None else None,
             plot_title=oconfig.graph_plot_title,
+            anchor_tag_id=anchor_tag_id,
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
     return OResult(
@@ -357,10 +419,22 @@ def optimize_and_get_ground_truth_error_metric(
 ) -> OResult:
     """Light wrapper for the optimize_graph instance method and ground_truth_metric_with_tag_id_intersection method."""
     opt_result = optimize_graph(graph=graph, oconfig=oconfig, visualize=visualize)
-    opt_result.gt_metric_opt = ground_truth_metric_with_tag_id_intersection(
+    (
+        gt_metric,
+        max_diff,
+        max_diff_idx,
+        _,
+        _,
+        gt_per_anchor,
+    ) = ground_truth_metric_with_tag_id_intersection(
         optimized_tags=tag_pose_array_with_metadata_to_map(opt_result.map_opt.tags),
         ground_truth_tags=ground_truth_tags,
     )
+    opt_result.gt_metric_opt = gt_metric
+    opt_result.max_opt = max_diff
+    opt_result.max_idx_opt = max_diff_idx
+    opt_result.gt_per_anchor_tag_opt = gt_per_anchor
+
     return opt_result
 
 
@@ -383,7 +457,7 @@ def tag_pose_array_with_metadata_to_map(
 
 def ground_truth_metric_with_tag_id_intersection(
     optimized_tags: Dict[int, np.ndarray], ground_truth_tags: Dict[int, np.ndarray]
-) -> float:
+) -> Tuple[float, float, int, float, int, Dict[int, float]]:
     """Use the intersection of the two provided tag dictionaries as input to the `graph_opt_utils.ground_truth_metric`
     function. Includes handling of the SBA case in which the optimized tags' estimates need to be translated and
     then inverted.
@@ -400,16 +474,27 @@ def ground_truth_metric_with_tag_id_intersection(
     )
     optimized_tags_poses_intersection = np.zeros((len(tag_id_intersection), 7))
     gt_tags_poses_intersection = np.zeros((len(tag_id_intersection), 7))
+    tag_ids = []
     for i, tag_id in enumerate(sorted(tag_id_intersection)):
         optimized_vertex_estimate = optimized_tags[tag_id]
         optimized_tags_poses_intersection[i] = optimized_vertex_estimate
         gt_tags_poses_intersection[i] = ground_truth_tags[tag_id]
+        tag_ids.append(tag_id)
 
-    metric = graph_opt_utils.ground_truth_metric(
+    (
+        metric,
+        max_diff,
+        max_diff_idx,
+        min_diff,
+        min_diff_idx,
+        gt_per_anchor_tag,
+    ) = graph_opt_utils.ground_truth_metric(
+        tag_ids,
         optimized_tag_verts=optimized_tags_poses_intersection,
         ground_truth_tags=gt_tags_poses_intersection,
     )
-    return metric
+
+    return metric, max_diff, max_diff_idx, min_diff, min_diff_idx, gt_per_anchor_tag
 
 
 def subgraph_pair_optimize(

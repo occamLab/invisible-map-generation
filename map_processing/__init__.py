@@ -11,8 +11,8 @@ from map_processing.transform_utils import transform_vector_to_matrix
 
 ASSUMED_FOCAL_LENGTH = 1464
 
-# TODO: send tag size with the tag detection
-ASSUMED_TAG_SIZE = 0.172  # Tag's x and y dimension length in meters
+# TODO: Send tag size with the tag detection
+ASSUMED_TAG_SIZE = 0.152  # Tag's x and y dimension length in meters
 
 
 class PrescalingOptEnum(Enum):
@@ -44,6 +44,11 @@ class VertexType(Enum):
 
 # noinspection GrazieInspection
 SQRT_2_OVER_2 = np.sqrt(2) / 2
+
+# TODO: Rework code underneath to match new work format.
+# *** These ground truth "datasets" are not used anymore, can be looked into for
+#   "generate_datasets.py" if wanted later ***
+
 GT_TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
     "3line": {
         0: np.array([[1, 0, 0, -3], [0, 1, 0, 0], [0, 0, 1, -4], [0, 0, 0, 1]]),
@@ -118,6 +123,8 @@ GT_TAG_DATASETS: Dict[str, Dict[int, np.ndarray]] = {
         ),
     },
 }
+
+# This data does not currently match any tags set up
 
 GROUND_TRUTH_MAPPING_STARTING_PT: Dict[str, List[str]] = {
     "occam": [

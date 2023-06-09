@@ -1,5 +1,7 @@
 """
-Generate artificial datasets to be used optimization.
+Generate artificial datasets to be used optimization. Generating datasets
+offers a controlled environment to conduct tests on backend system accuracy and
+efficiency, allowing for the analysis of how dataset parameters impact optimization.
 """
 
 import os
@@ -8,18 +10,16 @@ import sys
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
-import argparse
-import re
-from typing import Tuple, Dict, Union
-import datetime
-
-import numpy as np
-
-from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS, TIME_FORMAT
-from map_processing.graph_generator import GraphGenerator
-from map_processing.data_models import UGDataSet, GenerateParams
-from run_scripts import optimize_graphs_and_manage_cache
 from map_processing.cache_manager import CacheManagerSingleton
+from run_scripts import optimize_graphs_and_manage_cache
+from map_processing.data_models import UGDataSet, GenerateParams
+from map_processing.graph_generator import GraphGenerator
+from map_processing import ASSUMED_TAG_SIZE, GT_TAG_DATASETS, TIME_FORMAT
+import numpy as np
+import datetime
+from typing import Tuple, Dict, Union
+import re
+import argparse
 
 
 def make_parser() -> argparse.ArgumentParser:
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     ):  # d specifies a data set-based path, so get a CacheManagerSingleton instance
         # ready
         matching_maps = CacheManagerSingleton.find_maps(
-            args.d_p, search_only_unprocessed=True
+            args.d_p, search_only_unprocessed=0
         )
         if len(matching_maps) == 0:
             print(

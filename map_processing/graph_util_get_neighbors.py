@@ -10,7 +10,6 @@ import shapely.geometry
 from g2o import SE3Quat
 from shapely.geometry import LineString
 import scipy.spatial
-
 from map_processing.transform_utils import se3_quat_average
 
 

@@ -17,7 +17,6 @@ Notes:
 - The maps that are *processed* and cached are of a different format than the
   unprocessed graphs and cannot be-loaded for further processing.
 """
-
 import os
 import sys
 
@@ -38,14 +37,24 @@ from map_processing.graph_opt_hl_interface import (
     WeightSpecifier,
 )
 from map_processing.sweep import sweep_params
+import map_processing.throw_out_bad_tags as tag_filter
 import map_processing
 
 
-SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
-    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-6, 1e-2, 10]),
-    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-6, 1e-2, 10]),
-    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-2, 1e1, 10]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
+    # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
+}
+
+NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
+    # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
+    OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
+    # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
 
@@ -108,6 +117,14 @@ def make_parser() -> argparse.ArgumentParser:
         default=False,
     )
     p.add_argument(
+        "-fs",
+        type=str,
+        required=False,
+        help="Acquire maps from a specific bucket (device id) in firebase. This is done by linking"
+        "your firebase device_id to your name in the firebase_device_config.json",
+        default=None,
+    )
+    p.add_argument(
         "-F",
         action="store_true",
         help="Upload any graphs to Firebase that are optimized while this script is "
@@ -127,6 +144,12 @@ def make_parser() -> argparse.ArgumentParser:
         "-v",
         action="store_true",
         help="Visualize plots",
+        default=False,
+    )
+    p.add_argument(
+        "-t",
+        action="store_true",
+        help="Throw out data values that are too far off",
         default=False,
     )
 
@@ -152,14 +175,6 @@ def make_parser() -> argparse.ArgumentParser:
         "The graph optimization is then re-run with the modified graph. A negative "
         "value performs no filtering.",
         default=-1.0,
-    )
-    p.add_argument(
-        "-g",
-        action="store_true",
-        help="Search for a matching ground truth data set and, if one is found, "
-        "compute and print the ground truth "
-        "metric.",
-        default=False,
     )
 
     p.add_argument(
@@ -230,18 +245,26 @@ if __name__ == "__main__":
             firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0
         )
 
-    if args.f:
+    # Download all maps from Firebase
+    if args.fs is not None:
+        cms.download_maps_for_device(device_id_name=args.fs)
+        exit(0)
+    elif args.f:
         cms.download_all_maps()
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_only_unprocessed=not args.u)
+    matching_maps = cms.find_maps(map_pattern, search_restriction=0)
     if len(matching_maps) == 0:
         print(
-            f"No matches for {map_pattern} in recursive search of "
-            f"{CacheManagerSingleton.CACHE_PATH}"
+            f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
         )
         exit(0)
+
+    # Remove tag observations that are bad
+    if args.t:
+        this_path = cms.find_maps(map_pattern, search_restriction=0, paths=True)
+        print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv,
@@ -249,8 +272,11 @@ if __name__ == "__main__":
         ang_vel_var=args.avv,
     )
     for map_info in matching_maps:
+        gt_data = cms.find_ground_truth_data_from_map_info(map_info)
+        # If you want to sweep through optimization parameters
         if args.s:
-            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
+            sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
+
             sweep_params(
                 mi=map_info,
                 ground_truth_data=gt_data,
@@ -258,15 +284,18 @@ if __name__ == "__main__":
                     is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
                     compute_inf_params=compute_inf_params,
                 ),
-                sweep_config=SWEEP_CONFIG,
-                ordered_sweep_config_keys=[key for key in SWEEP_CONFIG.keys()],
+                sweep_config=sweep_config,
+                ordered_sweep_config_keys=[key for key in sweep_config.keys()],
                 verbose=True,
                 generate_plot=True,
-                show_plot=args.v,
+                show_plots=args.v,
                 num_processes=args.np,
+                upload_best=args.F,
+                cms=cms,
             )
+
+        # If you simply want to run the optimizer with specified weights
         else:
-            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             oconfig = OConfig(
                 is_sba=args.pso == 0,
                 weights=WEIGHTS_DICT[WeightSpecifier(args.w)],

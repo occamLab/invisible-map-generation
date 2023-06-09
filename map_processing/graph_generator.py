@@ -9,7 +9,7 @@ from copy import deepcopy
 from enum import Enum
 from typing import Callable, Tuple, Optional, List, Dict, Union
 
-import cv2.cv2 as cv2
+import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D

@@ -36,14 +36,34 @@ from map_processing.transform_utils import (
 )
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-ARRAY_SUMMARIZATION_THRESHOLD = int(1e9)  # Arbitrarily high integer
+ARRAY_SUMMARIZATION_THRESHOLD = int(
+    1e9
+)  # Arbitrarily high integer # TODO: Check what this does
 
 
 def _is_arr_of_right_shape(
     v: Optional[np.ndarray], shape: Tuple[int, ...], is_optional: bool = False
 ):
+    """
+    Check if the array entered is of the shape specified
+
+    Args:
+        v: An optional numpy ndarray repesenting the array to check shape for
+        shape: A tuple representing the shape of each dimension of the array to be expected
+        is_optional: A boolean representing whether the check is optional or not
+
+    Returns:
+        v_sqz: A numpy ndarray representing the result of np.squeeze on the array provided.
+
+    Raises:
+        ValueError: When any NaN values are contained in the array
+                    When a not optional array is None
+                    When array is not the same size as expected after np.squeeze
+                    When array is not the same shape as expected
+    """
     expected_num_dims = len(shape)
 
+    # Check array is None
     if v is None:
         if is_optional:
             return v
@@ -52,15 +72,19 @@ def _is_arr_of_right_shape(
                 "Value provided that was marked as non-optionally None is None"
             )
 
+    # Check value in array is NaN
     if np.any(v == np.nan):
         raise ValueError("Numpy array cannot contain any NaN values")
 
+    # Check if squeeze gives wrong dimensions
     v_sqz: np.ndarray = np.squeeze(v)
     if v_sqz.ndim != expected_num_dims:
         raise ValueError(
             f"Field that should have been an array was found to not have the right dimensions (number of dims found to "
             f"be {v_sqz.ndim} after squeezing the array)"
         )
+
+    # Check if shape is wrong
     for dim_idx, dim in enumerate(shape):
         if 0 <= shape[dim_idx] != v_sqz.shape[dim_idx]:
             raise ValueError(
@@ -72,16 +96,35 @@ def _is_arr_of_right_shape(
 
 
 def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
+    """
+    Check if vector entered is of the correct length.
+
+    Args:
+        v: A numpy ndarray representing the vector to be checked for right length
+        length: An int representing the correct length of the ndarray
+
+    Returns:
+        v_sqz: A numpy ndarray representing the result of np.squeeze on the vector inputted
+
+    Raises:
+        ValueError: When NaN values in vector
+                    When vector has >1 dimension
+                    When length is not the same as expected
+    """
     v_sqz: np.ndarray = np.squeeze(v)
 
+    # Check if value in vector is NaN
     if np.any(v == np.nan):
         raise ValueError("Numpy array cannot contain any NaN values")
 
+    # Check if vector has >1 dimensions
     if v_sqz.ndim != 1:
         raise ValueError(
             f"field that should have been a vector was found to not have the right dimensions (number of dims found to "
             f"be {v_sqz.ndim} after squeezing the array)"
         )
+
+    # Check if size of vector is right
     if v_sqz.size != length:
         raise ValueError(
             f"Expected vector to be of length {length} but instead found the length to be {v_sqz.size}"
@@ -90,6 +133,15 @@ def _is_vector_of_right_length(v: np.ndarray, length: int) -> np.ndarray:
 
 
 def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> np.ndarray:
+    """
+    Convert any string based array
+
+    Args:
+        v: A str or numpy array representing the array to be deserialized
+
+    Returns:
+        A numpy ndarray representing the deserialized version of the array entered
+    """
     if isinstance(v, np.ndarray):
         return v
     elif isinstance(v, str):
@@ -101,6 +153,27 @@ def _validator_for_numpy_array_deserialization(v: Union[str, np.ndarray]) -> np.
 
 
 class Weights(BaseModel):
+    """
+    A representation of weights for all parameters from data
+
+    Attributes:
+        orig_gravity: A numpy ndarray representing initial gravity weights
+        orig_odometry: A numpy ndarray representing initial odometry weights
+        orig_tag: A numpy ndarray representing inital tag weights
+        orig_tag_sba: A numpy ndarray representing inital tag weights after SBA
+        odom_tag_ratio: A float representing the odom tag ratio (in sweep results json)
+        normalize: A boolean representing whether to normalize or not
+
+        _check_gravity_is_correct_length_vector: A Validator for 'orig_gravity' correct length
+        _check_odometry_is_correct_length_vector: A Validator for 'orig_odometry' correct length
+        _check_tag_is_correct_length_vector: A Validator for 'orig_tag' correct length
+        _check_tag_sba_is_correct_length_vector: A Validator for 'orig_tag_sba' correct length
+        _deserialize_gravity_vector_if_needed: A Validator for 'orig_gravity' deserialization
+        _deserialize_odometry_vector_if_needed: A Validator for 'orig_odometry' deserialization
+        _deserialize_tag_vector_if_needed: A Validator for 'orig_tag' deserialization
+        _deserialize_tag_sba_vector_if_needed: A Validator for 'orig_tag_sba' deserialization
+    """
+
     orig_gravity: np.ndarray = Field(default_factory=lambda: np.ones(3))
     orig_odometry: np.ndarray = Field(default_factory=lambda: np.ones(6))
     orig_tag: np.ndarray = Field(default_factory=lambda: np.ones(6))
@@ -109,9 +182,16 @@ class Weights(BaseModel):
     normalize: bool = False
 
     class Config:
-        arbitrary_types_allowed = (
-            True  # Needed to allow numpy arrays to be used as fields
-        )
+        """
+        A configuration for weights
+
+        Attributes:
+            arbitrary_types_allowed: A boolean representing whether types such as np arrays can
+                be used as fields.
+            json_encoders: Encode array to string (used to write to json)
+        """
+
+        arbitrary_types_allowed = True
         json_encoders = {
             np.ndarray: lambda arr: np.array2string(
                 arr, threshold=ARRAY_SUMMARIZATION_THRESHOLD
@@ -146,6 +226,12 @@ class Weights(BaseModel):
 
     @property
     def odometry(self) -> np.ndarray:
+        """
+        If normalization True, normalized odometry provided, else orig_odometry
+
+        Returns:
+        A numpy ndarray representing the calculated odometry
+        """
         odom_mag = 1
         if self.normalize:
             odom_mag = np.linalg.norm(self.orig_odometry)
@@ -155,6 +241,12 @@ class Weights(BaseModel):
 
     @property
     def gravity(self) -> np.ndarray:
+        """
+        If normalization True, normalized gravity provided, else orig_gravity
+
+        Returns:
+            A numpy ndarray representing the calculated gravity
+        """
         grav_mag = 1
         if self.normalize:
             grav_mag = np.linalg.norm(self.orig_gravity)
@@ -164,6 +256,12 @@ class Weights(BaseModel):
 
     @property
     def tag(self) -> np.ndarray:
+        """
+        If normalization True, normalized tag positions provided, else orig_tag
+
+        Returns:
+            A numpy ndarray repesenting the calculated tag positions
+        """
         tag_mag = 1
         if self.normalize:
             tag_mag = np.linalg.norm(self.orig_tag)
@@ -173,6 +271,12 @@ class Weights(BaseModel):
 
     @property
     def tag_sba(self) -> np.ndarray:
+        """
+        If normalization True, normalized SBA tag positions provided, else orig_tag_sba
+
+        Returns:
+            A numpy ndarray representing the calculated SBA tag positions
+        """
         tag_sba_mag = 1
         if self.normalize:
             tag_sba_mag = np.linalg.norm(self.orig_tag_sba)
@@ -182,17 +286,41 @@ class Weights(BaseModel):
 
     @property
     def tag_odom_ratio(self):
+        """
+        Convert odom:tag ratio to tag:odom ratio by inversing the number
+
+        Returns:
+            A float representing the tag to odometry ratio.
+        """
         return 1 / self.odom_tag_ratio
 
     @classmethod
     def legacy_from_array(cls, array: Union[np.ndarray, List[float]]) -> "Weights":
+        """
+        Converts array to Weights type (legacy)
+
+        Returns:
+            A Weights type representing the inputted array
+        """
         return Weights(**cls.legacy_weight_dict_from_array(array))
 
     @staticmethod
     def legacy_weight_dict_from_array(
         array: Union[np.ndarray, List[float]]
     ) -> Dict[str, Union[float, np.ndarray]]:
-        """Construct a normalized weight dictionary from a given array of values using the legacy approach.
+        """
+        Construct a normalized weight dictionary from a given array of values using the legacy approach.
+
+        Args:
+            array: A np.ndarray or List of floats representing the array to create a normalized
+                weight dictionary from
+
+        Returns:
+            A dictionary mapping strings to either floats or np.ndarrays representing the normalized
+            weights dictionary
+
+        Raises:
+            Exception: If length of array is not supported (0 or >6)
 
         TODO: refactor places where this is function is used to not use this approach of constructing weights from a
          single numpy array
@@ -271,24 +399,42 @@ class Weights(BaseModel):
 
 
 class UGPoseDatum(BaseModel):
-    """Represents a single pose datum."""
+    """
+    Represents a single pose datum.
+
+    Attributes:
+        pose: Pose as a tuple of floats where reshaping into a 4x4 array using Fortran-like index
+            order results in the transform matrix. For more information on Fortran-like indexing
+            from the numpy documentation: "...means to read / write the elements using Fortran-like
+            index order, with the first index changing fastest, and the last index changing slowest.
+        timestamp: A float representing the time of the pose datum being recorded
+        planes: A list representing the plane of the datum (*CURRENTLY SKIPPED IN GRAPH GENERATION*)
+        id: An int representing the id of the pose datum
+    """
 
     pose: conlist(Union[float, int], min_items=16, max_items=16)
-    """
-    Pose as a tuple of floats where reshaping into a 4x4 array using Fortran-like index order results in the transform 
-    matrix. For more information on Fortran-like indexing from the numpy documentation: "...means to read / write the 
-    elements using Fortran-like index order, with the first index changing fastest, and the last index changing slowest. 
-    """
     timestamp: float
     planes: List = []
     id: int
 
     @property
     def pose_as_matrix(self) -> np.ndarray:
+        """
+        Converts pose to array
+
+        Returns:
+            np.ndarray representing the current pose as a 4x4 array
+        """
         return np.reshape(np.array(self.pose), (4, 4), order="F")
 
     @property
     def position(self) -> np.ndarray:
+        """
+        Gets position from pose
+
+        Returns:
+            np.ndarray representing just the position of the datum as a 3x3 array
+        """
         return self.pose_as_matrix[:3, 3]
 
     def __repr__(self):
@@ -296,19 +442,28 @@ class UGPoseDatum(BaseModel):
 
 
 class UGTagDatum(BaseModel):
-    """Represents a single tag observation datum."""
+    """
+    Represents a single tag observation datum.
+
+    Attributes:
+        tag_corners_pixel_coordinates: values alternate between x and y coordinates in the camera
+            frame. Tag corner order convention: Bottom right, bottom left, top left, top right.
+        tag_id: An int representing the id of the tag detected
+        pose_id: An int representing the id of the pose the tag was detected in
+        camera_intrinsics: Camera intrinsics in the order of: fx, fy, cx, cy
+        timestamp: A float representing the time the tag was detected
+        tag_pose: A list of floats and ints representing the pose of the tag detected
+        tag_position_variance: A list of floats and ints representing the variance in position of
+            tag
+        tag_orientation_variance: A list of floats and ints representing the variance in orientation
+            of tag
+        joint_covar: A list of floats and ints representing 'joint_covar' from json
+    """
 
     tag_corners_pixel_coordinates: conlist(Union[float, int], min_items=8, max_items=8)
-    """
-    Values alternate between x and y coordinates in the camera frame. Tag corner order convention: Bottom right, bottom 
-    left, top left, top right.
-    """
     tag_id: int
     pose_id: int
     camera_intrinsics: conlist(Union[float, int], min_items=4, max_items=4)
-    """
-    Camera intrinsics in the order of: fx, fy, cx, cy
-    """
     timestamp: float
     tag_pose: conlist(Union[float, int], min_items=16, max_items=16)
     tag_position_variance: conlist(Union[float, int], min_items=3, max_items=3) = [
@@ -323,10 +478,22 @@ class UGTagDatum(BaseModel):
 
     @property
     def tag_pose_as_matrix(self) -> np.ndarray:
+        """
+        Converts tag pose to matrix form
+
+        Returns:
+            A np.ndarray representing the pose of the tag as a 4x4 matrix
+        """
         return np.reshape(np.array(self.tag_pose), (4, 4), order="F")
 
     @property
     def obs_dist(self) -> float:
+        """
+        Finds distance from origin of tag (Euclidean)
+
+        Returns:
+            A float representing the Euclidean distance of the position of the tag
+        """
         return np.linalg.norm(self.tag_pose_as_matrix[:3, 3])
 
     def __repr__(self):
@@ -334,13 +501,22 @@ class UGTagDatum(BaseModel):
 
 
 class UGLocationDatum(BaseModel):
+    """
+    Represents a location datum, mapping a name to a pose id and transform
+
+    Attributes:
+        transform: Pose as a tuple of floats where reshaping into a 4x4 array using C-like index
+            order results in the transform matrix. For more information on Fortran-like indexing
+            from the numpy documentation: "means to read / write the elements using C-like index
+            order, with the last axis index changing fastest, back to the first axis index changing
+            slowest
+        name: A string representing the name of the location
+        timestamp: A float representing the timestamp of the observation
+        pose_id: An int representing the id of the pose associated with the observation.
+    """
+
     transform: conlist(Union[float, int], min_items=16, max_items=16)
-    """
-    Pose as a tuple of floats where reshaping into a 4x4 array using C-like index order results in the transform 
-    matrix. For more information on Fortran-like indexing from the numpy documentation: "means to read / write the 
-    elements using C-like index order, with the last axis index changing fastest, back to the first axis index changing 
-    slowest.
-    """
+
     # TODO: validate assumption that this transform actually uses C-like indexing
 
     name: str
@@ -350,34 +526,42 @@ class UGLocationDatum(BaseModel):
 
 class GenerateParams(BaseModel):
     # noinspection PyUnresolvedReferences
-    """Configures data set generation.
+    """
+    Configures data set generation.
 
     Attributes:
-        dataset_name: String provided as the data set name to the cache manager when the generated data set is
-         cached.
-        map_id: String provided as the map_id field in the UGDataSet object when exported.
-        parameterized_path_args: Dictionary to pass as the second positional argument to the `path_from` argument if
-         it is a callable (if the `path_from` argument is not a callable, then this argument is ignored).
-        t_max: For a parameterized path, this is the max parameter value to use when evaluating the path.
-        n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided, then this
-         argument is ignored.
+        dataset_name: A string provided as the data set name to the cache manager when the generated
+            data set is cached.
+        map_id: A string provided as the map_id field in the UGDataSet object when exported.
+        parameterized_path_args: A dictionary to pass as the second positional argument to the
+            `path_from` argument if it is a callable (if the `path_from` argument is not a callable,
+            then this argument is ignored).
+        t_max: For a parameterized path, this is the max parameter value to use when evaluating the
+            path.
+        n_poses: Number of poses to sample a parameterized path at; if a recorded path is provided,
+            then this argument is ignored.
         dist_threshold: Maximum distance from which a tag can be considered observable.
-        aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered observable. The angle
-         of attack is calculated as the angle between the z-axis of the tag pose and the vector from the tag to the
-         phone.
+        aoa_threshold: Maximum angle of attack (in radians) from which a tag can be considered
+            observable. The angle of attack is calculated as the angle between the z-axis of the
+            tag pose and the vector from the tag to the phone.
         tag_size: Height/width dimension of the (square) tags in meters.
-        obs_noise_var: Variance parameter for the observation model. Specifies the variance for the distribution
-         from which pixel noise is sampled and added to the simulated tag corner pixel observations. Note that the
-         simulated tag observation poses are re-derived from these noise pixel observations.
-        odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance of the Gaussian
-         noise in that direction.
+        obs_noise_var: Variance parameter for the observation model. Specifies the variance for the
+            distribution from which pixel noise is sampled and added to the simulated tag corner
+            pixel observations. Note that the simulated tag observation poses are re-derived from
+            these noise pixel observations.
+        odometry_noise_var: Dictionary mapping a dimension to which noise is applied to the variance
+            of the Gaussian noise in that direction.
 
     Properties:
-        delta_t: For a parameterized path, this gives the time delta used between each of the points. If the path is
-         a recorded path, then this value is set to 0 arbitrarily.
+        delta_t: For a parameterized path, this gives the time delta used between each of the
+            points. If the path is a recorded path, then this value is set to 0 arbitrarily.
     """
 
     class OdomNoiseDims(str, Enum):
+        """
+        Ordering for odom noise dimensions
+        """
+
         X = "x"
         Y = "y"
         Z = "z"
@@ -393,6 +577,10 @@ class GenerateParams(BaseModel):
             ]
 
     class GenerateParamsEnum(str, Enum):
+        """
+        Enumeration for GenerateParams
+        """
+
         ODOMETRY_NOISE_VAR_X = "odometry_noise_var_x"
         ODOMETRY_NOISE_VAR_Y = "odometry_noise_var_y"
         ODOMETRY_NOISE_VAR_Z = "odometry_noise_var_z"
@@ -400,16 +588,14 @@ class GenerateParams(BaseModel):
         OBS_NOISE_VAR = "obs_noise_var"
 
     class AltGenerateParamsEnum(str, Enum):
-        OBS_NOISE_VAR = "obs_noise_var"
         """
-        Sets the observation noise variance of the generated data set
+        OBS_NOISE_VAR: Sets the observation noise variance of the generated data set
+        LIN_TO_ANG_VEL_VAR: Defines the ratio between the magnitude of the linear velocity variance
+            vector and the angular velocity variance.
         """
 
+        OBS_NOISE_VAR = "obs_noise_var"
         LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
-        """
-        Defines the ratio between the magnitude of the linear velocity variance vector and the angular velocity 
-        variance.
-        """
 
     dataset_name: str
     map_id: Optional[str] = None
@@ -434,6 +620,12 @@ class GenerateParams(BaseModel):
     # noinspection PyMethodParameters
     @validator("parameterized_path_args")
     def validate_interdependent_null_values(cls, v, values):
+        """
+        Validates interdependent null values by checking if v, t_max, and n_poses are correct or not
+
+        Raises:
+            ValueError: If all three values are not equal: (all three None or all three not None)
+        """
         v_is_none = v is None
         t_max_is_none = values["t_max"] is None
         n_poses_is_none = values["n_poses"] is None
@@ -443,14 +635,17 @@ class GenerateParams(BaseModel):
             or (not v_is_none and not t_max_is_none and not n_poses_is_none)
         ):
             raise ValueError(
-                "tag_poses_for_parameterized, t_max, n_poses, and parameterized_path_args members must "
-                "both be None or not None."
+                "tag_poses_for_parameterized, t_max, n_poses, and \
+                parameterized_path_args members must both be None or not None."
             )
         return v
 
     @property
     def delta_t(self):
-        """If t_max is not None, then a delta-time value is computed from t_max and the number of specified poses"""
+        """
+        If t_max is not None, then a delta-time value is computed from t_max and the number of
+        specified poses
+        """
         if self.t_max is not None:
             return self.t_max / (self.n_poses - 1)
         else:
@@ -458,6 +653,9 @@ class GenerateParams(BaseModel):
 
     @property
     def lin_to_ang_var(self) -> float:
+        """
+        Finds norm of X, Y, Z and divide by rvert
+        """
         return (
             np.linalg.norm(
                 np.array(
@@ -479,17 +677,19 @@ class GenerateParams(BaseModel):
         param_order: List[GenerateParamsEnum],
         base_generate_params: "GenerateParams",
     ) -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
-        """Generator yielding instances of this class according to the cartesian product of the provided parameters.
+        """
+        Generator yielding instances of this class according to the cartesian product of the
+        provided parameters.
 
         Args:
-            param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian product is
-             taken.
+            param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian
+                product is taken.
             param_order: Ordering of the keys in param_multiplicands.
             base_generate_params: Supplies every parameter not prescribed by param_multiplicands.
 
         Returns:
-            A list of each tuple of parameters computed from the cartesian product (the length of which is equivalent to
-            the length of param_order) and a list of the generated objects.
+            A list of each tuple of parameters computed from the cartesian product (the length of
+            which is equivalent to the length of param_order) and a list of the generated objects.
 
         Raises:
             ValueError: If the keys of param_multiplicands elements of param_order are not the same.
@@ -508,12 +708,14 @@ class GenerateParams(BaseModel):
 
         products: List[Tuple[Any, ...]] = []
         generate_params: List[GenerateParams] = []
+
         for this_product in itertools.product(*product_args, repeat=1):
             products.append(this_product)
 
-            # For each of the x, y, z, and rvert elements of the odometry noise, apply the value stored in the
-            # included_params dictionary if it is a key; if not, then default to the value stored in
-            # base_generate_params.
+            """For each of the x, y, z, and rvert elements of the odometry noise, apply the value
+            stored in the included_params dictionary if it is a key; if not, then default to the
+            value stored in base_generate_params."""
+
             odometry_noise_var = {}
             if (
                 GenerateParams.GenerateParamsEnum.ODOMETRY_NOISE_VAR_X
@@ -610,38 +812,45 @@ class GenerateParams(BaseModel):
         hold_rvert_at: float,
         ratio_xz_to_y_lin_vel_var: float = 1,
     ) -> Tuple[List[Tuple[Any, ...]], List["GenerateParams"]]:
-        """Acts as a wrapper around the generate_params_generator class method that utilizes a parameter sweeping space
-        defined by the parameters in the AltGenerateParamsEnum enumeration. Generates GenerateParams objects
-        according to the cartesian product of the contents of alt_param_multiplicands.
+        """
+        Acts as a wrapper around the generate_params_generator class method that utilizes a
+        parameter sweeping space defined by the parameters in the AltGenerateParamsEnum enumeration.
+        Generates GenerateParams objects according to the cartesian product of the contents of
+        alt_param_multiplicands.
 
         Args:
-            alt_param_multiplicands: Dictionary mapping parameters to arrays of values whose cartesian product is
-             taken.
+            alt_param_multiplicands: Dictionary mapping parameters to arrays of values whose
+                cartesian product is taken.
             base_generate_params: Supplies every parameter not prescribed by param_multiplicands.
-            hold_rvert_at: Because AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR is a ratio, the rotational part of the
-             odometry noise is held constant with this value.
-            ratio_xz_to_y_lin_vel_var: Before the X, Y, and Z elements of the unit-magnitude linear velocity variance
-             vector are scaled, this sets the X:Y and Z:Y ratios of the vector's elements.
+            hold_rvert_at: Because AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR is a ratio, the
+                rotational part of the odometry noise is held constant with this value.
+            ratio_xz_to_y_lin_vel_var: Before the X, Y, and Z elements of the unit-magnitude linear
+                velocity variance vector are scaled, this sets the X:Y and Z:Y ratios of the
+                vector's elements.
 
         Returns:
-            A list of the outputs from the cartesian product and the corresponding GenerateParams objects.
+            A list of the outputs from the cartesian product and the corresponding GenerateParams
+            objects.
 
         Raises:
-            NotImplementedError: If there is an unhandled value in the AltGenerateParamsEnum enumeration.
+            NotImplementedError: If there is an unhandled value in the AltGenerateParamsEnum
+            enumeration.
         """
         # Expand the alt_param_multiplicands argument into a form that can be used in the
         # GenerateParams.generate_params_generator method.
         param_multiplicands: Dict[GenerateParams.GenerateParamsEnum, np.ndarray] = {}
+
         for key, values in alt_param_multiplicands.items():
             if key == cls.AltGenerateParamsEnum.OBS_NOISE_VAR:
                 param_multiplicands[
                     GenerateParams.GenerateParamsEnum.OBS_NOISE_VAR
                 ] = values
+
             elif key == cls.AltGenerateParamsEnum.LIN_TO_ANG_VEL_VAR:
-                # Ignore the values provided in alt_param_multiplicands because we are not interested in the cartesian
-                # product between each of the X, Y, Z, and rvert elements of the linear and angular velocity variance.
-                # Instead, the values provided in alt_param_multiplicands are applied to the result of the cartesian
-                # product.
+                # Ignore the values provided in alt_param_multiplicands because we are not
+                # interested in the cartesian product between each of the X, Y, Z, and rvert
+                # elements of the linear and angular velocity variance. Instead, the values provided
+                # in alt_param_multiplicands are applied to the result of the cartesian product.
                 lin_vel_var_unit = np.ones(3) * np.array(
                     [ratio_xz_to_y_lin_vel_var, 1, ratio_xz_to_y_lin_vel_var]
                 )
@@ -681,6 +890,7 @@ class GenerateParams(BaseModel):
 
         param_order = sorted(list(param_multiplicands.keys()))
         param_to_param_order_idx: Dict[GenerateParams.GenerateParamsEnum, int] = {}
+
         for i, param in enumerate(param_order):
             param_to_param_order_idx[param] = i
         (
@@ -751,11 +961,20 @@ class GenerateParams(BaseModel):
 
 
 class UGDataSet(BaseModel):
-    """Represents an unprocessed graph dataset.
+    """
+    Represents an unprocessed graph dataset.
 
+    Attributes:
+        location_data: A list of UGLocationDatums representing the location data of the dataset
+        map_id: A string representing the id of the map being generated
+        plane_data: A list of plane_data *NOT CURRENTLY BEING USED*
+        pose_data: A list of UGPoseDatum representing the poses recorded for the map
+        tag_data: A list of UGTagDatum representing the tags recorded for the map
+        generated_from: GenerateParams
     Notes:
-        All attributes except `generated_from` are necessary for deserializing data from the datasets generated by the
-         client app. The `generated_from` attribute is only used when the data set generated is synthetic.
+        All attributes except `generated_from` are necessary for deserializing data from the
+        datasets generated by the client app. The `generated_from` attribute is only used when the
+        data set generated is synthetic.
     """
 
     location_data: List[UGLocationDatum] = []
@@ -999,6 +1218,10 @@ class GTTagPose(BaseModel):
 
 
 class GTDataSet(BaseModel):
+    """
+    TODO
+    """
+
     poses: List[GTTagPose] = []
 
     @property
@@ -1091,6 +1314,8 @@ class OComputeInfParams(BaseModel):
     lin_vel_var: np.ndarray = Field(default_factory=lambda: np.ones(3))
     ang_vel_var: confloat(gt=0) = 1.0
     tag_sba_var: confloat(gt=0) = 1.0
+    # tag_no_sba_var = 1.0
+    tag_var: confloat(gt=0) = 1.0
 
     class Config:
         arbitrary_types_allowed = (
@@ -1157,6 +1382,7 @@ class OConfig(BaseModel):
         ANG_VEL_VAR = "ang_vel_var"
         TAG_SBA_VAR = "tag_sba_var"
         GRAV_MAG = "grav_mag"
+        TAG_VAR = "tag_var"
 
     class AltOConfigEnum(str, Enum):
         LIN_TO_ANG_VEL_VAR = "lin_to_ang_vel_var"
@@ -1205,6 +1431,7 @@ class OConfig(BaseModel):
 
         products: List[Tuple[Any, ...]] = []
         oconfigs: List[OConfig] = []
+
         for this_product in itertools.product(*product_args, repeat=1):
             products.append(this_product)
             oconfigs.append(
@@ -1233,6 +1460,11 @@ class OConfig(BaseModel):
                         ]
                         if OConfig.OConfigEnum.TAG_SBA_VAR in included_params
                         else base_oconfig.compute_inf_params.tag_sba_var,
+                        tag_var=this_product[
+                            sweep_param_to_product_idx[OConfig.OConfigEnum.TAG_VAR]
+                        ]
+                        if OConfig.OConfigEnum.TAG_VAR in included_params
+                        else base_oconfig.compute_inf_params.tag_var,
                     ),
                     scale_by_edge_amount=base_oconfig.scale_by_edge_amount,
                     weights=Weights(
@@ -1378,16 +1610,16 @@ class OG2oOptimizer(BaseModel):
 class OResultFitnessMetrics(BaseModel):
     """Container to store the chi2 values"""
 
-    chi2_all_before: confloat(ge=0)
+    chi2_all_before: np.float64
     alpha_all_before: Optional[float]
-    se3_not_gravity_before: confloat(ge=0)
-    psi2uv_before: confloat(ge=0)
-    gravity_before: confloat(ge=0)
-    chi2_all_after: confloat(ge=0)
+    se3_not_gravity_before: np.float64
+    psi2uv_before: np.float64
+    gravity_before: np.float64
+    chi2_all_after: np.float64
     alpha_all_after: Optional[float]
-    se3_not_gravity_after: confloat(ge=0)
-    psi2uv_after: confloat(ge=0)
-    gravity_after: confloat(ge=0)
+    se3_not_gravity_after: np.float64
+    psi2uv_after: np.float64
+    gravity_after: np.float64
 
     def repr_as_list(self) -> str:
         lines_before: List[str] = []
@@ -1422,6 +1654,15 @@ class OResult(BaseModel):
         fitness_metrics: The chi2 metrics before and after optimization
         gt_metric_pre: Ground truth metric of the pre-optimized map
         gt_metric_opt: Ground truth metric of the optimized map
+        max_pre: Maximum distance between two nodes of pre-optimized map
+        max_opt: Maximum distance between two nodes of optimized map
+        min_pre: Minimum ground truth metric between 2 nodes of unoptimized map
+        min_opt: Minimum ground truth metric between 2 nodes of optimized map
+        max_idx_pre: Index of node with maximum distance of pre-optimized map
+        max_idx_opt: Index of node with maximum distance of optimized map
+        min_idx_pre: Index of node with minimum distance of pre-optimized map
+        min_idx_opt: Index of node with minimum distance of optimized map
+        gt_per_anchor_tag_opt: Dictionary mapping id tag to ground truth value when it is made anchor
     """
     oconfig: OConfig
     map_pre: OG2oOptimizer
@@ -1429,6 +1670,30 @@ class OResult(BaseModel):
     fitness_metrics: OResultFitnessMetrics
     gt_metric_pre: Optional[float] = None
     gt_metric_opt: Optional[float] = None
+    max_pre: Optional[float] = None
+    max_opt: Optional[float] = None
+    min_pre: Optional[float] = None
+    min_opt: Optional[float] = None
+    max_idx_pre: Optional[float] = None
+    max_idx_opt: Optional[float] = None
+    min_idx_pre: Optional[float] = None
+    min_idx_opt: Optional[float] = None
+    gt_per_anchor_tag_opt: Optional[Dict[int, float]] = [None, None]
+    shift_metric: Optional[List] = None
+
+    @property
+    def find_max_gt(self):
+        return max(self.gt_per_anchor_tag_opt.values())
+
+    @property
+    def find_max_gt_tag(self):
+        return max(self.gt_per_anchor_tag_opt, key=self.gt_per_anchor_tag_opt.get)
+
+    @property
+    def find_max_gt_idx(self):
+        return np.where(
+            list(self.gt_per_anchor_tag_opt.keys()) == self.find_max_gt_tag
+        )[0][0]
 
     class Config:
         json_encoders = {
@@ -1487,11 +1752,12 @@ class OSweepResults(BaseModel):
     """
     The keys for this dictionary must be members of the set of the values of the OConfig.OConfigEnum enumeration.
     """
-    gt_results_list: List[float]
     sweep_config_keys_order: List[str]
     base_oconfig: OConfig
     map_name: str
     generated_params: Optional[GenerateParams] = None
+    oresults_list: List[OResult]
+    sweep_args: List
 
     class Config:
         json_encoders = {
@@ -1530,16 +1796,21 @@ class OSweepResults(BaseModel):
         return v
 
     # noinspection PyMethodParameters
-    @validator("gt_results_list")
-    def validate_length_of_gt_results_list(cls, v, values):
-        gt_results_arr_shape = values["gt_results_arr_shape"]
-        expected_length = np.product(gt_results_arr_shape)
-        if len(v) != expected_length:
-            raise ValueError(
-                f"gt_results_list cannot be of length {len(v)} if gt_results_arr_shape is "
-                f"{gt_results_arr_shape} (expected length is {expected_length})"
-            )
-        return v
+    # TODO: Inspect Issue with Validator
+    # @validator("gt_results_list")
+    # def validate_length_of_gt_results_list(cls, v, values):
+    #     gt_results_arr_shape = values["gt_results_arr_shape"]
+    #     expected_length = np.product(gt_results_arr_shape)
+    #     if len(v) != expected_length:
+    #         raise ValueError(
+    #             f"gt_results_list cannot be of length {len(v)} if gt_results_arr_shape is "
+    #             f"{gt_results_arr_shape} (expected length is {expected_length})"
+    #         )
+    #     return v
+
+    @property
+    def gt_results_list(self):
+        return np.array([oresult.gt_metric_opt for oresult in self.oresults_list])
 
     @property
     def sweep_config_dict(self) -> Dict[str, List[float]]:
@@ -1556,6 +1827,15 @@ class OSweepResults(BaseModel):
         )
 
     @property
+    def alpha_results_arr(self) -> np.ndarray:
+        return np.array(self.alpha_results_list).reshape(self.gt_results_arr_shape)
+
+    @property
+    def shift_results_arr(self) -> np.ndarray:
+        return np.array(self.shift_metric_list).reshape(self.gt_results_arr_shape)
+
+    @property
+    # This finds the minimum gt_metric from a list of gt_metrics corresponding to each parameter config in the sweep
     def min_gt_result(self) -> float:
         return np.min(self.gt_results_list)
 
@@ -1564,7 +1844,61 @@ class OSweepResults(BaseModel):
         return np.max(self.gt_results_list)
 
     @property
+    def min_gt_result_idx(self) -> float:
+        return np.argmin(self.gt_results_list)
+
+    @property
+    # OResult with min gt metric
+    def min_oresult(self) -> OResult:
+        return self.oresults_list[self.min_gt_result_idx]
+
+    @property
+    def gt_metric_pre(self):
+        return self.oresults_list[0].gt_metric_pre
+
+    @property
+    def alpha_results_list(self):
+        return [
+            oresult.fitness_metrics.alpha_all_after for oresult in self.oresults_list
+        ]
+
+    @property
+    def min_alpha_result(self) -> float:
+        return np.min(self.alpha_results_list)
+
+    @property
+    def min_shift_result(self) -> float:
+        return np.min(self.shift_metric_list)
+
+    @property
+    def min_alpha_result_idx(self) -> float:
+        return np.argmin(self.alpha_results_list)
+
+    @property
+    def min_oresult_alpha(self) -> OResult:
+        return self.oresults_list[self.min_alpha_result_idx]
+
+    @property
+    def min_shift_result_idx(self) -> float:
+        return np.argmin(self.shift_metric_list)
+
+    @property
+    def min_oresult_shift(self) -> OResult:
+        return self.oresults_list[self.min_shift_result_idx]
+
+    @property
+    # This finds the maximum distance a tag has to move from pre-optimized to optimized for the best OResult (best
+    # parameters)
+    def min_gt(self) -> float:
+        return self.min_oresult.gt_metric_opt
+
+    @property
+    def pre_opt_gt(self):
+        return self.min_oresult.gt_metric_pre
+
+    @property
     def where_min(self) -> Tuple[int, ...]:
+        # Where minimum gt_metric
         # noinspection PyTypeChecker
         where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
             self.gt_results_arr == self.min_gt_result
@@ -1574,6 +1908,23 @@ class OSweepResults(BaseModel):
         )  # Select first result if there are multiple
 
     @property
+    def where_min_alpha(self) -> Tuple[int, ...]:
+        # Where minimum alpha metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
+            self.alpha_results_arr == self.min_alpha_result
+        )
+        return tuple([arr[0] for arr in where_min_pre])
+
+    @property
+    def where_min_shift(self) -> Tuple[int, ...]:
+        # Where minimum shift metric
+        where_min_pre: Tuple[np.ndarray, np.ndarray, np.ndarray] = np.where(
+            self.shift_results_arr == self.min_shift_result
+        )
+        return tuple([arr[0] for arr in where_min_pre])
+
+    @property
+    # Parameters to produce min gt_metric
     def args_producing_min(self) -> Dict[str, float]:
         args_producing_min: Dict[str, float] = {}
         for i, key in enumerate(self.sweep_config_keys_order):
@@ -1581,6 +1932,46 @@ class OSweepResults(BaseModel):
                 self.where_min[i]
             ]
         return args_producing_min
+
+    @property
+    # Parameters to produce min alpha metric
+    def args_producing_min_alpha(self) -> Dict[str, float]:
+        args_producing_min: Dict[str, float] = {}
+        for i, key in enumerate(self.sweep_config_keys_order):
+            args_producing_min[key] = np.array(self.sweep_config[key])[
+                self.where_min_alpha[i]
+            ]
+        return args_producing_min
+
+    @property
+    # Parameters to produce min alpha metric
+    def args_producing_min_shift(self) -> Dict[str, float]:
+        args_producing_min: Dict[str, float] = {}
+        for i, key in enumerate(self.sweep_config_keys_order):
+            args_producing_min[key] = np.array(self.sweep_config[key])[
+                self.where_min_shift[i]
+            ]
+        return args_producing_min
+
+    @property
+    def shift_metric_list(self):
+        return [oresult.shift_metric[-1] for oresult in self.oresults_list]
+
+    @property
+    def min_shift_metric(self):
+        return np.min(self.shift_metric_list)
+
+    @property
+    def min_shift_oresult_idx(self):
+        return np.argmin(self.shift_metric_list)
+
+    @property
+    def min_shift_oresult(self):
+        return self.oresults_list[self.min_shift_oresult_idx]
+
+    @property
+    def min_shift_gt(self):
+        return self.min_shift_oresult.gt_metric_opt
 
     def query_at(self, parameter_query: Dict[str, float]):
         query_at_quantized: Dict[str, int] = {}
@@ -1627,7 +2018,16 @@ class OSweepResults(BaseModel):
         # value
         where_min = self.where_min
         fig, axs = plt.subplots(subplot_height, subplot_width)
-        fig.subplots_adjust(wspace=0.6, hspace=0.5)
+        fig.subplots_adjust(wspace=1.9, hspace=0.5)
+        fs = 10
+        plt.rcParams.update({"font.size": fs})
+
+        label_mapping_dct = {
+            "ang_vel_var": "Angular Velocity Variance",
+            "lin_vel_var": "Linear Velocity Variance",
+            "tag_var": "Tag Pose Variance",
+        }
+
         for i, ax in (
             enumerate(axs.flat)
             if num_possible_slice_comb != 1
@@ -1666,20 +2066,29 @@ class OSweepResults(BaseModel):
 
             # Add a colorbar to the axis
             divider = make_axes_locatable(ax)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            fig.colorbar(c, cax=cax, orientation="vertical", label="GT Metric")
+            cax = divider.append_axes("right", size="15%", pad=0.05)
+            fig.colorbar(
+                c, cax=cax, orientation="vertical", label="Ground Truth Metric"
+            )
 
-            ax.set_xlabel(self.sweep_config_keys_order[idcs_plot_against[0]])
+            ax.set_xlabel(
+                label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[0]]],
+                fontsize=fs,
+            )
             ax.set_xscale("log")
             ax.set_xlim(left=np.min(x_vec), right=np.max(x_vec))
-            ax.set_ylabel(self.sweep_config_keys_order[idcs_plot_against[1]])
+            ax.set_ylabel(
+                label_mapping_dct[self.sweep_config_keys_order[idcs_plot_against[1]]],
+                fontsize=fs,
+            )
             ax.set_yscale("log")
             ax.set_ylim(bottom=np.min(y_vec), top=np.max(y_vec))
 
         fig.suptitle(
             f"Cross Section of Search Space Intersecting Min. Ground Truth={self.min_gt_result:0.2e}"
             f"\n(red dot{'s' if num_possible_slice_comb > 1 else ''} show"
-            f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)"
+            f"{'s' if num_possible_slice_comb == 1 else ''} min. value coordinates)",
+            fontsize=fs,
         )
         return fig
 

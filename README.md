@@ -134,10 +134,25 @@ python3 run_scripts/optimize_and_manage_cache -p d --d_p "*duncan-occam-room-10-
 
 <img src="img/synthesized_data_from_data_set.png" alt="synthesized_data_occam_noise" width="50%">
 
+## Ground Truth
+
+One of the biggest challenge that IM has faced in its development is the lack of what we call "ground truth," or the *real* location of the tags. It's really impossible to evaluate how good a map is if we have no idea where the tags are actually supposed to go. 
+
+We've discovered that [RTABmap](https://github.com/occamLab/rtabmap) with a few changes is a pretty effective at mapping out a space and giving us the real location of April Tags. RTABmap uses LIDAR to map out the space and returns the locations of the tags.
+
+The [ground_truth_generator.py](ground_truth/gt_data_generator.py) script can generate new ground truth datasets for use from that. We've found that it's accurate enough to be assumed as true. 
+
+Read the [README](ground_truth/README.md) in the ground truth folder for more details!
+
+## Benchmarking
+
+After getting ground truth data, the next step is to benchmark the many different aspects of IM.
+
+The folder's [README](benchmarking/README.md) will explain what was benchmarked, and why!
+
 ## TODOS
 
 - Continue finding metrics to evaluate optimized map quality.
-  - Consider ways of obtaining ground truth data
 - Add more ways to consolidate paths in the map to make navigation more efficient
   - Currently, only direct intersections are handled
   - Consider detecting points that have no obstructions between (e.g. connect odometry points that are on different sides of a hallway).
