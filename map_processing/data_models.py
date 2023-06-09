@@ -393,7 +393,9 @@ class Weights(BaseModel):
         elif end_vertex_mode is None:
             return np.array(self.gravity)
         elif end_vertex_mode == VertexType.WAYPOINT:
-            return np.ones(6)  # TODO: set to something other than identity?
+            return np.ones(6)   # TODO: set to something other than identity?
+        elif end_vertex_mode == VertexType.CLOUD_ANCHOR:
+            return np.ones(6)   # TODO: set to something other than identity?
         else:
             raise Exception(f"Edge of end type {end_vertex_mode} not recognized")
 
@@ -522,6 +524,17 @@ class UGLocationDatum(BaseModel):
     name: str
     timestamp: float
     pose_id: int
+
+
+class UGCloudAnchorDatum(BaseModel):
+    """
+    TODO: documentation
+    """
+
+    timestamp: float
+    cloudIdentifier: str
+    pose: conlist(Union[float, int], min_items=16, max_items=16)
+    poseId: int
 
 
 class GenerateParams(BaseModel):
@@ -983,6 +996,7 @@ class UGDataSet(BaseModel):
     pose_data: List[UGPoseDatum]
     tag_data: List[List[UGTagDatum]] = []
     generated_from: Optional[GenerateParams] = None
+    cloud_data: List[List[UGCloudAnchorDatum]] = []
 
     # TODO: Add documentation for the following properties
 
@@ -1045,6 +1059,16 @@ class UGDataSet(BaseModel):
                     ]
                 ).reshape([-1, 4, 4], order="C"),
             )
+        )
+
+    @property
+    def cloud_anchor_edge_measurements_matrix(self) -> np.ndarray:
+        return (
+            np.zeros((0, 4, 4))
+            if len(self.cloud_data) == 0
+            else np.vstack(
+                [[x.pose for x in frame] for frame in self.cloud_data]
+            ).reshape([-1, 4, 4], order="C")
         )
 
     @property
@@ -1179,6 +1203,28 @@ class UGDataSet(BaseModel):
                         ]
                     )
                 )
+            )
+        )
+
+    @property
+    def cloud_anchor_ids(self) -> np.ndarray:
+        return list(
+            itertools.chain(
+                *[
+                    [cloud_anchor.cloudIdentifier for cloud_anchor in frame]
+                    for frame in self.cloud_data
+                ]
+            )
+        )
+
+    @property
+    def cloud_anchor_pose_ids(self) -> np.ndarray:
+        return list(
+            itertools.chain(
+                *[
+                    [cloud_anchor.poseId for cloud_anchor in frame]
+                    for frame in self.cloud_data
+                ]
             )
         )
 
@@ -1542,6 +1588,7 @@ class OG2oOptimizer(BaseModel):
     tags: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
     tagpoints: np.ndarray = Field(default_factory=lambda: np.zeros((0, 3)))
     waypoints_arr: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
+    cloud_anchors: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
     waypoints_metadata: List[Dict]
     locationsAdjChi2: Optional[np.ndarray] = None
     visibleTagsCount: Optional[np.ndarray] = None
