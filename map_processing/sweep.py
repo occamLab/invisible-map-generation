@@ -183,53 +183,65 @@ def sweep_params(
     )
 
     # Find min metrics from all the parameters
-    min_gt = sweep_results.min_gt_result
-    min_alpha = sweep_results.min_alpha_result
-    min_shift = sweep_results.min_shift_result
+    if ground_truth_data:
+        min_gt = sweep_results.min_gt_result
+        min_alpha = sweep_results.min_alpha_result
+        min_shift = sweep_results.min_shift_result
 
-    # Get best parameter based on ground truth
-    min_oresult = sweep_results.min_oresult  # OResult at that index
-
-    # Get best parameter based on alpha metric
+    # Get best parameter based on different parameters
+    if ground_truth_data:
+        min_oresult = sweep_results.min_oresult
+    else:
+        min_oresult = sweep_results.min_shift_oresult
     min_oresult_alpha = sweep_results.min_oresult_alpha
+    min_oresult_shift = sweep_results.min_oresult_shift
 
     # Get max ground truth from above dict for the best parameter config
-    max_gt = min_oresult.find_max_gt
-    max_gt_tag = min_oresult.find_max_gt_tag
+    if ground_truth_data:
+        max_gt = min_oresult.find_max_gt
+        max_gt_tag = min_oresult.find_max_gt_tag
 
     # Print results
     if verbose:
         # Print fitness metrics
-        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        print(
-            f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
-            f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})"
-        )
-        print(
-            f"For map based on min gt, GT: {min_gt} "
-            f"(delta = {min_gt - min_oresult.gt_metric_pre})"
-        )
-        print(
-            f"For map based on min shift, GT: {sweep_results.min_shift_gt} "
-            f"(delta = {sweep_results.min_shift_gt - min_oresult.gt_metric_pre})"
-        )
+        if ground_truth_data:
+            print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+            print(
+                f"For map based on min alpha, GT: {min_oresult_alpha.gt_metric_opt} "
+                f"(delta = {min_oresult_alpha.gt_metric_opt - min_oresult_alpha.gt_metric_pre})"
+            )
+            print(
+                f"For map based on min gt, GT: {min_gt} "
+                f"(delta = {min_gt - min_oresult.gt_metric_pre})"
+            )
+            print(
+                f"For map based on min shift, GT: {sweep_results.min_shift_gt} "
+                f"(delta = {sweep_results.min_shift_gt - min_oresult.gt_metric_pre})"
+            )
         print(f"Min Shift Metric: {sweep_results.min_shift_metric}")
-        print(
-            f"\n \nFitness metrics (GT): \n"
-            f"{min_oresult.fitness_metrics.repr_as_list()}"
-        )
+        if ground_truth_data:
+            print(
+                f"\n \nFitness metrics (GT): \n"
+                f"{min_oresult.fitness_metrics.repr_as_list()}"
+            )
         print(
             f"\nFitness metrics (Alpha): \n"
             f"{min_oresult_alpha.fitness_metrics.repr_as_list()}"
         )
-        print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
-        print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
+        print(
+            f"\nFitness metrics (Shift): \n"
+            f"{min_oresult_shift.fitness_metrics.repr_as_list()}"
+        )
+        if ground_truth_data:
+            print(f"Maximum ground truth metric: {max_gt} (tag id: {max_gt_tag})")
+            print(f"Ground Truth per Tag: \n {min_oresult.gt_per_anchor_tag_opt}")
 
         print("Optimal Hyperparameters:")
-        print(
-            "Parameters (GT):\n"
-            + json.dumps(sweep_results.args_producing_min, indent=2)
-        )
+        if ground_truth_data:
+            print(
+                "Parameters (GT):\n"
+                + json.dumps(sweep_results.args_producing_min, indent=2)
+            )
         print(
             "Parameters (Alpha):\n"
             + json.dumps(sweep_results.args_producing_min_alpha, indent=2)
@@ -240,10 +252,15 @@ def sweep_params(
         )
     else:
         # Display minimal results
-        print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
-        print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
-        print(f"Best Alpha: {min_alpha} (delta: {min_alpha-sweep_results.pre_opt_gt})")
-        print(f"Best Shift: {min_shift} (delta: {min_shift-sweep_results.pre_opt_gt})")
+        if ground_truth_data:
+            print(f"Pre-Optimization GT: {sweep_results.pre_opt_gt}")
+            print(f"Best GT: {min_gt} (delta: {min_gt-sweep_results.pre_opt_gt}")
+            print(
+                f"Best Alpha: {min_alpha} (delta: {min_alpha-sweep_results.pre_opt_gt})"
+            )
+            print(
+                f"Best Shift: {min_shift} (delta: {min_shift-sweep_results.pre_opt_gt})"
+            )
 
     # Cache file from sweep
     results_cache_file_name_no_ext = (
@@ -321,46 +338,45 @@ def _sweep_target(
         oconfig=sweep_args_tuple[1],
         visualize=False,
     )
-    (
-        gt_result,
-        max_diff,
-        max_diff_idx,
-        min_diff,
-        min_diff_idx,
-        gt_per_anchor_tag,
-    ) = ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
-        ground_truth_tags=sweep_args_tuple[2],
-    )
-    oresult.gt_per_anchor_tag_opt = gt_per_anchor_tag
-    (
-        gt_result_pre,
-        max_diff_pre,
-        max_diff_idx_pre,
-        min_diff_pre,
-        min_diff_idx_pre,
-        _,
-    ) = ground_truth_metric_with_tag_id_intersection(
-        optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
-        ground_truth_tags=sweep_args_tuple[2],
-    )
-
-    # Add metrics to corresponding OResult
-    oresult.gt_metric_pre = gt_result_pre
-    oresult.gt_metric_opt = gt_result
-    oresult.max_pre = max_diff_pre
-    oresult.max_opt = max_diff
-    oresult.min_pre = min_diff_pre
-    oresult.min_opt = min_diff
-    oresult.max_idx_pre = max_diff_idx_pre
-    oresult.max_idx_opt = max_diff_idx
-    oresult.min_idx_pre = min_diff_idx_pre
-    oresult.min_idx_opt = min_diff_idx
+    gt_result = None
     oresult.shift_metric = calculate_shift_metric(
         oresult.map_opt.tags, sweep_args_tuple[5]
     )
+    if sweep_args_tuple[2]:
+        (
+            gt_result,
+            max_diff,
+            max_diff_idx,
+            min_diff,
+            min_diff_idx,
+            gt_per_anchor_tag,
+        ) = ground_truth_metric_with_tag_id_intersection(
+            optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_opt.tags),
+            ground_truth_tags=sweep_args_tuple[2],
+        )
+        oresult.gt_per_anchor_tag_opt = gt_per_anchor_tag
+        (
+            gt_result_pre,
+            max_diff_pre,
+            max_diff_idx_pre,
+            min_diff_pre,
+            min_diff_idx_pre,
+            _,
+        ) = ground_truth_metric_with_tag_id_intersection(
+            optimized_tags=tag_pose_array_with_metadata_to_map(oresult.map_pre.tags),
+            ground_truth_tags=sweep_args_tuple[2],
+        )
 
-    # if sweep_args_tuple[4]:
-    #     print(f"Completed sweep (parameter idx={sweep_args_tuple[3][0] + 1})")
+        # Add metrics to corresponding OResult
+        oresult.gt_metric_pre = gt_result_pre
+        oresult.gt_metric_opt = gt_result
+        oresult.max_pre = max_diff_pre
+        oresult.max_opt = max_diff
+        oresult.min_pre = min_diff_pre
+        oresult.min_opt = min_diff
+        oresult.max_idx_pre = max_diff_idx_pre
+        oresult.max_idx_opt = max_diff_idx
+        oresult.min_idx_pre = min_diff_idx_pre
+        oresult.min_idx_opt = min_diff_idx
 
     return gt_result, sweep_args_tuple[3][0], oresult

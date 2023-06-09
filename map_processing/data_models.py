@@ -1879,6 +1879,14 @@ class OSweepResults(BaseModel):
         return self.oresults_list[self.min_alpha_result_idx]
 
     @property
+    def min_shift_result_idx(self) -> float:
+        return np.argmin(self.shift_metric_list)
+
+    @property
+    def min_oresult_shift(self) -> OResult:
+        return self.oresults_list[self.min_shift_result_idx]
+
+    @property
     # This finds the maximum distance a tag has to move from pre-optimized to optimized for the best OResult (best
     # parameters)
     def min_gt(self) -> float:

@@ -176,14 +176,6 @@ def make_parser() -> argparse.ArgumentParser:
         "value performs no filtering.",
         default=-1.0,
     )
-    p.add_argument(
-        "-g",
-        action="store_true",
-        help="Search for a matching ground truth data set and, if one is found, "
-        "compute and print the ground truth "
-        "metric.",
-        default=False,
-    )
 
     p.add_argument(
         "--lvv",
@@ -280,9 +272,9 @@ if __name__ == "__main__":
         ang_vel_var=args.avv,
     )
     for map_info in matching_maps:
+        gt_data = cms.find_ground_truth_data_from_map_info(map_info)
         # If you want to sweep through optimization parameters
         if args.s:
-            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
 
             sweep_params(
@@ -304,7 +296,6 @@ if __name__ == "__main__":
 
         # If you simply want to run the optimizer with specified weights
         else:
-            gt_data = cms.find_ground_truth_data_from_map_info(map_info)
             oconfig = OConfig(
                 is_sba=args.pso == 0,
                 weights=WEIGHTS_DICT[WeightSpecifier(args.w)],
