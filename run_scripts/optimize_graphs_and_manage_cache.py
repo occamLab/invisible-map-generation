@@ -40,6 +40,10 @@ from map_processing.sweep import sweep_params
 import map_processing.throw_out_bad_tags as tag_filter
 import map_processing
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] = {
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
@@ -53,7 +57,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 3]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -129,6 +133,12 @@ def make_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Upload any graphs to Firebase that are optimized while this script is "
         "running. This option is mutually exclusive with the -c option.",
+        default=False,
+    )
+    p.add_argument(
+        "-ca",
+        action="store_true",
+        help="Optimize Graph with Cloud Anchors",
         default=False,
     )
     p.add_argument(
@@ -233,9 +243,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.c and (args.F or args.s):
-        print("Mutually exclusive flags with -c used")
-        exit(-1)
+        raise ValueError("Mutually exclusive flags with -c used")
 
+    if args.ca and (args.pso == PrescalingOptEnum.USE_SBA.value or not args.s):
+        raise ValueError(
+            "Cloud Anchors are currently only supported in no SBA parameter sweeps"
+        )
+    
     # Fetch the service account key JSON file contents
     env_variable = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if env_variable is None:
@@ -292,6 +306,7 @@ if __name__ == "__main__":
                 num_processes=args.np,
                 upload_best=args.F,
                 cms=cms,
+                use_cloud_anchors=args.ca,
             )
 
         # If you simply want to run the optimizer with specified weights

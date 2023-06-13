@@ -47,6 +47,7 @@ def run_param_sweep(
     fixed_vertices: Optional[Set[VertexType]] = None,
     verbose: bool = False,
     num_processes: int = 1,
+    use_cloud_anchors: bool = False,
 ) -> Tuple[float, int, OResult]:
     graph_to_opt = Graph.as_graph(
         mi.map_dct,
@@ -54,6 +55,7 @@ def run_param_sweep(
         prescaling_opt=PrescalingOptEnum.USE_SBA
         if base_oconfig.is_sba
         else PrescalingOptEnum.FULL_COV,
+        use_cloud_anchors=use_cloud_anchors
     )
     sweep_arrs: Dict[OConfig.OConfigEnum, np.ndarray] = {}
 
@@ -167,6 +169,7 @@ def sweep_params(
     cache_results: bool = False,
     upload_best: bool = False,
     cms: CacheManagerSingleton = None,
+    use_cloud_anchors: bool = False,
 ) -> OSweepResults:
     """
     TODO: Documentation and add SBA weighting to the sweeping
@@ -180,6 +183,7 @@ def sweep_params(
         fixed_vertices=fixed_vertices,
         verbose=verbose,
         num_processes=num_processes,
+        use_cloud_anchors=use_cloud_anchors,
     )
 
     # Find min metrics from all the parameters
@@ -290,6 +294,8 @@ def sweep_params(
                 opt_odometry=opt_map.locations,
                 orig_odometry=pre_map.locations,
                 opt_tag_verts=opt_map.tags,
+                orig_cloud_anchor=pre_map.cloud_anchors,
+                opt_cloud_anchor=opt_map.cloud_anchors,
                 opt_tag_corners=opt_map.tagpoints,
                 opt_waypoint_verts=(opt_map.waypoints_metadata, opt_map.waypoints_arr),
                 orig_tag_verts=pre_map.tags,

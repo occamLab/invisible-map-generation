@@ -148,6 +148,8 @@ class Edge:
                     lin_vel_var=compute_inf_params.lin_vel_var,
                     ang_vel_var=compute_inf_params.ang_vel_var,
                 )
+            elif self.start_end[1].mode == VertexType.CLOUD_ANCHOR:
+                self._compute_information_cloud_anchor(weights_vec)
             else:
                 self._compute_information_se3_obs(
                     weights_vec, compute_inf_params.tag_var
@@ -164,6 +166,9 @@ class Edge:
                 f"vector argument was an array of shape {weights_vec.shape}"
             )
 
+    def _compute_information_cloud_anchor(self,weights_vec: np.ndarray):
+        self.information = np.diag(weights_vec)
+        
     def _compute_information_se3_nonzero_delta_t(
         self,
         weights_vec: np.ndarray,

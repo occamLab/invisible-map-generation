@@ -21,6 +21,9 @@ from map_processing.data_models import (
     OResultPseudoGTMetricValidation,
 )
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class MapInfo:
     """Container for identifying information for a graph (useful for caching process)
@@ -83,8 +86,8 @@ class CacheManagerSingleton:
 
     __instance = None
     __app_initialize_dict: Dict[str, str] = {
-        "databaseURL": "https://invisible-map-sandbox.firebaseio.com/",
-        "storageBucket": "invisible-map.appspot.com",
+        "databaseURL": "https://stepnavigation-default-rtdb.firebaseio.com/",
+        "storageBucket": "stepnavigation.appspot.com",
     }
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"

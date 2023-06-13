@@ -128,7 +128,6 @@ def holistic_optimize(
     graph = Graph.as_graph(
         map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso
     )
-
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(
             map_info.map_name
@@ -393,6 +392,8 @@ def optimize_graph(
             orig_odometry=before_opt_map.locations,
             opt_tag_verts=opt_result_map.tags,
             opt_tag_corners=opt_result_map.tagpoints,
+            orig_cloud_anchor=before_opt_map.cloud_anchors,
+            opt_cloud_anchor =opt_result_map.cloud_anchors,
             opt_waypoint_verts=(
                 opt_result_map.waypoints_metadata,
                 opt_result_map.waypoints_arr,

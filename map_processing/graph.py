@@ -782,6 +782,7 @@ class Graph:
         data_set: Union[Dict, UGDataSet],
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
+        use_cloud_anchors: bool = False,
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -999,21 +1000,72 @@ class Graph:
             waypoint_vertex_id_and_index_by_frame_id[waypoint_frame].append(
                 (waypoint_vertex_id, waypoint_index)
             )
+        # if use_cloud_anchors:
+        cloud_anchor_ids = data_set.cloud_anchor_ids
+        cloud_anchor_pose_ids = data_set.cloud_anchor_pose_ids
 
+        unique_cloud_anchor_ids = set(cloud_anchor_ids)
+
+        num_unique_cloud_anchor_names = len(unique_cloud_anchor_ids)
+        cloud_anchor_vertex_id_by_cloud_anchor_id = dict(
+            zip(
+                unique_cloud_anchor_ids,
+                range(
+                    unique_tag_ids.size + num_unique_waypoint_names,
+                    unique_tag_ids.size
+                    + num_unique_waypoint_names
+                    + num_unique_cloud_anchor_names,
+                ),
+            )
+        )
+        cloud_anchor_id_by_cloud_anchor_vertex_id = dict(
+            zip(
+                cloud_anchor_vertex_id_by_cloud_anchor_id.values(),
+                cloud_anchor_vertex_id_by_cloud_anchor_id.keys(),
+            )
+        )
+
+        cloud_anchor_vertex_id_and_index_by_frame_id: Dict[
+            int, List[Tuple[int, int]]
+        ] = {}
+        for cloud_anchor_index, (cloud_anchor_id, cloud_anchor_frame) in enumerate(
+            zip(cloud_anchor_ids, cloud_anchor_pose_ids)
+        ):
+            cloud_anchor_vertex_id = cloud_anchor_vertex_id_by_cloud_anchor_id[
+                cloud_anchor_id
+            ]
+            cloud_anchor_vertex_id_and_index_by_frame_id[
+                cloud_anchor_frame
+            ] = cloud_anchor_vertex_id_and_index_by_frame_id.get(
+                cloud_anchor_frame, []
+            )
+            cloud_anchor_vertex_id_and_index_by_frame_id[cloud_anchor_frame].append(
+                (cloud_anchor_vertex_id, cloud_anchor_index)
+            )
+
+        cloud_anchor_edge_measurements_matrix = (
+            data_set.cloud_anchor_edge_measurements_matrix
+        )
+        cloud_anchor_edge_measurements = transform_matrix_to_vector(
+            cloud_anchor_edge_measurements_matrix
+        )
+            
         num_tag_edges = edge_counter = 0
         vertices = {}
         edges = {}
         counted_tag_vertex_ids = set()
         counted_waypoint_vertex_ids = set()
+        # if use_cloud_anchors:
+        counted_cloud_anchor_vertex_ids = set()
         previous_vertex_uid = None
         first_odom_processed = False
         if use_sba:
-            vertex_counter = unique_tag_ids.size * 5 + num_unique_waypoint_names
+            vertex_counter = unique_tag_ids.size * 5 + num_unique_waypoint_names + len(unique_cloud_anchor_ids)
             # TODO: debug; this appears to be counterproductive
             initialize_with_averages = False
             tag_transform_estimates = defaultdict(lambda: [])
         else:
-            vertex_counter = unique_tag_ids.size + num_unique_waypoint_names
+            vertex_counter = unique_tag_ids.size + num_unique_waypoint_names + len(unique_cloud_anchor_ids)
 
         for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
@@ -1125,6 +1177,45 @@ class Graph:
                     )
 
                 num_tag_edges += 1
+                edge_counter += 1
+
+            # if use_cloud_anchors:
+            for (
+                cloud_anchor_vertex_id,
+                cloud_anchor_index,
+            ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(
+                int(odom_frame), []
+            ):
+                if cloud_anchor_vertex_id not in counted_cloud_anchor_vertex_ids:
+                    vertices[cloud_anchor_vertex_id] = Vertex(
+                        mode=VertexType.CLOUD_ANCHOR,
+                        estimate=transform_matrix_to_vector(
+                            pose_matrices[i].dot(
+                                cloud_anchor_edge_measurements_matrix[
+                                    cloud_anchor_index
+                                ]
+                            )
+                        ),
+                        fixed=VertexType.CLOUD_ANCHOR in fixed_vertices,
+                        meta_data={
+                            "cloud_anchor_id": cloud_anchor_id_by_cloud_anchor_vertex_id[
+                                cloud_anchor_vertex_id
+                            ]
+                        },
+                    )
+                    counted_cloud_anchor_vertex_ids.add(cloud_anchor_vertex_id)
+                edges[edge_counter] = Edge(
+                    startuid=current_odom_vertex_uid,
+                    enduid=cloud_anchor_vertex_id,
+                    corner_verts=None,
+                    information_prescaling=None,  # TODO: investigate
+                    camera_intrinsics=None,
+                    measurement=cloud_anchor_edge_measurements[cloud_anchor_index],
+                    start_end=(
+                        vertices[current_odom_vertex_uid],
+                        vertices[cloud_anchor_vertex_id],
+                    ),
+                )
                 edge_counter += 1
 
             # Connect odom to waypoint vertex
