@@ -525,6 +525,7 @@ class UGLocationDatum(BaseModel):
     timestamp: float
     pose_id: int
 
+
 class UGCloudAnchorDatum(BaseModel):
     """
     TODO: documentation
@@ -534,6 +535,7 @@ class UGCloudAnchorDatum(BaseModel):
     cloudIdentifier: str
     pose: conlist(Union[float, int], min_items=16, max_items=16)
     poseId: int
+
 
 class GenerateParams(BaseModel):
     # noinspection PyUnresolvedReferences
@@ -1069,7 +1071,6 @@ class UGDataSet(BaseModel):
             ).reshape([-1, 4, 4], order="C")
         )
 
-
     @property
     def timestamps(self) -> np.ndarray:
         return np.array([pose_datum.timestamp for pose_datum in self.pose_data])
@@ -1334,12 +1335,20 @@ class PGTagVertex(BaseModel):
     id: int
 
 
+class PGCloudVertex(BaseModel):
+    translation: PGTranslation
+    rotation: PGRotation
+    id: int
+
+
 class PGOdomVertex(BaseModel):
     translation: PGTranslation
     rotation: PGRotation
     poseId: int
     adjChi2: Optional[float]
+    cloudChi2: Optional[float]
     vizTags: Optional[float]
+    vizCloud: Optional[float]
     neighbors: Optional[List[int]]
 
 
@@ -1351,6 +1360,7 @@ class PGWaypointVertex(BaseModel):
 
 class PGDataSet(BaseModel):
     tag_vertices: List[PGTagVertex]
+    cloud_vertices: List[PGCloudVertex]
     odometry_vertices: List[PGOdomVertex]
     waypoints_vertices: List[PGWaypointVertex]
 
@@ -1591,6 +1601,8 @@ class OG2oOptimizer(BaseModel):
     waypoints_metadata: List[Dict]
     locationsAdjChi2: Optional[np.ndarray] = None
     visibleTagsCount: Optional[np.ndarray] = None
+    locationsCloudChi2: Optional[np.ndarray] = None
+    visibleCloudCount: Optional[np.ndarray] = None
 
     class Config:
         arbitrary_types_allowed = (

@@ -380,12 +380,13 @@ def optimize_graph(
         graph.filter_out_high_chi2_observation_edges(oconfig.obs_chi2_filter)
         graph.optimize_graph()
 
+    chi2_by_cloud = graph.determine_chi2_cloud_edges()
+
     # Change vertex estimates based off the optimized graph
     graph.update_vertices_estimates_from_optimized_graph()
     opt_result_map = graph_opt_utils.optimizer_to_map_chi2(
-        graph, graph.optimized_graph, is_sba=is_sba
+        graph, graph.optimized_graph, is_sba=False
     )
-
     if visualize:
         graph_opt_plot_utils.plot_optimization_result(
             opt_odometry=opt_result_map.locations,
@@ -393,7 +394,7 @@ def optimize_graph(
             opt_tag_verts=opt_result_map.tags,
             opt_tag_corners=opt_result_map.tagpoints,
             orig_cloud_anchor=before_opt_map.cloud_anchors,
-            opt_cloud_anchor =opt_result_map.cloud_anchors,
+            opt_cloud_anchor=opt_result_map.cloud_anchors,
             opt_waypoint_verts=(
                 opt_result_map.waypoints_metadata,
                 opt_result_map.waypoints_arr,
@@ -404,6 +405,8 @@ def optimize_graph(
             anchor_tag_id=anchor_tag_id,
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
+        graph_opt_plot_utils.plot_box_whisker_chis(chi2_by_cloud)
+
     return OResult(
         oconfig=oconfig,
         map_pre=before_opt_map,

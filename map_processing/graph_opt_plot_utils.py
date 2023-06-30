@@ -254,7 +254,6 @@ def plot_optimization_result(
             waypoint_name = opt_waypoint_verts[0][vert_idx]["name"]
             ax.text(vert[0], vert[1], vert[2], waypoint_name, color="black")
 
-    
     if three_dimensional:
         plt.scatter(
             opt_cloud_anchor[:, 0],
@@ -325,7 +324,6 @@ def plot_optimization_result(
             c="b",
         )
 
-
     plt.legend(bbox_to_anchor=(1.05, 1), fontsize="small")
     axis_equal(ax, three_dimensional)
     plt.gcf().set_dpi(300)
@@ -373,6 +371,17 @@ def axis_equal(ax: plt.Axes, three_dimensional: bool):
             ax.plot([xb], [yb], "w")
 
 
+def plot_box_whisker_chis(chi2_by_cloud: dict[int] = str) -> None:
+    """
+    Makes a Box and Whisker Plot of the Chi2 Values from a Cloud Anchor Node
+    """
+    plt.boxplot(chi2_by_cloud.values(), labels=chi2_by_cloud.keys(), meanline=True)
+    plt.xlabel("Cloud Anchor Node UID")
+    plt.ylabel("Chi2")
+    plt.title("Chi2 Values of Cloud Anchor Nodes")
+    plt.show()
+
+
 def plot_adj_chi2(
     map_from_opt: OG2oOptimizer, plot_title: Union[str, None] = None
 ) -> None:
@@ -383,6 +392,7 @@ def plot_adj_chi2(
         plot_title:
     """
     locations_chi2_viz_tags = []
+    locations_chi2_viz_cloud = []
     locations_shape = np.shape(map_from_opt.locations)
     for i in range(locations_shape[0]):
         locations_chi2_viz_tags.append(
@@ -392,34 +402,58 @@ def plot_adj_chi2(
                 map_from_opt.visibleTagsCount[i],
             )
         )
-    locations_chi2_viz_tags.sort(
-        key=lambda x: x[0][7]
-    )  # Sorts by UID, which is at the 7th index
+        locations_chi2_viz_cloud.append(
+            (
+                map_from_opt.locations[i],
+                map_from_opt.locationsCloudChi2[i],
+                map_from_opt.visibleCloudCount[i],
+            )
+        )
+    locations_chi2_viz_tags.sort(key=lambda x: x[0][7])
+    locations_chi2_viz_cloud.sort(key=lambda x: x[0][7])
+    # Sorts by UID, which is at the 7th index
 
-    chi2_values = np.zeros([locations_shape[0], 1])  # Contains adjacent chi2 values
+    chi2_values_tags = np.zeros(
+        [locations_shape[0], 1]
+    )  # Contains adjacent chi2 values
+    chi2_values_cloud = np.zeros([locations_shape[0], 1])
     viz_tags = np.zeros([locations_shape[0], 3])
-    odom_uids = np.zeros([locations_shape[0], 1])  # Contains UIDs
+    viz_cloud = np.zeros([locations_shape[0], 3])
+    odom_uids_tags = np.zeros([locations_shape[0], 1])
+    odom_uids_cloud = np.zeros([locations_shape[0], 1])  # Contains UIDs
     for idx in range(locations_shape[0]):
-        chi2_values[idx] = locations_chi2_viz_tags[idx][1]
-        odom_uids[idx] = int(locations_chi2_viz_tags[idx][0][7])
+        chi2_values_tags[idx] = locations_chi2_viz_tags[idx][1]
+        chi2_values_cloud[idx] = locations_chi2_viz_cloud[idx][1]
+        odom_uids_tags[idx] = int(locations_chi2_viz_tags[idx][0][7])
+        odom_uids_cloud[idx] = int(locations_chi2_viz_cloud[idx][0][7])
 
         # Each row: UID, chi2_value, and num. viz. tags (only if != 0). As of now, the number of visible tags is
         # ignored when plotting (plot only shows boolean value: whether at least 1 tag vertex is visible)
+        num_cloud_verts = locations_chi2_viz_cloud[idx][2]
         num_tag_verts = locations_chi2_viz_tags[idx][2]
         if num_tag_verts != 0:
             viz_tags[idx, :] = np.array(
-                [odom_uids[idx], chi2_values[idx], num_tag_verts]
+                [odom_uids_tags[idx], chi2_values_tags[idx], num_tag_verts]
             ).flatten()
 
-    odom_uids.flatten()
-    chi2_values.flatten()
+        if num_cloud_verts != 0:
+            viz_cloud[idx, :] = np.array(
+                [odom_uids_cloud[idx], chi2_values_cloud[idx], num_cloud_verts]
+            ).flatten()
+
+    odom_uids_tags.flatten()
+    odom_uids_cloud.flatten()
+    chi2_values_tags.flatten()
+    chi2_values_cloud.flatten()
 
     f = plt.figure()
     ax: plt.Axes = f.add_axes([0.1, 0.1, 0.8, 0.7])
-    ax.plot(odom_uids, chi2_values)
-    ax.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
-    ax.set_xlim(min(odom_uids), max(odom_uids))
-    ax.legend(["chi2 value", ">=1 tag vertex visible"])
+    # ax.plot(odom_uids_tags, chi2_values_tags)
+    ax.plot(odom_uids_cloud, chi2_values_cloud)
+    # ax.scatter(viz_tags[:, 0], viz_tags[:, 1], marker="o", color="red")
+    ax.scatter(viz_cloud[:, 0], viz_cloud[:, 1], marker="o", color="red")
+    ax.set_xlim(min(odom_uids_cloud), max(odom_uids_cloud))
+    ax.legend(["chi2 value", ">=1 cloud anchors visible"])
     ax.set_xlabel("Odometry vertex UID")
 
     plt.xlabel("Odometry vertex UID")

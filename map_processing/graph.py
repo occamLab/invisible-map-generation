@@ -102,6 +102,7 @@ class Graph:
         self.use_huber: bool = use_huber
 
         self.our_odom_edges_to_g2o_edges = {}
+        self.our_cloud_edges_to_g2o_edges = {}
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
@@ -213,6 +214,55 @@ class Graph:
                 g2o_edge, g2o_edge.vertices()[0]
             )[0]
         return adj_chi2, num_tags_visible
+
+    def map_odom_to_cloud_chi2(self, vertex_uid: int) -> Tuple[float, int]:
+        """Computes odometry-adjacent chi2 value
+
+        Arguments:
+            vertex_uid (int): Vertex integer corresponding to an odometry node
+
+        Returns:
+            Tuple containing two elements:
+            - Float that is the sum of the chi2 values of the two edges (as calculated through the `get_chi2_of_edge`
+              static method) that are incident to both the specified odometry node and two other odometry nodes. If
+              there is only one such incident edge, then only that edge's chi2 value is returned.
+            - Integer indicating how many tag vertices are visible from the specified odometry node
+
+        Raises:
+            ValueError if `vertex_uid` does not correspond to an odometry node.
+            Exception if there appear to be more than two incident edges that connect the specified node to other
+             odometry nodes.
+        """
+        if self.vertices[vertex_uid].mode != VertexType.ODOMETRY:
+            raise ValueError("Specified vertex type is not an odometry vertex")
+
+        cloud_edge_uids = []
+        num_clouds_visible = 0
+        for e in self._verts_to_edges[vertex_uid]:
+            edge = self.edges[e]
+            end_vertex = self.vertices[edge.enduid] if edge.enduid is not None else None
+            if end_vertex is None:  # Continue if the edge is a gravity edge
+                continue
+            start_vertex = self.vertices[edge.startuid]
+            if (
+                start_vertex.mode == VertexType.CLOUD_ANCHOR
+                or end_vertex.mode == VertexType.CLOUD_ANCHOR
+            ):
+                cloud_edge_uids.append(e)
+                num_clouds_visible += 1
+
+        # if len(cloud_edge_uids) > 2:
+        #     raise Exception(
+        #         "Odometry vertex appears to be incident to > two odometry vertices"
+        #     )
+
+        adj_chi2 = 0.0
+        for our_edge in cloud_edge_uids:
+            g2o_edge = self.our_cloud_edges_to_g2o_edges[our_edge]
+            adj_chi2 += graph_opt_utils.get_chi2_of_edge(
+                g2o_edge, g2o_edge.vertices()[0]
+            )[0]
+        return adj_chi2, num_clouds_visible
 
     # noinspection DuplicatedCode
     def optimize_graph(self) -> OResultFitnessMetrics:
@@ -353,6 +403,11 @@ class Graph:
                     and edge_i.start_end[1].mode == VertexType.ODOMETRY
                 ):
                     self.our_odom_edges_to_g2o_edges[i] = edge
+                if (
+                    edge_i.start_end[0].mode == VertexType.CLOUD_ANCHOR
+                    or edge_i.start_end[1].mode == VertexType.CLOUD_ANCHOR
+                ):
+                    self.our_cloud_edges_to_g2o_edges[i] = edge
 
         if not cpp_bool_ret_val_check:
             raise Exception(
@@ -406,6 +461,33 @@ class Graph:
             del self._verts_to_edges[edge.enduid]
         del self.edges[edge_id]
 
+    def determine_chi2_cloud_edges(self):
+        """
+        Loops through all the edges of an optimized graph to find edges with CLOUD_ANCHOR type nodes.
+        Afterwards, calculates the chi2 value of edges associated with CLOUD_ANCHOR type nodes.
+        """
+        if self.optimized_graph is None:
+            return
+
+        cloud_chi2_by_vertex_uids = {}
+        chi2s = []
+        for edge in self.optimized_graph.edges():
+            enduid = self.edges[edge.vertices()[0].id()].enduid
+            if enduid is not None:
+                end_mode = self.vertices[enduid].mode
+                if end_mode.name == "CLOUD_ANCHOR":
+                    if isinstance(edge, EdgeSE3Gravity):
+                        continue
+                        # Exlude Gravity Edges
+                    chi2 = graph_opt_utils.get_chi2_of_edge(edge)[0]
+                    # Assuming Cloud Anchor nodes are always the end vertex
+                    if enduid not in cloud_chi2_by_vertex_uids:
+                        cloud_chi2_by_vertex_uids[enduid] = []
+                    cloud_chi2_by_vertex_uids[enduid].append(chi2)
+                    chi2s.append(chi2)
+        cloud_chi2_by_vertex_uids = dict(sorted(cloud_chi2_by_vertex_uids.items()))
+        return cloud_chi2_by_vertex_uids
+
     def filter_out_high_chi2_observation_edges(
         self, filter_std_dv_multiple: float
     ) -> None:
@@ -423,8 +505,8 @@ class Graph:
         chi2_by_edge = {}
         chi2s = []
         for edge in self.optimized_graph.edges():
-            end_mode = self.vertices[self.edges[edge.id()].enduid].mode
             start_mode = self.vertices[self.edges[edge.id()].startuid].mode
+            end_mode = self.vertices[self.edges[edge.id()].enduid].mode
             if end_mode in (VertexType.TAG, VertexType.TAGPOINT) or start_mode in (
                 VertexType.TAG,
                 VertexType.TAGPOINT,
@@ -1036,9 +1118,7 @@ class Graph:
             ]
             cloud_anchor_vertex_id_and_index_by_frame_id[
                 cloud_anchor_frame
-            ] = cloud_anchor_vertex_id_and_index_by_frame_id.get(
-                cloud_anchor_frame, []
-            )
+            ] = cloud_anchor_vertex_id_and_index_by_frame_id.get(cloud_anchor_frame, [])
             cloud_anchor_vertex_id_and_index_by_frame_id[cloud_anchor_frame].append(
                 (cloud_anchor_vertex_id, cloud_anchor_index)
             )
@@ -1049,7 +1129,7 @@ class Graph:
         cloud_anchor_edge_measurements = transform_matrix_to_vector(
             cloud_anchor_edge_measurements_matrix
         )
-            
+
         num_tag_edges = edge_counter = 0
         vertices = {}
         edges = {}
@@ -1060,12 +1140,20 @@ class Graph:
         previous_vertex_uid = None
         first_odom_processed = False
         if use_sba:
-            vertex_counter = unique_tag_ids.size * 5 + num_unique_waypoint_names + len(unique_cloud_anchor_ids)
+            vertex_counter = (
+                unique_tag_ids.size * 5
+                + num_unique_waypoint_names
+                + len(unique_cloud_anchor_ids)
+            )
             # TODO: debug; this appears to be counterproductive
             initialize_with_averages = False
             tag_transform_estimates = defaultdict(lambda: [])
         else:
-            vertex_counter = unique_tag_ids.size + num_unique_waypoint_names + len(unique_cloud_anchor_ids)
+            vertex_counter = (
+                unique_tag_ids.size
+                + num_unique_waypoint_names
+                + len(unique_cloud_anchor_ids)
+            )
 
         for i, odom_frame in enumerate(frame_ids_to_timestamps.keys()):
             current_odom_vertex_uid = vertex_counter
@@ -1183,9 +1271,7 @@ class Graph:
             for (
                 cloud_anchor_vertex_id,
                 cloud_anchor_index,
-            ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(
-                int(odom_frame), []
-            ):
+            ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
                 if cloud_anchor_vertex_id not in counted_cloud_anchor_vertex_ids:
                     vertices[cloud_anchor_vertex_id] = Vertex(
                         mode=VertexType.CLOUD_ANCHOR,

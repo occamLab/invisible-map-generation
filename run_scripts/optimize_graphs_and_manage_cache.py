@@ -57,7 +57,7 @@ NO_SBA_SWEEP_CONFIG: Dict[OConfig.OConfigEnum, Tuple[Callable, Iterable[Any]]] =
     # OConfig.OConfigEnum.ODOM_TAG_RATIO: (np.linspace, [1, 1, 1]),
     OConfig.OConfigEnum.LIN_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
     OConfig.OConfigEnum.ANG_VEL_VAR: (np.geomspace, [1e-10, 10, 10]),
-    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 3]),
+    OConfig.OConfigEnum.TAG_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.TAG_SBA_VAR: (np.geomspace, [1e-10, 10, 10]),
     # OConfig.OConfigEnum.GRAV_MAG: (np.linspace, [1, 1, 1]),
 }
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         raise ValueError(
             "Cloud Anchors are currently only supported in no SBA parameter sweeps"
         )
-    
+
     # Fetch the service account key JSON file contents
     env_variable = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if env_variable is None:
@@ -258,7 +258,6 @@ if __name__ == "__main__":
         cms = CacheManagerSingleton(
             firebase_creds=credentials.Certificate(env_variable), max_listen_wait=0
         )
-
     # Download all maps from Firebase
     if args.fs is not None:
         cms.download_maps_for_device(device_id_name=args.fs)
@@ -329,6 +328,7 @@ if __name__ == "__main__":
                 visualize=args.v,
                 compare=args.c,
                 upload=args.F,
+                cms=cms,
                 gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data)
                 if gt_data is not None
                 else None,

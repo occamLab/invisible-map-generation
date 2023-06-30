@@ -106,7 +106,7 @@ def _get_intersection(vertices, id1, id2, curr_id):
     ):
         return None
 
-    print(f"Intersection at {intersect_pt}, between {id1} and {id2}")
+    # print(f"Intersection at {intersect_pt}, between {id1} and {id2}")
     return {
         "translation": {"x": intersect_pt.x, "y": average[1], "z": intersect_pt.y},
         "rotation": {

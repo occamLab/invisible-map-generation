@@ -109,14 +109,16 @@ def optimizer_to_map(
     tags_arr = np.array(tags) if len(tags) > 0 else np.zeros((0, 8))
     tagpoints_arr = np.array(tagpoints) if len(tagpoints) > 0 else np.zeros((0, 3))
     waypoints_arr = np.array(waypoints) if len(waypoints) > 0 else np.zeros((0, 8))
-    cloud_anchors_arr = np.array(cloud_anchors) if len(cloud_anchors) > 0 else np.zeros((0, 8))
+    cloud_anchors_arr = (
+        np.array(cloud_anchors) if len(cloud_anchors) > 0 else np.zeros((0, 8))
+    )
     return OG2oOptimizer(
         locations=locations_arr,
         tags=tags_arr,
         tagpoints=tagpoints_arr,
         waypoints_arr=waypoints_arr,
         waypoints_metadata=waypoint_metadata,
-        cloud_anchors = cloud_anchors_arr,
+        cloud_anchors=cloud_anchors_arr,
     )
 
 
@@ -140,16 +142,23 @@ def optimizer_to_map_chi2(
     ret_map = optimizer_to_map(graph.vertices, optimizer, is_sba=is_sba)
     locations_shape = np.shape(ret_map.locations)
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
+    locations_cloud_chi2 = np.zeros([locations_shape[0], 1])
     visible_tags_count = np.zeros([locations_shape[0], 1])
+    visible_cloud_count = np.zeros([locations_shape[0], 1])
 
     for i, odom_node_vec in enumerate(ret_map.locations):
         uid = round(
             odom_node_vec[7]
         )  # UID integer is stored as a floating point number, so cast it to an integer
         locations_adj_chi2[i], visible_tags_count[i] = graph.map_odom_to_adj_chi2(uid)
+        locations_cloud_chi2[i], visible_cloud_count[i] = graph.map_odom_to_cloud_chi2(
+            uid
+        )
 
     ret_map.locationsAdjChi2 = locations_adj_chi2
     ret_map.visibleTagsCount = visible_tags_count
+    ret_map.locationsCloudChi2 = locations_cloud_chi2
+    ret_map.visibleCloudCount = visible_cloud_count
     return ret_map
 
 
@@ -233,8 +242,7 @@ def get_chi2_of_edge(
         raise ValueError(f"Unhandled edge type for chi2 calculation: {type(edge)}")
 
     if math.isnan(chi2):
-        raise ValueError(f"chi2 is NaN for: {edge}")
-
+        chi2 = 0.0
     k: int = information.shape[0]
     c: float = -np.log(np.power(2 * np.pi, -0.5 * k))
     alpha: float = c - np.log(np.sqrt(np.linalg.det(information))) + 0.5 * chi2
@@ -410,14 +418,22 @@ def make_processed_map_json(
          relevant data set models in the `data_set_models` module.
     """
     tag_locations = opt_result.tags
+    cloud_locations = opt_result.cloud_anchors
     odom_locations = opt_result.locations
     adj_chi2_arr = opt_result.locationsAdjChi2
+    cloud_chi2_arr = opt_result.locationsCloudChi2
     visible_tags_count = opt_result.visibleTagsCount
+    visible_cloud_count = opt_result.visibleCloudCount
     waypoint_locations = (opt_result.waypoints_metadata, opt_result.waypoints_arr)
 
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
         raise ValueError(
             "'visible_tags_count' and 'adj_chi2_arr' arguments must both be None or non-None"
+        )
+
+    if (visible_cloud_count is None) ^ (cloud_chi2_arr is None):
+        raise ValueError(
+            "'cloud_tags_count' and 'cloud_chi2_arr' arguments must both be None or non-None"
         )
 
     tag_vertex_list: List[PGTagVertex] = []
@@ -429,6 +445,20 @@ def make_processed_map_json(
                     x=curr_tag[3], y=curr_tag[4], z=curr_tag[5], w=curr_tag[6]
                 ),
                 id=int(curr_tag[7]),
+            )
+        )
+
+    cloud_vertex_list: List[PGTagVertex] = []
+    for curr_cloud in cloud_locations:
+        cloud_vertex_list.append(
+            PGTagVertex(
+                translation=PGTranslation(
+                    x=curr_cloud[0], y=curr_cloud[1], z=curr_cloud[2]
+                ),
+                rotation=PGRotation(
+                    x=curr_cloud[3], y=curr_cloud[4], z=curr_cloud[5], w=curr_cloud[6]
+                ),
+                id=int(curr_cloud[7]),
             )
         )
 
@@ -453,6 +483,14 @@ def make_processed_map_json(
         for odom_idx, curr_odom in enumerate(odom_locations_with_chi2_and_viz_tags):
             odom_vertex_list[odom_idx].adjChi2 = curr_odom[9]
             odom_vertex_list[odom_idx].vizTags = curr_odom[10]
+
+    if cloud_chi2_arr is not None:
+        odom_locations_with_chi2_and_viz_cloud = np.concatenate(
+            [odom_locations, cloud_chi2_arr, visible_cloud_count], axis=1
+        )
+        for odom_idx, curr_odom in enumerate(odom_locations_with_chi2_and_viz_cloud):
+            odom_vertex_list[odom_idx].cloudChi2 = curr_odom[9]
+            odom_vertex_list[odom_idx].vizCloud = curr_odom[10]
 
     if calculate_intersections:
         neighbors_list, intersections = graph_util_get_neighbors.get_neighbors(
@@ -487,6 +525,7 @@ def make_processed_map_json(
 
     processed_data_set = PGDataSet(
         tag_vertices=tag_vertex_list,
+        cloud_vertices=cloud_vertex_list,
         odometry_vertices=odom_vertex_list,
         waypoints_vertices=waypoint_vertex_list,
     )
