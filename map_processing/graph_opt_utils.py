@@ -24,11 +24,13 @@ from .data_models import (
     PGTranslation,
     PGRotation,
     PGTagVertex,
+    PGCloudVertex,
     PGOdomVertex,
     PGWaypointVertex,
     PGDataSet,
     OG2oOptimizer,
 )
+from .graph import Graph
 from .transform_utils import transform_gt_to_have_common_reference
 from scipy.spatial.transform import Rotation as R
 
@@ -242,6 +244,7 @@ def get_chi2_of_edge(
         raise ValueError(f"Unhandled edge type for chi2 calculation: {type(edge)}")
 
     if math.isnan(chi2):
+        # Changed Chi2 Null Returns to 0.0
         chi2 = 0.0
     k: int = information.shape[0]
     c: float = -np.log(np.power(2 * np.pi, -0.5 * k))
@@ -395,13 +398,15 @@ def rotation_metric(
 
 
 def make_processed_map_json(
-    opt_result: OG2oOptimizer, calculate_intersections: bool = False
+    graph: Graph,
+    opt_result: OG2oOptimizer,
+    calculate_intersections: bool = False,
 ) -> str:
     """Serializes the result of an optimization into a JSON that is of an acceptable format for uploading to the
     database.
 
     Args:
-        opt_result: A dictionary containing the tag locations, odometry locations, waypoint locations,
+        opt_result: A dictionary containing the tag locations, odometry locations, waypoint locations, cloud anchor locations
          odometry-adjacent chi2 array, and per-odometry-node visible tags count array in the keys 'tags', 'locations',
          'waypoints', 'locationsAdjChi2', and 'visibleTagsCount', respectively. This is the format of dictionary that is
          produced by the `map_processing.graph_opt_utils.optimizer_to_map_chi2` function and, subsequently, the
@@ -451,14 +456,14 @@ def make_processed_map_json(
     cloud_vertex_list: List[PGTagVertex] = []
     for curr_cloud in cloud_locations:
         cloud_vertex_list.append(
-            PGTagVertex(
+            PGCloudVertex(
                 translation=PGTranslation(
                     x=curr_cloud[0], y=curr_cloud[1], z=curr_cloud[2]
                 ),
                 rotation=PGRotation(
                     x=curr_cloud[3], y=curr_cloud[4], z=curr_cloud[5], w=curr_cloud[6]
                 ),
-                id=int(curr_cloud[7]),
+                cloud_id=graph.cloud_id_by_vertex_id[int(curr_cloud[7])],
             )
         )
 

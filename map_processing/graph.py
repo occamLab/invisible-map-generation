@@ -103,6 +103,7 @@ class Graph:
 
         self.our_odom_edges_to_g2o_edges = {}
         self.our_cloud_edges_to_g2o_edges = {}
+        self.cloud_id_by_vertex_id = {}
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
@@ -250,11 +251,6 @@ class Graph:
             ):
                 cloud_edge_uids.append(e)
                 num_clouds_visible += 1
-
-        # if len(cloud_edge_uids) > 2:
-        #     raise Exception(
-        #         "Odometry vertex appears to be incident to > two odometry vertices"
-        #     )
 
         adj_chi2 = 0.0
         for our_edge in cloud_edge_uids:
@@ -864,7 +860,6 @@ class Graph:
         data_set: Union[Dict, UGDataSet],
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
-        use_cloud_anchors: bool = False,
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -1106,7 +1101,6 @@ class Graph:
                 cloud_anchor_vertex_id_by_cloud_anchor_id.keys(),
             )
         )
-
         cloud_anchor_vertex_id_and_index_by_frame_id: Dict[
             int, List[Tuple[int, int]]
         ] = {}
@@ -1411,6 +1405,9 @@ class Graph:
         # TODO: Huber delta should probably scale with pixels rather than error
         resulting_graph = Graph(
             edges, is_sba=use_sba, use_huber=False, huber_delta=None
+        )
+        resulting_graph.cloud_id_by_vertex_id = (
+            cloud_anchor_id_by_cloud_anchor_vertex_id
         )
 
         # Create file with sba optimized pixel corners per tag

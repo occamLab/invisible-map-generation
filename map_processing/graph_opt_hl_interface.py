@@ -128,6 +128,7 @@ def holistic_optimize(
     graph = Graph.as_graph(
         map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso
     )
+
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(
             map_info.map_name
@@ -189,7 +190,7 @@ def holistic_optimize(
         graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data
     )
     processed_map_json = graph_opt_utils.make_processed_map_json(
-        opt_result.map_opt, calculate_intersections=upload
+        graph=graph, opt_result=opt_result.map_opt, calculate_intersections=upload
     )
 
     if verbose:
@@ -366,6 +367,7 @@ def optimize_graph(
          graph before optimization.
     """
     is_sba = oconfig.is_sba
+
     graph.set_weights(
         weights=oconfig.weights, scale_by_edge_amount=oconfig.scale_by_edge_amount
     )
@@ -380,6 +382,7 @@ def optimize_graph(
         graph.filter_out_high_chi2_observation_edges(oconfig.obs_chi2_filter)
         graph.optimize_graph()
 
+    # Return chi2 sorted by cloud edges
     chi2_by_cloud = graph.determine_chi2_cloud_edges()
 
     # Change vertex estimates based off the optimized graph
