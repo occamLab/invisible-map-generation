@@ -24,4 +24,4 @@ WORKDIR /invisible-map-generation/g2opy
 RUN python3 setup.py install
 WORKDIR /invisible-map-generation
 COPY . ./
-CMD python3 run_scripts/optimize_graphs_and_manage_cache.py -f
+CMD python3 run_scripts/optimize_graphs_and_manage_cache.py -h

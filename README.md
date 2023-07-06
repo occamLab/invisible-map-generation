@@ -8,13 +8,7 @@
 ## Run with Docker
 
 Build with: `docker build -t invisible_map . `
-
-Then, you can run the default run command to fetch from firebase with: 
-`docker run -v /Users/becca/invisible-map-generation/.cache:/invisible-map-generation/.cache/ invisible_map`
-Add the `-it` flag to enter the Docker terminal to run any command. 
-
-Rebuild and rerun the container to see code changes. 
-Edit [Dockerfile](/Dockerfile) to change the run command, or add dependencies. 
+Run with: `docker run -it -v "$(pwd):/invisible-map-generation" invisible_map /bin/bash`
 
 ## Dependencies
 
