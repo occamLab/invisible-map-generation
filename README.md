@@ -4,6 +4,18 @@
 
 *This repository is a refactor and extension of the work done in [occamlab/assistive_apps](https://github.com/occamLab/assistive_apps/tree/summer2018) to generate maps.*
 
+
+## Run with Docker
+
+Build with: `docker build -t invisible_map . `
+
+Then, you can run the default run command to fetch from firebase with: 
+`docker run -v /Users/becca/invisible-map-generation/.cache:/invisible-map-generation/.cache/ invisible_map`
+Add the `-it` flag to enter the Docker terminal to run any command. 
+
+Rebuild and rerun the container to see code changes. 
+Edit [Dockerfile](/Dockerfile) to change the run command, or add dependencies. 
+
 ## Dependencies
 
 - [OCCaM Lab fork of g2opy](https://github.com/occamLab/g2opy) to work with the graphs.
