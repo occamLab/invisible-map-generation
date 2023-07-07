@@ -33,3 +33,6 @@ venv
 
 .env
 .DS_Store
+
+# Ignore output files
+*output.png

@@ -165,6 +165,7 @@ def visualize_data_spread(xyzs, test_name, qxyzs=None):
         plt.subplot(rows, 3, i + 1, title=titles[i])
         plt.hist(all_pose_data[i], bins=25, color=colors[i % 3])
 
+    plt.savefig("data_spread_output.png")
     plt.show()
 
 
@@ -277,6 +278,7 @@ def visualizing_corner_pixel_differences(pixels, tag_id, visualization_type):
 
     plt.legend(legend)
     plt.title(tag_id)
+    plt.savefig("corner_pixel_diffs_output.png")
     plt.show()
 
 

@@ -334,6 +334,7 @@ class GraphGenerator:
                     zs=[line_start[2], line_end[2]],
                     color="c",
                 )
+        plt.savefig("graph_generator_output.png")
         plt.show()
 
     def generate(self) -> None:

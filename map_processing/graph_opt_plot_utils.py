@@ -99,6 +99,7 @@ def plot_metrics(
     ax.set_ylabel("Odom:Tag")
     ax.set_zlabel("Metric")
     fig.colorbar(surf)
+    plt.savefig("metrics_output.png")
     plt.show()
 
 
@@ -330,6 +331,7 @@ def plot_optimization_result(
     if isinstance(plot_title, str):
         plt.title(plot_title, wrap=True)
 
+    plt.savefig("plot_optimization_output.png")
     plt.show()
 
 
@@ -379,6 +381,7 @@ def plot_box_whisker_chis(chi2_by_cloud: dict[int] = str) -> None:
     plt.xlabel("Cloud Anchor Node UID")
     plt.ylabel("Chi2")
     plt.title("Chi2 Values of Cloud Anchor Nodes")
+    plt.savefig("chis_box_whisker_output.png")
     plt.show()
 
 
@@ -459,4 +462,5 @@ def plot_adj_chi2(
     plt.xlabel("Odometry vertex UID")
     if plot_title is not None:
         plt.title(plot_title, wrap=True)
+    plt.savefig("adj_chi2_output.png")
     plt.show()

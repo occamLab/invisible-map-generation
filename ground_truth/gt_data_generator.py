@@ -249,6 +249,7 @@ def plot_IM_GT_data(im_pos, gt_pos, im_quat, gt_quat):
             )
 
     ax.legend(["invisible map", "ground truth"])
+    plt.savefig("IM_GT_output.png")
     plt.show()
 
 
