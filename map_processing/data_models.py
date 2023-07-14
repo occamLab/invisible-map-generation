@@ -22,7 +22,7 @@ Notes:
 import itertools
 from enum import Enum
 from typing import Union, Optional, Dict, List, Tuple, Any
-
+from collections import defaultdict
 import numpy as np
 from g2o import SE3Quat
 from matplotlib import pyplot as plt
@@ -997,6 +997,7 @@ class UGDataSet(BaseModel):
     tag_data: List[List[UGTagDatum]] = []
     generated_from: Optional[GenerateParams] = None
     cloud_data: List[List[UGCloudAnchorDatum]] = []
+    map_num: int = 0
 
     # TODO: Add documentation for the following properties
 
@@ -1042,6 +1043,29 @@ class UGDataSet(BaseModel):
         for i, pose_datum in enumerate(self.pose_data):
             ret[pose_datum.id] = pose_matrices[i]
         return ret
+
+    @property
+    def pose_calculation(self) -> np.ndarray:
+        """
+        Return the cloud anchor pose before optimization
+        """
+        location = defaultdict(list)
+        data = list(map(lambda x: x[0], self.cloud_data))
+        by_id = defaultdict(list)
+        by_poseid = defaultdict(list)
+
+        for item in data:
+            by_id[item.cloudIdentifier].append(item)
+
+        for item in self.pose_data:
+            by_poseid[item.id].append(item.pose)
+
+        for anchor_id in by_id:
+            for instance in by_id[anchor_id]:
+                reshaped = np.reshape(instance.pose, (4, 4)).transpose()
+                translation = list(reshaped[:3, 3])
+                location[anchor_id].append(translation)
+        return location
 
     @property
     def tag_edge_measurements_matrix(self) -> np.ndarray:
@@ -1339,6 +1363,7 @@ class PGCloudVertex(BaseModel):
     translation: PGTranslation
     rotation: PGRotation
     cloud_id: Optional[str]
+    cloud_name: Optional[str]
 
 
 class PGOdomVertex(BaseModel):
@@ -1599,7 +1624,7 @@ class OG2oOptimizer(BaseModel):
          of cloud anchors visible at that given pose.
     """
 
-    locations: np.ndarray = Field(default_factory=lambda: np.zeros((0, 9)))
+    locations: np.ndarray = Field(default_factory=lambda: np.zeros((0, 10)))
     tags: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))
     tagpoints: np.ndarray = Field(default_factory=lambda: np.zeros((0, 3)))
     waypoints_arr: np.ndarray = Field(default_factory=lambda: np.zeros((0, 8)))

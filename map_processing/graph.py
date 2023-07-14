@@ -104,6 +104,7 @@ class Graph:
         self.our_odom_edges_to_g2o_edges = {}
         self.our_cloud_edges_to_g2o_edges = {}
         self.cloud_id_by_vertex_id = {}
+        self.cloud_locations_before_opt = {}
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
@@ -857,7 +858,7 @@ class Graph:
 
     @staticmethod
     def as_graph(
-        data_set: Union[Dict, UGDataSet],
+        data_set: dict,
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
     ) -> Graph:
@@ -1061,7 +1062,10 @@ class Graph:
             )
 
         waypoint_name_by_vertex_id = dict(
-            zip(waypoint_vertex_id_by_name.values(), waypoint_vertex_id_by_name.keys())
+            zip(
+                waypoint_vertex_id_by_name.values(),
+                waypoint_vertex_id_by_name.keys(),
+            )
         )
         waypoint_vertex_id_and_index_by_frame_id = (
             {}
@@ -1409,6 +1413,8 @@ class Graph:
         resulting_graph.cloud_id_by_vertex_id = (
             cloud_anchor_id_by_cloud_anchor_vertex_id
         )
+
+        resulting_graph.cloud_locations_before_opt = data_set.pose_calculation
 
         # Create file with sba optimized pixel corners per tag
         return resulting_graph

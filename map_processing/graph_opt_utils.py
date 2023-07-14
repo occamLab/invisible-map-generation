@@ -143,6 +143,7 @@ def optimizer_to_map_chi2(
     """
     ret_map = optimizer_to_map(graph.vertices, optimizer, is_sba=is_sba)
     locations_shape = np.shape(ret_map.locations)
+    cloud_anchors_shape = np.shape(ret_map.cloud_anchors)
     locations_adj_chi2 = np.zeros([locations_shape[0], 1])
     locations_cloud_chi2 = np.zeros([locations_shape[0], 1])
     visible_tags_count = np.zeros([locations_shape[0], 1])

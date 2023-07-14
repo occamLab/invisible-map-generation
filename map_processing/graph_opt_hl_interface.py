@@ -406,6 +406,7 @@ def optimize_graph(
             ground_truth_tags=gt_data if gt_data is not None else None,
             plot_title=oconfig.graph_plot_title,
             anchor_tag_id=anchor_tag_id,
+            cloud_location_before=graph.cloud_locations_before_opt,
         )
         graph_opt_plot_utils.plot_adj_chi2(opt_result_map, oconfig.chi2_plot_title)
         graph_opt_plot_utils.plot_box_whisker_chis(chi2_by_cloud)

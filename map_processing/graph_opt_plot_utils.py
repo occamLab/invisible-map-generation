@@ -116,6 +116,7 @@ def plot_optimization_result(
     three_dimensional: bool = False,
     detailed_labels: bool = False,
     anchor_tag_id=None,
+    cloud_location_before: Optional[dict] = None,
 ) -> None:
     """Visualization used during the optimization routine."""
     f = plt.figure()
@@ -135,6 +136,16 @@ def plot_optimization_result(
             c="m",
             label="Tag Corners",
         )
+
+    # Plot Initial CA Locations
+    xcoords = []
+    ycoords = []
+    for cloud_id, locations in cloud_location_before.items():
+        for location in locations:
+            xcoords.append(location[0])
+            ycoords.append(location[2])
+    for i, anchor in enumerate(xcoords):
+        plt.scatter(anchor, ycoords[i], c="red", s=8)
 
     # Plot optimized tag vertices, their reference frames, and their labels
     if detailed_labels:

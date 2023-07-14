@@ -4,6 +4,7 @@ Takes in the pose of a tag, computes where the corner pixels SHOULD be on the
 camera's screen, then compares it to where the pixels actually were on the screen.
 Allows us to essentially remake the SBA algorithm.
 """
+from collections import defaultdict
 import os
 import sys
 
@@ -142,46 +143,70 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
         a bunch of print statements, but the helper function overwrites a file in its workflow.
         the print statement is just an indication of how much stuff was thrown out.
     """
-    # fix_it = False
     with open(data_path) as data_file:
         unprocessed_map_data = json.load(data_file)
+
+    throw_ids = []
+    if unprocessed_map_data["cloud_data"]:
+        data = list(map(lambda x: x[0], unprocessed_map_data["cloud_data"]))
+        by_id = defaultdict(list)
+
+        for item in data:
+            by_id[item["cloudIdentifier"]].append(item)
+
+        for anchor_id in by_id:
+            max_dis = 0
+            for instance in by_id[anchor_id]:
+                reshaped = np.reshape(instance["pose"], (4, 4)).transpose()
+                translation1 = reshaped[:3, 3]
+                for i2 in by_id[anchor_id]:
+                    r2 = np.reshape(i2["pose"], (4, 4)).transpose()
+                    translation2 = r2[:3, 3]
+                    distance = np.linalg.norm(translation1 - translation2)
+                    if distance > max_dis:
+                        max_dis = distance
+            if max_dis > 10:
+                throw_ids.append(anchor_id)
+
+        unprocessed_map_data["cloud_data"] = [
+            i
+            for j, i in enumerate(unprocessed_map_data["cloud_data"])
+            if (i[0]["cloudIdentifier"] not in throw_ids)
+        ]
 
     throws = []
     throws_indeces = []
     errors = []
 
-    for i in range(len(unprocessed_map_data["tag_data"])):
-        sba_rms_error, throw, relevant_tag, corner_pixels = sba_evaluate(
-            i, unprocessed_map_data, visualize, verbose
-        )
-        errors.append(sba_rms_error)
-        unprocessed_map_data["tag_data"][i][0][
-            "tag_corners_pixel_coordinates"
-        ] = np.ndarray.flatten(corner_pixels, order="F").tolist()
+    if unprocessed_map_data["tag_data"]:
+        for i in range(len(unprocessed_map_data["tag_data"])):
+            sba_rms_error, throw, relevant_tag, corner_pixels = sba_evaluate(
+                i, unprocessed_map_data, visualize, verbose
+            )
+            errors.append(sba_rms_error)
+            unprocessed_map_data["tag_data"][i][0][
+                "tag_corners_pixel_coordinates"
+            ] = np.ndarray.flatten(corner_pixels, order="F").tolist()
 
-        if throw:
-            throws.append(relevant_tag)
-            throws_indeces.append(i)
-            continue
+            if throw:
+                throws.append(relevant_tag)
+                throws_indeces.append(i)
+                continue
 
-    unprocessed_map_data["tag_data"] = [
-        i
-        for j, i in enumerate(unprocessed_map_data["tag_data"])
-        if j not in throws_indeces
-    ]
+        unprocessed_map_data["tag_data"] = [
+            i
+            for j, i in enumerate(unprocessed_map_data["tag_data"])
+            if j not in throws_indeces
+        ]
+
+    fix_it = True
     if fix_it:
         with open(data_path, "w") as f:
             json.dump(unprocessed_map_data, f, indent=2)
 
-    percent_thrown = 100 * (len(throws) / len(errors))
+    # percent_thrown = 100 * (len(throws) / len(errors))
 
-    return (
-        f"average error: {np.mean(errors)}"
-        + "\n"
-        + f"list of tags thrown: {throws}"
-        + "\n"
-        + f"percentage of tags thrown: {percent_thrown:.2f}%"
-    )
+    return f"Threw out {len(throws)} tags and {len(throw_ids)} anchors."
 
 
 if __name__ == "__main__":
