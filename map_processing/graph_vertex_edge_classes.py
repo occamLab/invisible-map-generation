@@ -204,6 +204,8 @@ class Edge:
                 SE3Quat(self.start_end[1].estimate).Quaternion().R[1, :3]
             )
 
+        if (delta_t_sq == 0):
+            delta_t_sq = 0.00000000000001
         # Rotation component
         self.information[3:, 3:] *= np.diag(
             4

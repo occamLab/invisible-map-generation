@@ -865,6 +865,7 @@ class Graph:
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
         use_cloud_anchors: bool = False,
+        abs_anchor_pos:bool = False
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -1126,9 +1127,6 @@ class Graph:
         cloud_anchor_edge_measurements_matrix = (
             data_set.cloud_anchor_edge_measurements_matrix
         )
-        cloud_anchor_edge_measurements = transform_matrix_to_vector(
-            cloud_anchor_edge_measurements_matrix
-        )
 
         num_tag_edges = edge_counter = 0
         vertices = {}
@@ -1267,20 +1265,20 @@ class Graph:
                 num_tag_edges += 1
                 edge_counter += 1
 
-            # if use_cloud_anchors:
+
             for (
                 cloud_anchor_vertex_id,
                 cloud_anchor_index,
             ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
+                anchor_transform = cloud_anchor_edge_measurements_matrix[cloud_anchor_index]
+                if (abs_anchor_pos):
+                    anchor_transform = np.linalg.inv(pose_matrices[i]).dot(np.transpose(cloud_anchor_edge_measurements_matrix[cloud_anchor_index]))
+
                 if cloud_anchor_vertex_id not in counted_cloud_anchor_vertex_ids:
                     vertices[cloud_anchor_vertex_id] = Vertex(
                         mode=VertexType.CLOUD_ANCHOR,
                         estimate=transform_matrix_to_vector(
-                            pose_matrices[i].dot(
-                                cloud_anchor_edge_measurements_matrix[
-                                    cloud_anchor_index
-                                ]
-                            )
+                            pose_matrices[i].dot(anchor_transform)
                         ),
                         fixed=VertexType.CLOUD_ANCHOR in fixed_vertices,
                         meta_data={
@@ -1296,7 +1294,7 @@ class Graph:
                     corner_verts=None,
                     information_prescaling=None,  # TODO: investigate
                     camera_intrinsics=None,
-                    measurement=cloud_anchor_edge_measurements[cloud_anchor_index],
+                    measurement=transform_matrix_to_vector(anchor_transform),
                     start_end=(
                         vertices[current_odom_vertex_uid],
                         vertices[cloud_anchor_vertex_id],

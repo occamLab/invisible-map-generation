@@ -8,6 +8,8 @@ from collections import defaultdict
 import os
 import sys
 
+import matplotlib.pyplot as plt
+
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
@@ -154,22 +156,33 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
         for item in data:
             by_id[item['cloudIdentifier']].append(item)
 
+        xcoordsall = []
+        ycoordsall = []
+        ids = []
+
         for anchor_id in by_id: 
             max_dis = 0
+            xcoords = []
+            ycoords = []    
             for instance in by_id[anchor_id]:
-                pose = list(filter(lambda x: x["id"] == instance["poseId"], unprocessed_map_data["pose_data"]))[0]["pose"]
-                reshaped = np.reshape(pose, (4,4))
-                translation1 = reshaped[3, :3]
-                for i2 in by_id[anchor_id]:
-                    p2 = list(filter(lambda x: x["id"] == i2["poseId"], unprocessed_map_data["pose_data"]))[0]["pose"]
-                    r2 = np.reshape(p2, (4,4))
-                    translation2 = r2[3, :3]
+                transform1 = np.reshape(instance["pose"], (4,4)).transpose()
+                translation1 = transform1[:3, 3]
+                xcoords.append(translation1[0])
+                ycoords.append(translation1[2])
+                for instance2 in by_id[anchor_id]:
+                    r2 = np.reshape(instance2["pose"], (4,4)).transpose()
+                    translation2 = r2[:3, 3]
+                    
                     distance = np.linalg.norm(translation1 - translation2)
-                    # print("pose distance: ", distance)
+
                     if distance > max_dis:
                         max_dis = distance
             if max_dis > 15:
                 throw_ids.append(anchor_id)
+            
+            ids.append(instance["cloudIdentifier"])
+            xcoordsall.append(xcoords)
+            ycoordsall.append(ycoords)
         
         unprocessed_map_data["cloud_data"] = [
             i
@@ -177,6 +190,22 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
             if (i[0]["cloudIdentifier"] not in throw_ids)
         ]
     
+        plt.figure(figsize=(10,6))
+        for i, anchor in enumerate(ids):
+            plt.scatter(
+                        xcoordsall[i],
+                        ycoordsall[i],
+                        facecolors=np.random.rand(3,),
+                        label=anchor,
+                    )
+            
+        odom_poses = list(map(lambda x: x["pose"], unprocessed_map_data["pose_data"]))
+        line_x = list(map(lambda x: x[12],odom_poses))
+        line_y = list(map(lambda x: x[14],odom_poses))
+        plt.legend()
+        plt.plot(line_x, line_y)
+        
+        plt.savefig("anchor_instance_output.png")
     throws = []
     throws_indeces = []
     errors = []

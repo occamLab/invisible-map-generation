@@ -121,6 +121,12 @@ def make_parser() -> argparse.ArgumentParser:
         default=False,
     )
     p.add_argument(
+        "-a",
+        action="store_true",
+        help="Assume cloud anchor transforms are transforms in the global frame (use for STEP Mapping data).",
+        default=False,
+    )
+    p.add_argument(
         "-fs",
         type=str,
         required=False,
@@ -329,6 +335,7 @@ if __name__ == "__main__":
                 compare=args.c,
                 upload=args.F,
                 cms=cms,
+                abs_anchor_pos=args.a,
                 gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data)
                 if gt_data is not None
                 else None,

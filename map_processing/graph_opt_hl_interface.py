@@ -70,6 +70,7 @@ def holistic_optimize(
     visualize: bool = True,
     compare: bool = False,
     upload: bool = False,
+    abs_anchor_pos: bool = False,
     generate_plot_titles: bool = True,
 ) -> Union[OResult, OSGPairResult]:
     """Optimizes graph, caches the result, and if specified by the arguments: upload the processed graph, visualize
@@ -126,7 +127,7 @@ def holistic_optimize(
         gt_data_as_dict_of_se3_arrays = gt_data.as_dict_of_se3_arrays
 
     graph = Graph.as_graph(
-        map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso
+        map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso, abs_anchor_pos=abs_anchor_pos
     )
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(
