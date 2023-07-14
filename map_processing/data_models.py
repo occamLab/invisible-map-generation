@@ -1338,7 +1338,7 @@ class PGTagVertex(BaseModel):
 class PGCloudVertex(BaseModel):
     translation: PGTranslation
     rotation: PGRotation
-    id: int
+    cloud_id: Optional[str]
 
 
 class PGOdomVertex(BaseModel):
@@ -1586,11 +1586,17 @@ class OG2oOptimizer(BaseModel):
          7th position.
         tagpoints: (m, 3) array containing the m tag corners' global xyz coordinates.
         waypoints_arr: (w, 8) array containing w waypoint poses (x, y, z, qx, qy, qz, qw).
+        cloud_anchors: (m, 8) array containing m tag poses (x, y, z, qx, qy, qz, qw) as well as the cloud identifier in the
+        7th position.
         locationsAdjChi2: Optionally associated with each odometry node is a chi2 calculated from the
          `map_odom_to_adj_chi2` method of the `Graph` class, which is stored in this vector.
         waypoints_metadata: Length-w list of waypoint metadata.
+        locationsCloudChi2: Optionally associated with each odometry node and cloud anchor is a chi2 calculated from the
+         `map_odom_to_adj_chi2` method of the `Graph` class, which is stored in this vector.
         visibleTagsCount: Optionally associated with each odometry node is an integer indicating the number
          of tags visible at that given pose.
+        visibleCloudCount: Optionally associated with each odometry node is an integer indicating the number
+         of cloud anchors visible at that given pose.
     """
 
     locations: np.ndarray = Field(default_factory=lambda: np.zeros((0, 9)))
@@ -1632,6 +1638,13 @@ class OG2oOptimizer(BaseModel):
     _check_visibleTagsCount_is_correct_shape_matrix = validator(
         "visibleTagsCount", allow_reuse=True
     )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
+    
+    _check_locationsCloudChi2_is_correct_shape_matrix = validator(
+        "locationsCloudChi2", allow_reuse=True
+    )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
+    _check_visibleCloudCount_is_correct_shape_matrix = validator(
+        "visibleCloudCount", allow_reuse=True
+    )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
 
     _deserialize_locations_matrix_if_needed = validator(
         "locations", allow_reuse=True, pre=True
@@ -1649,6 +1662,13 @@ class OG2oOptimizer(BaseModel):
         if v is not None
         else None
     )
+    _deserialize_cloud_anchors_matrix_if_needed = validator(
+        "cloud_anchors", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 8])
+        if v is not None
+        else None
+    )
     _deserialize_locations_adj_chi2_matrix_if_needed = validator(
         "locationsAdjChi2", allow_reuse=True, pre=True
     )(
@@ -1658,6 +1678,20 @@ class OG2oOptimizer(BaseModel):
     )
     _deserialize_visibleTagsCount_matrix_if_needed = validator(
         "visibleTagsCount", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1])
+        if v is not None
+        else None
+    )
+    _deserialize_locations_cloud_anchor_matrix_if_needed = validator(
+        "locationsCloudChi2", allow_reuse=True, pre=True
+    )(
+        lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1])
+        if v is not None
+        else None
+    )
+    _deserialize_visibleCloudCount_matrix_if_needed = validator(
+        "visibleCloudCount", allow_reuse=True, pre=True
     )(
         lambda v: _validator_for_numpy_array_deserialization(v).reshape([-1, 1])
         if v is not None

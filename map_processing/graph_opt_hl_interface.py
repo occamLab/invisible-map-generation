@@ -127,7 +127,10 @@ def holistic_optimize(
         gt_data_as_dict_of_se3_arrays = gt_data.as_dict_of_se3_arrays
 
     graph = Graph.as_graph(
-        map_info.map_dct, fixed_vertices=fixed_vertices, prescaling_opt=pso, abs_anchor_pos=abs_anchor_pos
+        map_info.map_dct,
+        fixed_vertices=fixed_vertices,
+        prescaling_opt=pso,
+        abs_anchor_pos=abs_anchor_pos,
     )
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(
@@ -190,7 +193,7 @@ def holistic_optimize(
         graph=graph, oconfig=oconfig, visualize=visualize, gt_data=gt_data
     )
     processed_map_json = graph_opt_utils.make_processed_map_json(
-        opt_result.map_opt, calculate_intersections=upload
+        graph=graph, opt_result=opt_result.map_opt, calculate_intersections=upload
     )
 
     if verbose:

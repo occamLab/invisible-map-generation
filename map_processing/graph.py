@@ -103,6 +103,7 @@ class Graph:
 
         self.our_odom_edges_to_g2o_edges = {}
         self.our_cloud_edges_to_g2o_edges = {}
+        self.cloud_id_by_vertex_id = {}
         self.g2o_status = -1
         self.maximization_success_status = False
         self.errors = np.array([])
@@ -865,7 +866,7 @@ class Graph:
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
         use_cloud_anchors: bool = False,
-        abs_anchor_pos:bool = False
+        abs_anchor_pos: bool = False,
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -1265,14 +1266,19 @@ class Graph:
                 num_tag_edges += 1
                 edge_counter += 1
 
-
             for (
                 cloud_anchor_vertex_id,
                 cloud_anchor_index,
             ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
-                anchor_transform = cloud_anchor_edge_measurements_matrix[cloud_anchor_index]
-                if (abs_anchor_pos):
-                    anchor_transform = np.linalg.inv(pose_matrices[i]).dot(np.transpose(cloud_anchor_edge_measurements_matrix[cloud_anchor_index]))
+                anchor_transform = cloud_anchor_edge_measurements_matrix[
+                    cloud_anchor_index
+                ]
+                if abs_anchor_pos:
+                    anchor_transform = np.linalg.inv(pose_matrices[i]).dot(
+                        np.transpose(
+                            cloud_anchor_edge_measurements_matrix[cloud_anchor_index]
+                        )
+                    )
 
                 if cloud_anchor_vertex_id not in counted_cloud_anchor_vertex_ids:
                     vertices[cloud_anchor_vertex_id] = Vertex(
@@ -1410,7 +1416,9 @@ class Graph:
         resulting_graph = Graph(
             edges, is_sba=use_sba, use_huber=False, huber_delta=None
         )
-
+        resulting_graph.cloud_id_by_vertex_id = (
+            cloud_anchor_id_by_cloud_anchor_vertex_id
+        )
         # Create file with sba optimized pixel corners per tag
         return resulting_graph
 
