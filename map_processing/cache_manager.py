@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class MapInfo:
     """Container for identifying information for a graph (useful for caching process)
 
@@ -528,7 +529,7 @@ class CacheManagerSingleton:
             )
 
     @staticmethod
-    def find_ground_truth_data_from_map_info(map_info: MapInfo) -> Optional[Dict]:
+    def find_ground_truth_data_from_map_info(map_info: List[MapInfo]) -> Optional[Dict]:
         """Uses the ground truth mapping to find the dataset matching the map_info object.
 
         Args:
@@ -546,11 +547,11 @@ class CacheManagerSingleton:
                 gt_mapping_dict = json.load(f)
         else:
             gt_mapping_dict = GROUND_TRUTH_MAPPING_STARTING_PT
-
-        for item in gt_mapping_dict.items():
-            for map_name in item[1]:
-                if map_info.map_name == map_name:
-                    matching_datasets.append(item[0])
+        for map_data in map_info:
+            for item in gt_mapping_dict.items():
+                for map_name in item[1]:
+                    if map_data.map_name == map_name:
+                        matching_datasets.append(item[0])
         if len(matching_datasets) != 1:
             return None
         else:

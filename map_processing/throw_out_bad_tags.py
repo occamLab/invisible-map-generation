@@ -149,68 +149,70 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
         unprocessed_map_data = json.load(data_file)
 
     throw_ids = []
-    if (unprocessed_map_data["cloud_data"]):
+    if unprocessed_map_data["cloud_data"]:
         data = list(map(lambda x: x[0], unprocessed_map_data["cloud_data"]))
         by_id = defaultdict(list)
 
         for item in data:
-            by_id[item['cloudIdentifier']].append(item)
+            by_id[item["cloudIdentifier"]].append(item)
 
         xcoordsall = []
         ycoordsall = []
         ids = []
 
-        for anchor_id in by_id: 
+        for anchor_id in by_id:
             max_dis = 0
             xcoords = []
-            ycoords = []    
+            ycoords = []
             for instance in by_id[anchor_id]:
-                transform1 = np.reshape(instance["pose"], (4,4)).transpose()
+                transform1 = np.reshape(instance["pose"], (4, 4)).transpose()
                 translation1 = transform1[:3, 3]
                 xcoords.append(translation1[0])
                 ycoords.append(translation1[2])
                 for instance2 in by_id[anchor_id]:
-                    r2 = np.reshape(instance2["pose"], (4,4)).transpose()
+                    r2 = np.reshape(instance2["pose"], (4, 4)).transpose()
                     translation2 = r2[:3, 3]
-                    
+
                     distance = np.linalg.norm(translation1 - translation2)
 
                     if distance > max_dis:
                         max_dis = distance
-            if max_dis > 15:
+            if max_dis > 10:
                 throw_ids.append(anchor_id)
-            
+
             ids.append(instance["cloudIdentifier"])
             xcoordsall.append(xcoords)
             ycoordsall.append(ycoords)
-        
+
         unprocessed_map_data["cloud_data"] = [
             i
             for j, i in enumerate(unprocessed_map_data["cloud_data"])
             if (i[0]["cloudIdentifier"] not in throw_ids)
         ]
-    
-        plt.figure(figsize=(10,6))
+
+        plt.figure(figsize=(10, 6))
         for i, anchor in enumerate(ids):
             plt.scatter(
-                        xcoordsall[i],
-                        ycoordsall[i],
-                        facecolors=np.random.rand(3,),
-                        label=anchor,
-                    )
-            
+                xcoordsall[i],
+                ycoordsall[i],
+                facecolors=np.random.rand(
+                    3,
+                ),
+                label=anchor,
+            )
+
         odom_poses = list(map(lambda x: x["pose"], unprocessed_map_data["pose_data"]))
-        line_x = list(map(lambda x: x[12],odom_poses))
-        line_y = list(map(lambda x: x[14],odom_poses))
+        line_x = list(map(lambda x: x[12], odom_poses))
+        line_y = list(map(lambda x: x[14], odom_poses))
         plt.legend()
         plt.plot(line_x, line_y)
-        
+
         plt.savefig("anchor_instance_output.png")
     throws = []
     throws_indeces = []
     errors = []
 
-    if (unprocessed_map_data["tag_data"]):
+    if unprocessed_map_data["tag_data"]:
         for i in range(len(unprocessed_map_data["tag_data"])):
             sba_rms_error, throw, relevant_tag, corner_pixels = sba_evaluate(
                 i, unprocessed_map_data, visualize, verbose
@@ -230,7 +232,7 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
             for j, i in enumerate(unprocessed_map_data["tag_data"])
             if j not in throws_indeces
         ]
-    
+
     fix_it = True
     if fix_it:
         with open(data_path, "w") as f:
@@ -238,9 +240,7 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
 
     # percent_thrown = 100 * (len(throws) / len(errors))
 
-    return (
-       f"Threw out {len(throws)} tags and {len(throw_ids)} anchors."
-    )
+    return f"Threw out {len(throws)} tags and {len(throw_ids)} anchors."
 
 
 if __name__ == "__main__":
