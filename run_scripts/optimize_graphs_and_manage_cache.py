@@ -27,9 +27,10 @@ import argparse
 import numpy as np
 from firebase_admin import credentials
 from typing import Dict, Callable, Iterable, Any, Tuple
+from collections import defaultdict
 
 from map_processing import PrescalingOptEnum, VertexType
-from map_processing.cache_manager import CacheManagerSingleton
+from map_processing.cache_manager import CacheManagerSingleton, MapInfo
 from map_processing.data_models import OComputeInfParams, GTDataSet, OConfig
 from map_processing.graph_opt_hl_interface import (
     holistic_optimize,
@@ -273,70 +274,93 @@ if __name__ == "__main__":
         exit(0)
 
     map_pattern = args.p if args.p else ""
-    matching_maps = cms.find_maps(map_pattern, search_restriction=0)
-    if len(matching_maps) == 0:
-        print(
-            f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
-        )
-        exit(0)
+    map_pattern = map_pattern.split("+")
+
+    map_dictionary = defaultdict(list)
+    map_data = []
+    id_len = 0
+
+    for i, map_name in enumerate(map_pattern):
+        matching_map = cms.find_maps(map_name, search_restriction=0)
+        if len(matching_map) == 0:
+            print(
+                f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
+            )
+            exit(0)
+        for map_set in matching_map:
+            map_data.append(map_set)
+            for pose_data in map_set.map_dct["pose_data"]:
+                pose_data["id"] += id_len
+            for cloud_data in map_set.map_dct["cloud_data"]:
+                for instance in cloud_data:
+                    instance["poseId"] += id_len
+            for key, values in map_set.map_dct.items():
+                map_dictionary[key].extend(values)
+            id_len = len(map_set.map_dct["pose_data"])
+
+    map_dictionary["map_id"] = args.p
+
+    complete_map = MapInfo(
+        map_name=args.p, map_dct=map_dictionary, map_json_name="test"
+    )
 
     # Remove tag observations that are bad
     if args.t:
-        this_path = cms.find_maps(map_pattern, search_restriction=0, paths=True)
-        print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
+        for map_name in map_pattern:
+            this_path = cms.find_maps(map_name, search_restriction=0, paths=True)
+            print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv,
         tag_sba_var=args.tsv,
         ang_vel_var=args.avv,
     )
-    for map_info in matching_maps:
-        gt_data = cms.find_ground_truth_data_from_map_info(map_info)
-        # If you want to sweep through optimization parameters
-        if args.s:
-            sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
+    gt_data = cms.find_ground_truth_data_from_map_info(map_data)
+    # If you want to sweep through optimization parameters
+    if args.s:
+        sweep_config = NO_SBA_SWEEP_CONFIG if args.pso == 1 else SBA_SWEEP_CONFIG
 
-            sweep_params(
-                mi=map_info,
-                ground_truth_data=gt_data,
-                base_oconfig=OConfig(
-                    is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
-                    compute_inf_params=compute_inf_params,
-                ),
-                sweep_config=sweep_config,
-                ordered_sweep_config_keys=[key for key in sweep_config.keys()],
-                verbose=True,
-                generate_plot=True,
-                show_plots=args.v,
-                num_processes=args.np,
-                upload_best=args.F,
-                cms=cms,
-                use_cloud_anchors=args.ca,
-            )
-
-        # If you simply want to run the optimizer with specified weights
-        else:
-            oconfig = OConfig(
-                is_sba=args.pso == 0,
-                weights=WEIGHTS_DICT[WeightSpecifier(args.w)],
-                scale_by_edge_amount=args.sbea,
+        sweep_params(
+            mi=complete_map,
+            ground_truth_data=gt_data,
+            base_oconfig=OConfig(
+                is_sba=args.pso == PrescalingOptEnum.USE_SBA.value,
                 compute_inf_params=compute_inf_params,
-            )
-            fixed_vertices = set()
-            for tag_type in args.fix:
-                fixed_vertices.add(VertexType(tag_type))
-            opt_result = holistic_optimize(
-                map_info=map_info,
-                pso=PrescalingOptEnum(args.pso),
-                oconfig=oconfig,
-                fixed_vertices=fixed_vertices,
-                verbose=True,
-                visualize=args.v,
-                compare=args.c,
-                upload=args.F,
-                cms=cms,
-                abs_anchor_pos=args.a,
-                gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data)
-                if gt_data is not None
-                else None,
-            )
+            ),
+            sweep_config=sweep_config,
+            ordered_sweep_config_keys=[key for key in sweep_config.keys()],
+            verbose=True,
+            generate_plot=True,
+            show_plots=args.v,
+            num_processes=args.np,
+            upload_best=args.F,
+            cms=cms,
+            use_cloud_anchors=args.ca,
+        )
+
+    # If you simply want to run the optimizer with specified weights
+    else:
+        oconfig = OConfig(
+            is_sba=args.pso == 0,
+            weights=WEIGHTS_DICT[WeightSpecifier(args.w)],
+            scale_by_edge_amount=args.sbea,
+            compute_inf_params=compute_inf_params,
+        )
+        fixed_vertices = set()
+        for tag_type in args.fix:
+            fixed_vertices.add(VertexType(tag_type))
+        opt_result = holistic_optimize(
+            map_info=complete_map,
+            pso=PrescalingOptEnum(args.pso),
+            oconfig=oconfig,
+            fixed_vertices=fixed_vertices,
+            verbose=True,
+            visualize=args.v,
+            compare=args.c,
+            upload=args.F,
+            cms=cms,
+            abs_anchor_pos=args.a,
+            gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data)
+            if gt_data is not None
+            else None,
+        )
