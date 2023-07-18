@@ -2,11 +2,13 @@
 Contains the CacheManagerSingleton class used for managing the local cache.
 """
 
+import uuid
 import glob
 import json
 import os
 from threading import Semaphore, Thread, Timer
 from typing import Dict, Union, List, Optional, Set, Callable
+
 
 import firebase_admin
 import numpy as np
@@ -228,6 +230,8 @@ class CacheManagerSingleton:
                 )
 
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
+            token = uuid.uuid4()
+            processed_map_blob.metadata = {"firebaseStorageDownloadTokens": token}
             processed_map_blob.upload_from_string(json_string)
 
             ref = db.reference("maps")
