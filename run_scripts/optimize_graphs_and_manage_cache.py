@@ -287,7 +287,10 @@ if __name__ == "__main__":
                 f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
             )
             exit(0)
+        map_name = ""
         for map_set in matching_map:
+            map_json_name = map_set.map_json_blob_name
+            map_name += map_set.map_name
             map_data.append(map_set)
             for pose_data in map_set.map_dct["pose_data"]:
                 pose_data["id"] += id_len
@@ -297,11 +300,13 @@ if __name__ == "__main__":
             for key, values in map_set.map_dct.items():
                 map_dictionary[key].extend(values)
             id_len = len(map_set.map_dct["pose_data"])
+        if (len(matching_map) > 1):
+            map_json_name = args.p
 
     map_dictionary["map_id"] = args.p
 
     complete_map = MapInfo(
-        map_name=args.p, map_dct=map_dictionary, map_json_name="test"
+        map_name=map_name, map_dct=map_dictionary, map_json_name=map_json_name
     )
 
     # Remove tag observations that are bad

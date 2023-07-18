@@ -464,6 +464,7 @@ def make_processed_map_json(
                     x=curr_cloud[3], y=curr_cloud[4], z=curr_cloud[5], w=curr_cloud[6]
                 ),
                 cloud_id=graph.cloud_id_by_vertex_id[int(curr_cloud[7])],
+                name=graph.cloud_anchor_names[graph.cloud_id_by_vertex_id[int(curr_cloud[7])]]
             )
         )
 

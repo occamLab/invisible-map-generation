@@ -536,6 +536,7 @@ class UGCloudAnchorDatum(BaseModel):
     cloudIdentifier: str
     pose: conlist(Union[float, int], min_items=16, max_items=16)
     poseId: int
+    name: str
 
 
 class GenerateParams(BaseModel):
@@ -1241,6 +1242,10 @@ class UGDataSet(BaseModel):
                 ]
             )
         )
+    
+    @property
+    def cloud_anchor_names(self) -> np.ndarray:
+        return {item[0].cloudIdentifier: item[0].name for item in self.cloud_data}
 
     @property
     def cloud_anchor_pose_ids(self) -> np.ndarray:
@@ -1364,6 +1369,7 @@ class PGCloudVertex(BaseModel):
     translation: PGTranslation
     rotation: PGRotation
     cloud_id: Optional[str]
+    name: Optional[str]
 
 
 class PGOdomVertex(BaseModel):

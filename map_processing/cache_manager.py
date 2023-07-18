@@ -234,6 +234,7 @@ class CacheManagerSingleton:
             if map_info.uid is not None:
                 ref = ref.child(map_info.uid)
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
+            ref.child("latestProcessedMap").set(processed_map_full_path)
 
             if verbose:
                 print(
