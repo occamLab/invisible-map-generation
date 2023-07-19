@@ -279,6 +279,8 @@ if __name__ == "__main__":
     map_dictionary = defaultdict(list)
     map_data = []
     id_len = 0
+    add_bound = 0
+    map_bounds = {}
 
     for i, map_name in enumerate(map_pattern):
         matching_map = cms.find_maps(map_name, search_restriction=0)
@@ -300,13 +302,19 @@ if __name__ == "__main__":
             for key, values in map_set.map_dct.items():
                 map_dictionary[key].extend(values)
             id_len = len(map_set.map_dct["pose_data"])
-        if (len(matching_map) > 1):
-            map_json_name = args.p
-
+            if len(matching_map) > 1:
+                map_json_name = args.p
+            map_bounds[map_set.map_name] = id_len
+    for map, bound in map_bounds.items():
+        map_bounds[map] += add_bound
+        add_bound = bound
     map_dictionary["map_id"] = args.p
 
     complete_map = MapInfo(
-        map_name=map_name, map_dct=map_dictionary, map_json_name=map_json_name
+        map_name=map_name,
+        map_dct=map_dictionary,
+        map_json_name=map_json_name,
+        map_bounds=map_bounds,
     )
 
     # Remove tag observations that are bad

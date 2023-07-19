@@ -39,12 +39,18 @@ class MapInfo:
     """
 
     def __init__(
-        self, map_name: str, map_json_name: str, map_dct: Dict = None, uid: str = None
+        self,
+        map_name: str,
+        map_json_name: str,
+        map_dct: Dict = None,
+        uid: str = None,
+        map_bounds: Dict = None,
     ):
         self.map_name: str = str(map_name)
         self.map_json_blob_name: str = str(map_json_name)
         self.map_dct: Union[dict, str] = dict(map_dct) if map_dct is not None else {}
         self.uid = uid
+        self.map_bounds: dict = map_bounds
 
     def __hash__(self):
         return self.map_json_blob_name.__hash__()

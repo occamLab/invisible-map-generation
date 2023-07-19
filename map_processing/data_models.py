@@ -1045,7 +1045,7 @@ class UGDataSet(BaseModel):
         for i, pose_datum in enumerate(self.pose_data):
             ret[pose_datum.id] = pose_matrices[i]
         return ret
-    
+
     @property
     def pose_calculation(self) -> np.ndarray:
         """
@@ -1243,6 +1243,10 @@ class UGDataSet(BaseModel):
             )
         )
     
+    @property
+    def cloud_anchor_names(self) -> np.ndarray:
+        return {item[0].cloudIdentifier: item[0].name for item in self.cloud_data}
+
     @property
     def cloud_anchor_names(self) -> np.ndarray:
         return {item[0].cloudIdentifier: item[0].name for item in self.cloud_data}
@@ -1669,7 +1673,7 @@ class OG2oOptimizer(BaseModel):
     _check_visibleTagsCount_is_correct_shape_matrix = validator(
         "visibleTagsCount", allow_reuse=True
     )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))
-    
+
     _check_locationsCloudChi2_is_correct_shape_matrix = validator(
         "locationsCloudChi2", allow_reuse=True
     )(lambda v: _is_arr_of_right_shape(v, (-1, 1), is_optional=True))

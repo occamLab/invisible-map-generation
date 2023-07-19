@@ -869,6 +869,7 @@ class Graph:
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
         use_cloud_anchors: bool = False,
         abs_anchor_pos: bool = False,
+        map_bounds: Dict = None,
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -1374,22 +1375,29 @@ class Graph:
                         np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i])
                     )
 
-                edges[edge_counter] = Edge(
-                    startuid=previous_vertex_uid,
-                    enduid=current_odom_vertex_uid,
-                    corner_verts=None,
-                    information_prescaling=None,
-                    camera_intrinsics=None,
-                    measurement=measurement_arg,
-                    start_end=(
-                        vertices[previous_vertex_uid],
-                        vertices[current_odom_vertex_uid],
-                    ),
-                )
-                edge_counter += 1
+                if (
+                    vertices[current_odom_vertex_uid].meta_data["pose_id"]
+                    not in list(map_bounds.values())[:-1]
+                ):
+                    edges[edge_counter] = Edge(
+                        startuid=previous_vertex_uid,
+                        enduid=current_odom_vertex_uid,
+                        corner_verts=None,
+                        information_prescaling=None,
+                        camera_intrinsics=None,
+                        measurement=measurement_arg,
+                        start_end=(
+                            vertices[previous_vertex_uid],
+                            vertices[current_odom_vertex_uid],
+                        ),
+                    )
+                    edge_counter += 1
+                else:
+                    print(
+                        f"Odometry Node Cut Off from Map {list(map_bounds.keys())[list(map_bounds.values()).index(vertices[current_odom_vertex_uid].meta_data['pose_id'])]}"
+                    )
 
-            # Connect gravity edge to odometry vertex
-            # (use the second column of the inverted rotation matrix)
+            # Connect gravity edge to odometry vertex (use the second column of the inverted rotation matrix)
             gravity_edge_measurement_vector = np.concatenate(
                 (np.array([0.0, 1.0, 0.0]), pose_matrices[i, 1, :-1])
             )
@@ -1418,6 +1426,7 @@ class Graph:
         resulting_graph = Graph(
             edges, is_sba=use_sba, use_huber=False, huber_delta=None
         )
+        resulting_graph.cloud_anchor_names = data_set.cloud_anchor_names
         resulting_graph.cloud_id_by_vertex_id = (
             cloud_anchor_id_by_cloud_anchor_vertex_id
         )

@@ -127,10 +127,11 @@ def holistic_optimize(
         gt_data_as_dict_of_se3_arrays = gt_data.as_dict_of_se3_arrays
 
     graph = Graph.as_graph(
-        map_info.map_dct,
+        data_set=map_info.map_dct,
         fixed_vertices=fixed_vertices,
         prescaling_opt=pso,
         abs_anchor_pos=abs_anchor_pos,
+        map_bounds=map_info.map_bounds,
     )
     if generate_plot_titles:
         oconfig.graph_plot_title = "Optimization results for map: {}".format(
