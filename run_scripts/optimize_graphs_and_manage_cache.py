@@ -303,6 +303,9 @@ if __name__ == "__main__":
             for cloud_data in map_set.map_dct["cloud_data"]:
                 for instance in cloud_data:
                     instance["poseId"] += id_len
+                    if not args.a:
+                        fixed = np.reshape(pose_data[instance["poseId"]], (4,4)).transpose().dot(np.reshape(instance["pose"], (4,4)).transpose())
+                        instance["pose"] = np.transpose(fixed).reshape((4,4))
                     anchor_info[map_set.map_name][instance["cloudIdentifier"]] = instance["pose"]
             for key, values in map_set.map_dct.items():
                 map_dictionary[key].extend(values)
@@ -344,11 +347,9 @@ if __name__ == "__main__":
         map_bounds=map_bounds,
     )
 
-    # Remove tag observations that are bad
+    # Remove tag and cloud anchor observations that are bad
     if args.t:
-        for map_name in map_pattern:
-            this_path = cms.find_maps(map_name, search_restriction=0, paths=True)
-            print(tag_filter.throw_out_bad_tags(this_path[0], verbose=True))
+        complete_map.map_dct = tag_filter.throw_out_bad_tags(complete_map.map_dct, verbose=True)
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv,
@@ -399,7 +400,6 @@ if __name__ == "__main__":
             compare=args.c,
             upload=args.F,
             cms=cms,
-            abs_anchor_pos=args.a,
             gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(gt_data)
             if gt_data is not None
             else None,

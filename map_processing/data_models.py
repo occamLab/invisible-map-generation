@@ -536,7 +536,7 @@ class UGCloudAnchorDatum(BaseModel):
     cloudIdentifier: str
     pose: conlist(Union[float, int], min_items=16, max_items=16)
     poseId: int
-    name: str
+    name: Optional[str]
 
 
 class GenerateParams(BaseModel):

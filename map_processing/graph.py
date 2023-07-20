@@ -867,8 +867,6 @@ class Graph:
         data_set: Union[Dict, UGDataSet],
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
-        use_cloud_anchors: bool = False,
-        abs_anchor_pos: bool = False,
         map_bounds: Dict = None,
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
@@ -1273,15 +1271,11 @@ class Graph:
                 cloud_anchor_vertex_id,
                 cloud_anchor_index,
             ) in cloud_anchor_vertex_id_and_index_by_frame_id.get(int(odom_frame), []):
-                anchor_transform = cloud_anchor_edge_measurements_matrix[
-                    cloud_anchor_index
-                ]
-                if abs_anchor_pos:
-                    anchor_transform = np.linalg.inv(pose_matrices[i]).dot(
-                        np.transpose(
-                            cloud_anchor_edge_measurements_matrix[cloud_anchor_index]
-                        )
+                anchor_transform = np.linalg.inv(pose_matrices[i]).dot(
+                    np.transpose(
+                        cloud_anchor_edge_measurements_matrix[cloud_anchor_index]
                     )
+                )
 
                 if cloud_anchor_vertex_id not in counted_cloud_anchor_vertex_ids:
                     vertices[cloud_anchor_vertex_id] = Vertex(

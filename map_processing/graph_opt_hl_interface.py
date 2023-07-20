@@ -70,7 +70,6 @@ def holistic_optimize(
     visualize: bool = True,
     compare: bool = False,
     upload: bool = False,
-    abs_anchor_pos: bool = False,
     generate_plot_titles: bool = True,
 ) -> Union[OResult, OSGPairResult]:
     """Optimizes graph, caches the result, and if specified by the arguments: upload the processed graph, visualize
@@ -130,7 +129,6 @@ def holistic_optimize(
         data_set=map_info.map_dct,
         fixed_vertices=fixed_vertices,
         prescaling_opt=pso,
-        abs_anchor_pos=abs_anchor_pos,
         map_bounds=map_info.map_bounds,
     )
     if generate_plot_titles:

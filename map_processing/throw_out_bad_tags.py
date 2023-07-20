@@ -133,20 +133,17 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize=False, verbose=False):
     return RMS_error, throw, relevant_tag, sba_pixel_corners
 
 
-def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
+def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix_it=True):
     """
     Helper function to throw out tags with too high of an error based upon the calculation done in
     sba_evaluate().
 
     Args:
-        data_path (str): path to the file to be overwritten
+        unprocessed_map_data (Dict): map info dictionary of data. 
 
     Returns:
-        a bunch of print statements, but the helper function overwrites a file in its workflow.
-        the print statement is just an indication of how much stuff was thrown out.
+        The filtered version of the data.
     """
-    with open(data_path) as data_file:
-        unprocessed_map_data = json.load(data_file)
 
     throw_ids = []
     if unprocessed_map_data["cloud_data"]:
@@ -233,15 +230,9 @@ def throw_out_bad_tags(data_path, visualize=False, verbose=False, fix_it=True):
             if j not in throws_indeces
         ]
 
-    fix_it = True
-    if fix_it:
-        with open(data_path, "w") as f:
-            json.dump(unprocessed_map_data, f, indent=2)
+    print(f"Threw out {len(throws)} tags and {len(throw_ids)} anchors.")
 
-    # percent_thrown = 100 * (len(throws) / len(errors))
-
-    return f"Threw out {len(throws)} tags and {len(throw_ids)} anchors."
-
+    return unprocessed_map_data
 
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)
