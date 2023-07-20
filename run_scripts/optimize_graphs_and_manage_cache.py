@@ -306,46 +306,36 @@ if __name__ == "__main__":
                     anchor_info[map_set.map_name][instance["cloudIdentifier"]] = instance["pose"]
             for key, values in map_set.map_dct.items():
                 map_dictionary[key].extend(values)
-            id_len = len(map_set.map_dct["pose_data"])
+            id_len += len(map_set.map_dct["pose_data"])
             map_bounds[map_set.map_name] = id_len
 
     if len(matching_map) > 1:
         map_json_name = args.p
     
-    for map, bound in map_bounds.items():
-        map_bounds[map] += add_bound
-        add_bound = bound
     map_dictionary["map_id"] = args.p
-
+    map_bounds = dict(sorted(map_bounds.items(), key=lambda item: item[1]))
 
     if len(anchor_info) > 1:
-        first_map_id = list(map_bounds.keys())[0]
-        second_map_id = list(map_bounds.keys())[1]
-
-        intersect = set(anchor_info[first_map_id].keys()).intersection(set(anchor_info[second_map_id].keys()))
+        all_anchor_ids = [set(anchor_info[anchor].keys()) for anchor in anchor_info]
+        intersect = set.intersection(*all_anchor_ids)
         anchor_id = random.choice(list(intersect))
 
-        anchor_1 = np.transpose(np.reshape(anchor_info[first_map_id][anchor_id], (4,4)))
-        anchor_2 = np.transpose(np.reshape(anchor_info[second_map_id][anchor_id], (4,4)))
+        anchor_positions = {map_id: np.transpose(np.reshape(anchor_info[map_id][anchor_id], (4,4))) for map_id in anchor_info}
 
-        cutoff = list(map_bounds.values())[0]
+        for pose_data in map_dictionary["pose_data"]:
+            for map in map_bounds:
+                if pose_data["id"] < map_bounds[map]:
+                    fixed = np.linalg.inv(anchor_positions[map]).dot(np.transpose(np.reshape(pose_data["pose"], (4,4))))
+                    pose_data["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
+                    break
 
         for cloud_data in map_dictionary["cloud_data"]:
             for instance in cloud_data:
-                if instance["poseId"] < cutoff:
-                    fixed = np.linalg.inv(anchor_1).dot(np.transpose(np.reshape(instance["pose"], (4,4))))
-                    instance["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
-                else: 
-                    fixed = np.linalg.inv(anchor_2).dot(np.transpose(np.reshape(instance["pose"], (4,4))))
-                    instance["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
-
-        for pose_data in map_dictionary["pose_data"]:
-            if pose_data["id"] < cutoff:
-                fixed = np.linalg.inv(anchor_1).dot(np.transpose(np.reshape(pose_data["pose"], (4,4))))
-                pose_data["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
-            else: 
-                fixed = np.linalg.inv(anchor_2).dot(np.transpose(np.reshape(pose_data["pose"], (4,4))))
-                pose_data["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
+                for map in map_bounds:
+                    if instance["poseId"] < map_bounds[map]:
+                        fixed = np.linalg.inv(anchor_positions[map]).dot(np.transpose(np.reshape(instance["pose"], (4,4))))
+                        instance["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
+                        break
 
     complete_map = MapInfo(
         map_name=map_name,
