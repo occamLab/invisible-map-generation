@@ -1377,7 +1377,7 @@ class Graph:
 
                 if (
                     vertices[current_odom_vertex_uid].meta_data["pose_id"]
-                    not in list(map_bounds.values())[:-1]
+                    not in list(map_bounds.values())
                 ):
                     edges[edge_counter] = Edge(
                         startuid=previous_vertex_uid,
