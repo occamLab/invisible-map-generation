@@ -321,6 +321,10 @@ if __name__ == "__main__":
     if len(anchor_info) > 1:
         all_anchor_ids = [set(anchor_info[anchor].keys()) for anchor in anchor_info]
         intersect = set.intersection(*all_anchor_ids)
+
+        if (len(intersect) == 0):
+            print("No shared anchors between maps.")
+            exit(1)
         anchor_id = random.choice(list(intersect))
 
         anchor_positions = {map_id: np.transpose(np.reshape(anchor_info[map_id][anchor_id], (4,4))) for map_id in anchor_info}
