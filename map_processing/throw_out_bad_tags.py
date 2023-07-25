@@ -161,6 +161,7 @@ def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix
             max_dis = 0
             xcoords = []
             ycoords = []
+            total_dis = 0
             for instance in by_id[anchor_id]:
                 transform1 = np.reshape(instance["pose"], (4, 4)).transpose()
                 translation1 = transform1[:3, 3]
@@ -172,6 +173,7 @@ def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix
 
                     distance = np.linalg.norm(translation1 - translation2)
 
+                    total_dis += distance
                     if distance > max_dis:
                         max_dis = distance
             if max_dis > 10:
@@ -180,6 +182,12 @@ def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix
             ids.append(instance["cloudIdentifier"])
             xcoordsall.append(xcoords)
             ycoordsall.append(ycoords)
+
+            name = list(filter(lambda anchor: anchor["cloudIdentifier"] == anchor_id,data))[0]["name"]
+            print(name, ": ", anchor_id)
+            print("Max Distance: ", max_dis)
+            print("Average Distance", total_dis/(len(by_id[anchor_id]) **2))
+            print("-----------")
 
         unprocessed_map_data["cloud_data"] = [
             i
