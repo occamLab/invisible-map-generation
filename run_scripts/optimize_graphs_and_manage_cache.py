@@ -137,6 +137,12 @@ def make_parser() -> argparse.ArgumentParser:
         default=None,
     )
     p.add_argument(
+        "-fc",
+        action="store_true",
+        help="Find a combine maps with shared cloud anchors",
+        default=None,
+    )
+    p.add_argument(
         "-F",
         action="store_true",
         help="Upload any graphs to Firebase that are optimized while this script is "
@@ -273,6 +279,9 @@ if __name__ == "__main__":
     elif args.f:
         cms.download_all_maps()
         exit(0)
+    elif args.fc:
+        cms.combine_shared_maps()
+        exit(0)
 
     map_pattern = args.p if args.p else ""
     map_pattern = map_pattern.split("+")
@@ -292,7 +301,7 @@ if __name__ == "__main__":
             )
             exit(0)
         map_name = ""
-        
+
         for map_set in matching_map:
             map_json_name = map_set.map_json_blob_name
             map_name += map_set.map_name
@@ -304,9 +313,15 @@ if __name__ == "__main__":
                 for instance in cloud_data:
                     instance["poseId"] += id_len
                     if not args.a:
-                        fixed = np.reshape(pose_data[instance["poseId"]], (4,4)).transpose().dot(np.reshape(instance["pose"], (4,4)).transpose())
-                        instance["pose"] = np.transpose(fixed).reshape((4,4))
-                    anchor_info[map_set.map_name][instance["cloudIdentifier"]] = instance["pose"]
+                        fixed = (
+                            np.reshape(pose_data[instance["poseId"]], (4, 4))
+                            .transpose()
+                            .dot(np.reshape(instance["pose"], (4, 4)).transpose())
+                        )
+                        instance["pose"] = np.transpose(fixed).reshape((4, 4))
+                    anchor_info[map_set.map_name][
+                        instance["cloudIdentifier"]
+                    ] = instance["pose"]
             for key, values in map_set.map_dct.items():
                 map_dictionary[key].extend(values)
             id_len += len(map_set.map_dct["pose_data"])
@@ -314,7 +329,7 @@ if __name__ == "__main__":
 
     if len(matching_map) > 1:
         map_json_name = args.p
-    
+
     map_dictionary["map_id"] = args.p
     map_bounds = dict(sorted(map_bounds.items(), key=lambda item: item[1]))
 
@@ -322,26 +337,37 @@ if __name__ == "__main__":
         all_anchor_ids = [set(anchor_info[anchor].keys()) for anchor in anchor_info]
         intersect = set.intersection(*all_anchor_ids)
 
-        if (len(intersect) == 0):
+        if len(intersect) == 0:
             print("No shared anchors between maps.")
             exit(1)
         anchor_id = random.choice(list(intersect))
 
-        anchor_positions = {map_id: np.transpose(np.reshape(anchor_info[map_id][anchor_id], (4,4))) for map_id in anchor_info}
+        anchor_positions = {
+            map_id: np.transpose(np.reshape(anchor_info[map_id][anchor_id], (4, 4)))
+            for map_id in anchor_info
+        }
 
         for pose_data in map_dictionary["pose_data"]:
             for map in map_bounds:
                 if pose_data["id"] < map_bounds[map]:
-                    fixed = np.linalg.inv(anchor_positions[map]).dot(np.transpose(np.reshape(pose_data["pose"], (4,4))))
-                    pose_data["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
+                    fixed = np.linalg.inv(anchor_positions[map]).dot(
+                        np.transpose(np.reshape(pose_data["pose"], (4, 4)))
+                    )
+                    pose_data["pose"] = list(
+                        np.reshape(np.transpose(fixed), (1, 16))[0]
+                    )
                     break
 
         for cloud_data in map_dictionary["cloud_data"]:
             for instance in cloud_data:
                 for map in map_bounds:
                     if instance["poseId"] < map_bounds[map]:
-                        fixed = np.linalg.inv(anchor_positions[map]).dot(np.transpose(np.reshape(instance["pose"], (4,4))))
-                        instance["pose"] = list(np.reshape(np.transpose(fixed), (1, 16))[0])
+                        fixed = np.linalg.inv(anchor_positions[map]).dot(
+                            np.transpose(np.reshape(instance["pose"], (4, 4)))
+                        )
+                        instance["pose"] = list(
+                            np.reshape(np.transpose(fixed), (1, 16))[0]
+                        )
                         break
 
     complete_map = MapInfo(
@@ -353,7 +379,9 @@ if __name__ == "__main__":
 
     # Remove tag and cloud anchor observations that are bad
     if args.t:
-        complete_map.map_dct = tag_filter.throw_out_bad_tags(complete_map.map_dct, verbose=True)
+        complete_map.map_dct = tag_filter.throw_out_bad_tags(
+            complete_map.map_dct, verbose=True
+        )
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv,
