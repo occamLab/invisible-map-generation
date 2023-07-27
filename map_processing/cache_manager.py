@@ -6,8 +6,10 @@ import uuid
 import glob
 import json
 import os
+import random
 from threading import Semaphore, Thread, Timer
 from typing import Dict, Union, List, Optional, Set, Callable
+from collections import defaultdict
 
 
 import firebase_admin
@@ -261,6 +263,101 @@ class CacheManagerSingleton:
     def download_all_maps(self):
         """Downloads all maps from Firebase."""
         return self._download_all_maps_recur()
+
+    def combine_shared_maps(self):
+        """Combines Maps with shared CAs"""
+        map_seed = MapInfo(
+            map_name="combined_map",
+            map_json_name="combined_map",
+        )
+        combined_map = self._combine_maps_with_shared_cloud_anchors(map_seed=map_seed)
+        combined_map.map_json_blob_name = "fixedtesting/combined_map"
+        combined_map.map_name = "combined_map"
+        map_json = json.dumps(combined_map.map_dct, indent=2)
+        CacheManagerSingleton.cache_map(
+            self.UNPROCESSED_MAPS_PARENT,
+            combined_map,
+            map_json,
+        )
+        return combined_map
+
+    def combine_maps(
+        self,
+        map_seed: MapInfo,
+        new_map: MapInfo,
+    ):
+        """
+        Combine maps from Firebase
+        """
+        map_dictionary = defaultdict(list)
+        id_len = 0
+        map_bounds = {}
+        anchor_info = {}
+        matching_map = set([map_seed, new_map])
+        map_name = ""
+
+        for map_set in matching_map:
+            if map_set is None:
+                continue
+            map_json_name = map_set.map_json_blob_name
+            map_name += map_set.map_name
+            anchor_info[map_set.map_name] = {}
+            for pose_data in map_set.map_dct["pose_data"]:
+                pose_data["id"] += id_len
+            for cloud_data in map_set.map_dct["cloud_data"]:
+                for instance in cloud_data:
+                    instance["poseId"] += id_len
+                    anchor_info[map_set.map_name][
+                        instance["cloudIdentifier"]
+                    ] = instance["pose"]
+            for key, values in map_set.map_dct.items():
+                map_dictionary[key].extend(values)
+            id_len += len(map_set.map_dct["pose_data"])
+            map_bounds[map_set.map_name] = id_len
+
+        map_dictionary["map_id"] = "combined_map"
+        map_bounds = dict(sorted(map_bounds.items(), key=lambda item: item[1]))
+
+        if len(anchor_info) > 1:
+            all_anchor_ids = [set(anchor_info[anchor].keys()) for anchor in anchor_info]
+            intersect = set.intersection(*all_anchor_ids)
+            anchor_id = random.choice(list(intersect))
+
+            anchor_positions = {
+                map_id: np.transpose(np.reshape(anchor_info[map_id][anchor_id], (4, 4)))
+                for map_id in anchor_info
+            }
+
+            for pose_data in map_dictionary["pose_data"]:
+                for map_data in map_bounds:
+                    if pose_data["id"] < map_bounds[map_data]:
+                        fixed = np.linalg.inv(anchor_positions[map_data]).dot(
+                            np.transpose(np.reshape(pose_data["pose"], (4, 4)))
+                        )
+                        pose_data["pose"] = list(
+                            np.reshape(np.transpose(fixed), (1, 16))[0]
+                        )
+                        break
+
+            for cloud_data in map_dictionary["cloud_data"]:
+                for instance in cloud_data:
+                    for map_data in map_bounds:
+                        if instance["poseId"] < map_bounds[map_data]:
+                            fixed = np.linalg.inv(anchor_positions[map_data]).dot(
+                                np.transpose(np.reshape(instance["pose"], (4, 4)))
+                            )
+                            instance["pose"] = list(
+                                np.reshape(np.transpose(fixed), (1, 16))[0]
+                            )
+                            break
+
+        complete_map = MapInfo(
+            map_name=map_name,
+            map_dct=map_dictionary,
+            map_json_name=map_json_name,
+            map_bounds=map_bounds,
+        )
+        return complete_map
 
     def get_map_from_unprocessed_map_event(
         self,
@@ -816,6 +913,61 @@ class CacheManagerSingleton:
                 self._download_all_maps_recur(
                     map_info=child_val, uid=child_key if uid is None else uid
                 )
+
+    def _combine_maps_with_shared_cloud_anchors(
+        self,
+        map_info: Union[Dict[str, Dict], None] = None,
+        map_seed: MapInfo = None,
+        uid: str = None,
+    ):
+        """
+        Recursive function for finding maps with same CAs
+        """
+        if map_info is None:
+            map_info = db.reference(self.UNPROCESSED_MAPS_PARENT).get()
+        anchors = []
+        for child_key, child_val in map_info.items():
+            if isinstance(child_val, str):
+                info = self._check_cloud_anchor_info(child_key, child_val, uid=uid)
+                if info is not None:
+                    anchors.append(info[0])
+                    if len(anchors) >= 1:
+                        intersect = set.intersection(*anchors)
+                        if len(intersect) >= 1:
+                            map_seed = self.combine_maps(map_seed, info[1])
+                            print(f"Combining {info[1].map_name}...")
+            elif isinstance(child_val, dict):
+                map_seed = self._combine_maps_with_shared_cloud_anchors(
+                    map_info=child_val, uid=child_key if uid is None else uid
+                )
+        return map_seed
+
+    def _check_cloud_anchor_info(self, map_name: str, map_json: str, uid: str = None):
+        if self.__max_listen_wait > 0:
+            self.__timer_mutex.acquire()
+            self.__listen_kill_timer.cancel()
+            self.__listen_kill_timer = Timer(
+                self.__max_listen_wait, self.__firebase_listen_sem.release
+            )
+            self.__listen_kill_timer.start()
+            self.__timer_mutex.release()
+
+        json_blob = None
+        map_info = MapInfo(map_name, map_json, uid=uid)
+        if "fixedtesting" in map_info.map_json_blob_name:
+            json_blob = self.__bucket.get_blob(map_info.map_json_blob_name)
+        anchors = []
+        if json_blob is not None:
+            json_data = json_blob.download_as_bytes()
+            json_dct = json.loads(json_data)
+            map_info.map_dct = json_dct
+            for cloud_data in json_dct["cloud_data"]:
+                for instance in cloud_data:
+                    anchors.append(instance["cloudIdentifier"])
+            anchors = set(anchors)
+            return (anchors, map_info)
+        else:
+            return None
 
     def _firebase_get_and_cache_unprocessed_map(
         self, map_name: str, map_json: str, uid: str = None
