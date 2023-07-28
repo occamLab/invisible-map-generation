@@ -16,6 +16,7 @@ sys.path.append(repository_root)
 import json
 import numpy as np
 import argparse
+from firebase_admin import db, storage
 
 import benchmarking.benchmarking_utils as B
 
@@ -133,7 +134,7 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize=False, verbose=False):
     return RMS_error, throw, relevant_tag, sba_pixel_corners
 
 
-def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix_it=True):
+def throw_out_bad_tags(unprocessed_map_data, map_name, visualize=False, verbose=False, fix_it=True):
     """
     Helper function to throw out tags with too high of an error based upon the calculation done in
     sba_evaluate().
@@ -178,6 +179,10 @@ def throw_out_bad_tags(unprocessed_map_data, visualize=False, verbose=False, fix
                         max_dis = distance
             if max_dis > 10:
                 throw_ids.append(anchor_id)
+
+
+            ref = db.reference("reliability")
+            ref.child(anchor_id).child(map_name).set(max_dis)
 
             ids.append(instance["cloudIdentifier"])
             xcoordsall.append(xcoords)

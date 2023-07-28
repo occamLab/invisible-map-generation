@@ -20,13 +20,14 @@ Notes:
 import os
 import random
 import sys
+import uuid
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
 import argparse
 import numpy as np
-from firebase_admin import credentials
+from firebase_admin import credentials, db
 from typing import Dict, Callable, Iterable, Any, Tuple
 from collections import defaultdict
 
@@ -291,6 +292,10 @@ if __name__ == "__main__":
     id_len = 0
     add_bound = 0
     map_bounds = {}
+    map_final_name = ""
+    map_json_name = ""
+
+    maps_combined_name = ""
 
     anchor_info = {}
     for i, map_name in enumerate(map_pattern):
@@ -300,11 +305,10 @@ if __name__ == "__main__":
                 f"No matches for {map_pattern} in recursive search of {CacheManagerSingleton.CACHE_PATH}"
             )
             exit(0)
-        map_name = ""
-
+        
         for map_set in matching_map:
             map_json_name = map_set.map_json_blob_name
-            map_name += map_set.map_name
+            maps_combined_name += map_set.map_name
             map_data.append(map_set)
             anchor_info[map_set.map_name] = {}
             for pose_data in map_set.map_dct["pose_data"]:
@@ -327,13 +331,25 @@ if __name__ == "__main__":
             id_len += len(map_set.map_dct["pose_data"])
             map_bounds[map_set.map_name] = id_len
 
-    if len(matching_map) > 1:
-        map_json_name = args.p
-
     map_dictionary["map_id"] = args.p
     map_bounds = dict(sorted(map_bounds.items(), key=lambda item: item[1]))
 
     if len(anchor_info) > 1:
+
+        multi_map_name = str(uuid.uuid4())
+        multi_maps = db.reference("multi_maps").get()
+        for multi_map_id in multi_maps:
+            if set(multi_maps[multi_map_id]) == set(anchor_info.keys()):
+                multi_map_name = multi_map_id
+
+        ref = db.reference("multi_maps")
+        ref = ref.child(multi_map_name)
+        for i, map_id in enumerate(anchor_info):
+            ref.child(str(i)).set(map_id)
+
+        map_json_name = "multi/" + maps_combined_name + ".json"
+        map_final_name = multi_map_name
+        
         all_anchor_ids = [set(anchor_info[anchor].keys()) for anchor in anchor_info]
         intersect = set.intersection(*all_anchor_ids)
 
@@ -371,7 +387,7 @@ if __name__ == "__main__":
                         break
 
     complete_map = MapInfo(
-        map_name=map_name,
+        map_name=map_final_name,
         map_dct=map_dictionary,
         map_json_name=map_json_name,
         map_bounds=map_bounds,
@@ -379,9 +395,7 @@ if __name__ == "__main__":
 
     # Remove tag and cloud anchor observations that are bad
     if args.t:
-        complete_map.map_dct = tag_filter.throw_out_bad_tags(
-            complete_map.map_dct, verbose=True
-        )
+        complete_map.map_dct = tag_filter.throw_out_bad_tags(complete_map.map_dct, map_final_name, verbose=True)
 
     compute_inf_params = OComputeInfParams(
         lin_vel_var=np.ones(3) * np.sqrt(3) * args.lvv,
