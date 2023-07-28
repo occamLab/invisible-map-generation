@@ -139,8 +139,9 @@ def make_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "-fc",
-        action="store_true",
-        help="Find a combine maps with shared cloud anchors",
+        type=str,
+        required=False,
+        help="Combine maps that share cloud anchors with the input map",
         default=None,
     )
     p.add_argument(
@@ -281,7 +282,7 @@ if __name__ == "__main__":
         cms.download_all_maps()
         exit(0)
     elif args.fc:
-        cms.combine_shared_maps()
+        cms.combine_shared_maps(map_seed=args.fc)
         exit(0)
 
     map_pattern = args.p if args.p else ""

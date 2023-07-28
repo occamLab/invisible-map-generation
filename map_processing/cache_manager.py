@@ -264,22 +264,20 @@ class CacheManagerSingleton:
         """Downloads all maps from Firebase."""
         return self._download_all_maps_recur()
 
-    def combine_shared_maps(self):
-        """Combines Maps with shared CAs"""
-        map_seed = MapInfo(
-            map_name="combined_map",
-            map_json_name="combined_map",
+    def combine_shared_maps(self, map_seed):
+        """Combines Maps with shared CAs then caches it"""
+        map_info = self._flatten_firebase(
+            db.reference(self.UNPROCESSED_MAPS_PARENT).get()
         )
-        combined_map = self._combine_maps_with_shared_cloud_anchors(map_seed=map_seed)
-        combined_map.map_json_blob_name = "fixedtesting/combined_map"
-        combined_map.map_name = "combined_map"
-        map_json = json.dumps(combined_map.map_dct, indent=2)
+        combined_map = self._combine_maps_with_shared_cloud_anchors(map_info, map_seed)
+        map_name = map_seed.split(".")[0]
+        combined_map.map_name = f"{map_name}_combined"
+        combined_map.map_json_blob_name = f"fixedtesting/{map_name}_combined"
         CacheManagerSingleton.cache_map(
-            self.UNPROCESSED_MAPS_PARENT,
+            CacheManagerSingleton.UNPROCESSED_MAPS_PARENT,
             combined_map,
-            map_json,
+            json.dumps(combined_map.map_dct, indent=2),
         )
-        return combined_map
 
     def combine_maps(
         self,
@@ -916,33 +914,44 @@ class CacheManagerSingleton:
 
     def _combine_maps_with_shared_cloud_anchors(
         self,
-        map_info: Union[Dict[str, Dict], None] = None,
-        map_seed: MapInfo = None,
+        map_info: List = None,
+        map_seed: str = None,
         uid: str = None,
     ):
         """
-        Recursive function for finding maps with same CAs
+        Iterative function for finding maps with same CAs
         """
-        if map_info is None:
-            map_info = db.reference(self.UNPROCESSED_MAPS_PARENT).get()
-        anchors = []
-        for child_key, child_val in map_info.items():
-            if isinstance(child_val, str):
-                info = self._check_cloud_anchor_info(child_key, child_val, uid=uid)
-                if info is not None:
-                    anchors.append(info[0])
-                    if len(anchors) >= 1:
-                        intersect = set.intersection(*anchors)
-                        if len(intersect) >= 1:
-                            map_seed = self.combine_maps(map_seed, info[1])
-                            print(f"Combining {info[1].map_name}...")
-            elif isinstance(child_val, dict):
-                map_seed = self._combine_maps_with_shared_cloud_anchors(
-                    map_info=child_val, uid=child_key if uid is None else uid
-                )
+        seed_anchors = set()
+
+        map_seed = list(self.find_maps(map_seed))[0]
+        for cloud_data in map_seed.map_dct["cloud_data"]:
+            for instance in cloud_data:
+                seed_anchors.add(instance["cloudIdentifier"])
+
+        for address in map_info:
+            info = self._check_cloud_anchor_info(address, uid=uid)
+            if info is not None:
+                if len(info[0]) >= 1:
+                    intersect = seed_anchors.intersection(info[0])
+                    if len(intersect) >= 1:
+                        map_seed = self.combine_maps(map_seed, info[1])
+                        seed_anchors.update(info[0])
+                        print(f"Combining {info[1].map_name}...")
         return map_seed
 
-    def _check_cloud_anchor_info(self, map_name: str, map_json: str, uid: str = None):
+    def _flatten_firebase(self, tree):
+        """
+        Converts to Firebase Tree into List
+        """
+        map_list = []
+        for value in tree.values():
+            if isinstance(value, dict):
+                map_list.extend(self._flatten_firebase(value))
+            else:
+                map_list.append(value)
+        return map_list
+
+    def _check_cloud_anchor_info(self, map_json: str, uid: str = None):
         if self.__max_listen_wait > 0:
             self.__timer_mutex.acquire()
             self.__listen_kill_timer.cancel()
@@ -953,6 +962,7 @@ class CacheManagerSingleton:
             self.__timer_mutex.release()
 
         json_blob = None
+        map_name = map_json.split("/")[1]
         map_info = MapInfo(map_name, map_json, uid=uid)
         if "fixedtesting" in map_info.map_json_blob_name:
             json_blob = self.__bucket.get_blob(map_info.map_json_blob_name)
@@ -968,6 +978,45 @@ class CacheManagerSingleton:
             return (anchors, map_info)
         else:
             return None
+
+    # def upload_combined(
+    #     self, map_info: MapInfo, json_string: str, verbose: bool = False
+    # ) -> None:
+    #     """Uploads the combined map json string into the Firebase __bucket under the path
+    #     <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
+
+    #     Notes:
+    #         - Acquires the __synch_mutex (calling from another thread will block until this
+    #           completes).
+    #         - Note that no exception catching is implemented.
+
+    #     Args:
+    #         map_info (MapInfo): Contains the map name and map json path
+    #         json_string (str): Json string of the map to upload
+    #         verbose: TODO
+    #     """
+    #     with self.__synch_mutex:
+    #         combined_map_filename = "combined_map.json"
+    #         combined_map_full_path = (
+    #             f"{self.UNPROCESSED_MAPS_PARENT}/{combined_map_filename}"
+    #         )
+    #         combined_map_blob = self.__bucket.blob(combined_map_full_path)
+    #         token = uuid.uuid4()
+    #         combined_map_blob.metadata = {"firebaseStorageDownloadTokens": token}
+    #         combined_map_blob.upload_from_string(json_string)
+
+    #         ref = db.reference("unprocessed_maps")
+    #         if map_info.uid is not None:
+    #             ref = ref.child(map_info.uid)
+    #         ref.child(map_info.map_name).child("map_file").set(combined_map_full_path)
+    #         ref.child("combined_map").set(combined_map_full_path)
+
+    #         CacheManagerSingleton.cache_map(
+    #             CacheManagerSingleton.UNPROCESSED_MAPS_PARENT,
+    #             map_info,
+    #             json_string,
+    #             verbose=verbose,
+    #         )
 
     def _firebase_get_and_cache_unprocessed_map(
         self, map_name: str, map_json: str, uid: str = None
