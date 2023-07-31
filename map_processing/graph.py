@@ -867,7 +867,7 @@ class Graph:
         data_set: Union[Dict, UGDataSet],
         fixed_vertices: Optional[Union[VertexType, Set[VertexType]]] = None,
         prescaling_opt: PrescalingOptEnum = PrescalingOptEnum.USE_SBA,
-        map_bounds: Dict = None,
+        map_bounds: Dict = {},
     ) -> Graph:
         """Convert a dictionary decoded from JSON into a Graph object.
 
@@ -1369,9 +1369,8 @@ class Graph:
                         np.linalg.inv(previous_pose_matrix).dot(pose_matrices[i])
                     )
 
-                if (
-                    vertices[current_odom_vertex_uid].meta_data["pose_id"]
-                    not in list(map_bounds.values())
+                if vertices[current_odom_vertex_uid].meta_data["pose_id"] not in list(
+                    map_bounds.values()
                 ):
                     edges[edge_counter] = Edge(
                         startuid=previous_vertex_uid,

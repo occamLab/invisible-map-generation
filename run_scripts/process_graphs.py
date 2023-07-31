@@ -4,10 +4,15 @@ new maps and process and upload them.
 
 Author: Allison Li, Duncan Mazza
 """
+import os
+import sys
+from datetime import datetime
+
+from firebase_admin import credentials
 
 from map_processing.data_models import OConfig
-from firebase_admin import credentials
 from map_processing.graph_opt_utils import make_processed_map_json
+import map_processing.throw_out_bad_tags as tag_filter
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import (
     PrescalingOptEnum,
@@ -16,9 +21,6 @@ from map_processing.graph_opt_hl_interface import (
     optimize_graph,
 )
 from map_processing.cache_manager import CacheManagerSingleton, MapInfo
-import os
-import sys
-from datetime import datetime
 
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
@@ -55,12 +57,18 @@ def for_each_map_info(map_info: MapInfo) -> None:
         f"{map_info.map_json_blob_name[:-5]} "
         + f'{datetime.now().strftime("%Y%m%d%H%M%S")}.json'
     )
-    graph = Graph.as_graph(map_info.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
+    combined_map = cms.combine_shared_maps(map_seed=map_info)
+    combined_map.map_dct = tag_filter.throw_out_bad_tags(
+        combined_map.map_dct, combined_map.map_name, verbose=False
+    )
+    graph = Graph.as_graph(combined_map.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
     )
     opt_result = optimize_graph(graph=graph, oconfig=optimization_config)
-    json_str = make_processed_map_json(opt_result.map_opt, calculate_intersections=True)
+    json_str = make_processed_map_json(
+        graph=graph, opt_result=opt_result.map_opt, calculate_intersections=True
+    )
     cms.upload(map_info, json_str)
 
 
