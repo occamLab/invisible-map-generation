@@ -310,6 +310,7 @@ if __name__ == "__main__":
         for map_set in matching_map:
             map_json_name = map_set.map_json_blob_name
             maps_combined_name += map_set.map_name
+            map_final_name = map_set.map_name
             map_data.append(map_set)
             anchor_info[map_set.map_name] = {}
             for pose_data in map_set.map_dct["pose_data"]:
