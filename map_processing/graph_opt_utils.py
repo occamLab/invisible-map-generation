@@ -33,6 +33,7 @@ from .data_models import (
 from .graph import Graph
 from .transform_utils import transform_gt_to_have_common_reference
 from scipy.spatial.transform import Rotation as R
+from .map_data_pb2 import *
 
 
 def optimizer_to_map(
@@ -538,6 +539,154 @@ def make_processed_map_json(
         waypoints_vertices=waypoint_vertex_list,
     )
     return processed_data_set.json(indent=2)
+
+
+def make_processed_map_protobuf(
+    graph: Graph,
+    opt_result: OG2oOptimizer,
+    calculate_intersections: bool = False,
+) -> bytes:
+    """Serializes the result of an optimization into Protocol Buffers (Protobuf) binary format.
+
+    Args:
+    opt_result: A dictionary containing the tag locations, odometry locations, waypoint locations,
+        odometry-adjacent chi2 array, and per-odometry-node visible tags count array in the keys 'tags', 'locations',
+        'waypoints', 'locationsAdjChi2', and 'visibleTagsCount', respectively. This is the format of dictionary that is
+        produced by the `map_processing.graph_opt_utils.optimizer_to_map_chi2` function and, subsequently, the
+        `GraphManager.optimize_graph` method.
+    calculate_intersections: If true, graph_util_get_neighbors.get_neighbors is called with the odometry nodes
+        as the argument. The results are appended to the resulting tag vertex map under the 'neighbors' key.
+
+
+    Returns:
+        bytes: A binary representation of the serialized data using Protobuf.
+
+    Raises:
+        ValueError: If both the 'visible_tags_count' and 'adj_chi2_arr' arguments are None or not None.
+
+    Note:
+        This function encodes the provided data structures into Protobuf format, which can be used for efficient
+        storage and transmission of map-related information.
+    """
+    tag_locations = opt_result.tags
+    cloud_locations = opt_result.cloud_anchors
+    odom_locations = opt_result.locations
+    adj_chi2_arr = opt_result.locationsAdjChi2
+    cloud_chi2_arr = opt_result.locationsCloudChi2
+    visible_tags_count = opt_result.visibleTagsCount
+    visible_cloud_count = opt_result.visibleCloudCount
+    waypoint_locations = (opt_result.waypoints_metadata, opt_result.waypoints_arr)
+
+    if (visible_tags_count is None) ^ (adj_chi2_arr is None):
+        raise ValueError(
+            "'visible_tags_count' and 'adj_chi2_arr' arguments must both be None or non-None"
+        )
+
+    if (visible_cloud_count is None) ^ (cloud_chi2_arr is None):
+        raise ValueError(
+            "'cloud_tags_count' and 'cloud_chi2_arr' arguments must both be None or non-None"
+        )
+
+    tag_vertex_list: List[PGTagV] = []
+    for curr_tag in tag_locations:
+        tag_vertex_list.append(
+            PGTagV(
+                translation=PGTrans(x=curr_tag[0], y=curr_tag[1], z=curr_tag[2]),
+                rotation=PGRot(
+                    x=curr_tag[3], y=curr_tag[4], z=curr_tag[5], w=curr_tag[6]
+                ),
+                id=int(curr_tag[7]),
+            )
+        )
+
+    cloud_vertex_list: List[PGCloudV] = []
+    for curr_cloud in cloud_locations:
+        cloud_vertex_list.append(
+            PGCloudV(
+                translation=PGTrans(x=curr_cloud[0], y=curr_cloud[1], z=curr_cloud[2]),
+                rotation=PGRot(
+                    x=curr_cloud[3], y=curr_cloud[4], z=curr_cloud[5], w=curr_cloud[6]
+                ),
+                cloud_id=graph.cloud_id_by_vertex_id[int(curr_cloud[7])],
+                name=graph.cloud_anchor_names[
+                    graph.cloud_id_by_vertex_id[int(curr_cloud[7])]
+                ],
+            )
+        )
+
+    odom_vertex_list: List[PGOdomV] = []
+    for curr_odom in odom_locations:
+        odom_vertex_list.append(
+            PGOdomV(
+                translation=PGTrans(x=curr_odom[0], y=curr_odom[1], z=curr_odom[2]),
+                rotation=PGRot(
+                    x=curr_odom[3], y=curr_odom[4], z=curr_odom[5], w=curr_odom[6]
+                ),
+                poseId=int(curr_odom[8]),
+            )
+        )
+
+    if adj_chi2_arr is not None:
+        odom_locations_with_chi2_and_viz_tags = np.concatenate(
+            [odom_locations, adj_chi2_arr, visible_tags_count], axis=1
+        )
+        for odom_idx, curr_odom in enumerate(odom_locations_with_chi2_and_viz_tags):
+            odom_vertex_list[odom_idx].adjChi2 = curr_odom[9]
+            odom_vertex_list[odom_idx].vizTags = int(curr_odom[10])
+
+    if cloud_chi2_arr is not None:
+        odom_locations_with_chi2_and_viz_cloud = np.concatenate(
+            [odom_locations, cloud_chi2_arr, visible_cloud_count], axis=1
+        )
+        for odom_idx, curr_odom in enumerate(odom_locations_with_chi2_and_viz_cloud):
+            odom_vertex_list[odom_idx].cloudChi2 = curr_odom[9]
+            odom_vertex_list[odom_idx].vizCloud = int(curr_odom[10])
+
+    if calculate_intersections:
+        neighbors_list, intersections = graph_util_get_neighbors.get_neighbors(
+            odom_locations[:, :7]
+        )
+        for index, neighbors in enumerate(neighbors_list):
+            neighbor_proto = NeighborsList()
+            for neighbor in neighbors:
+                neighbor_proto.neighbors = neighbor
+            odom_vertex_list[index].neighbors.append(neighbor_proto)
+        for intersection in intersections:
+            odom_vertex_list.append(PGOdomV(**intersection))
+    else:
+        for index in range(0, len(odom_vertex_list)):
+            odom_vertex_list[index].neighbors.extend([])
+
+    waypoint_vertex_list: List[PGWaypointV] = []
+    for idx in range(len(waypoint_locations[0])):
+        waypoint_vertex_list.append(
+            PGWaypointV(
+                translation=PGTrans(
+                    x=waypoint_locations[1][idx][0],
+                    y=waypoint_locations[1][idx][1],
+                    z=waypoint_locations[1][idx][2],
+                ),
+                rotation=PGRot(
+                    x=waypoint_locations[1][idx][3],
+                    y=waypoint_locations[1][idx][4],
+                    z=waypoint_locations[1][idx][5],
+                    w=waypoint_locations[1][idx][6],
+                ),
+                id=waypoint_locations[0][idx]["name"],
+            )
+        )
+
+    # Create Protobuf message objects and populate them
+    processed_data_set = PGData(
+        tag_vertices=tag_vertex_list,
+        cloud_vertices=cloud_vertex_list,
+        odometry_vertices=odom_vertex_list,
+        waypoints_vertices=waypoint_vertex_list,
+    )
+
+    # Serialize the Protobuf message to bytes
+    print(processed_data_set)
+    return processed_data_set.SerializeToString()
 
 
 def compare_std_dev(all_tags, all_tags_original):

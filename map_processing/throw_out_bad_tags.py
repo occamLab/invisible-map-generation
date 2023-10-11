@@ -134,13 +134,15 @@ def sba_evaluate(tag_idx, unprocessed_map_data, visualize=False, verbose=False):
     return RMS_error, throw, relevant_tag, sba_pixel_corners
 
 
-def throw_out_bad_tags(unprocessed_map_data, map_name, visualize=False, verbose=False, fix_it=True):
+def throw_out_bad_tags(
+    unprocessed_map_data, map_name, visualize=False, verbose=False, fix_it=True
+):
     """
     Helper function to throw out tags with too high of an error based upon the calculation done in
     sba_evaluate().
 
     Args:
-        unprocessed_map_data (Dict): map info dictionary of data. 
+        unprocessed_map_data (Dict): map info dictionary of data.
 
     Returns:
         The filtered version of the data.
@@ -180,7 +182,6 @@ def throw_out_bad_tags(unprocessed_map_data, map_name, visualize=False, verbose=
             if max_dis > 10:
                 throw_ids.append(anchor_id)
 
-
             ref = db.reference("reliability")
             ref.child(anchor_id).child(map_name).set(max_dis)
 
@@ -188,10 +189,12 @@ def throw_out_bad_tags(unprocessed_map_data, map_name, visualize=False, verbose=
             xcoordsall.append(xcoords)
             ycoordsall.append(ycoords)
 
-            name = list(filter(lambda anchor: anchor["cloudIdentifier"] == anchor_id,data))[0]["name"]
+            name = list(
+                filter(lambda anchor: anchor["cloudIdentifier"] == anchor_id, data)
+            )[0]["name"]
             print(name, ": ", anchor_id)
             print("Max Distance: ", max_dis)
-            print("Average Distance", total_dis/(len(by_id[anchor_id]) **2))
+            print("Average Distance", total_dis / (len(by_id[anchor_id]) ** 2))
             print("-----------")
 
         unprocessed_map_data["cloud_data"] = [
@@ -246,6 +249,7 @@ def throw_out_bad_tags(unprocessed_map_data, map_name, visualize=False, verbose=
     print(f"Threw out {len(throws)} tags and {len(throw_ids)} anchors.")
 
     return unprocessed_map_data
+
 
 if __name__ == "__main__":
     np.set_printoptions(suppress=True)

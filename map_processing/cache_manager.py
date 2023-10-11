@@ -961,7 +961,7 @@ class CacheManagerSingleton:
         map_seed: The combined map of map_seed and all maps called from map_info
         If no shared anchors are found, return back the original map
         """
-        MAP_LIMIT = 5
+        # MAP_LIMIT = 5
         seed_anchors = set()
         maps_added = 0
         intersections = []
@@ -972,8 +972,8 @@ class CacheManagerSingleton:
                 seed_anchors.add(instance["cloudIdentifier"])
 
         for address in map_info:
-            if maps_added == MAP_LIMIT:
-                break
+            # if maps_added == MAP_LIMIT:
+            #     break
             info = self._check_cloud_anchor_info(address)
             if info is not None:
                 if len(info[0]) >= 1:
@@ -986,6 +986,7 @@ class CacheManagerSingleton:
                         intersections.append(intersect)
         if len(intersections) == 0:
             print("No maps with shared Cloud Anchors found in database")
+        print(f"{maps_added} Maps Combined")
         return map_seed
 
     def _check_cloud_anchor_info(self, map_json: str, uid: str = None):

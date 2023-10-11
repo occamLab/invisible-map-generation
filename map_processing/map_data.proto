@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+message PGTrans {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message PGRot {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message NeighborsList{
+  repeated int32 neighbors = 1;
+}
+
+message PGTagV {
+  PGTrans translation = 1;
+  PGRot rotation = 2;
+  int32 id = 3;
+}
+
+message PGCloudV {
+  PGTrans translation = 1;
+  PGRot rotation = 2;
+  optional string cloud_id = 3;
+  optional string name = 4;
+}
+
+message PGOdomV {
+  PGTrans translation = 1;
+  PGRot rotation = 2;
+  int32 poseId = 3;
+  optional float adjChi2 = 4;
+  optional float cloudChi2 = 5;
+  optional int32 vizTags = 6;
+  optional int32 vizCloud = 7;
+  repeated NeighborsList all_neighbors = 8;
+}
+
+message PGWaypointV {
+  PGTrans translation = 1;
+  PGRot rotation = 2;
+  string id = 3;
+}
+
+message PGData {
+  repeated PGTagV tag_vertices = 1;
+  repeated PGCloudV cloud_vertices = 2;
+  repeated PGOdomV odometry_vertices = 3;
+  repeated PGWaypointV waypoints_vertices = 4;
+}

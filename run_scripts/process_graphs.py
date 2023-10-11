@@ -11,7 +11,10 @@ from datetime import datetime
 from firebase_admin import credentials
 
 from map_processing.data_models import OConfig
-from map_processing.graph_opt_utils import make_processed_map_json
+from map_processing.graph_opt_utils import (
+    make_processed_map_json,
+    make_processed_map_protobuf,
+)
 import map_processing.throw_out_bad_tags as tag_filter
 from map_processing.graph import Graph
 from map_processing.graph_opt_hl_interface import (
@@ -54,8 +57,8 @@ def for_each_map_info(map_info: MapInfo) -> None:
     if map_info is None or map_info.map_dct is None or len(map_info.map_dct) == 0:
         return
     map_info.map_json_blob_name = (
-        f"{map_info.map_json_blob_name[:-5]} "
-        + f'{datetime.now().strftime("%Y%m%d%H%M%S")}.json'
+        f"{map_info.map_json_blob_name[:-5]}"
+        + f'_{datetime.now().strftime("%Y%m%d%H%M%S")}.json'
     )
     combined_map = cms.combine_shared_maps(map_seed=map_info)
     combined_map.map_dct = tag_filter.throw_out_bad_tags(
@@ -66,10 +69,14 @@ def for_each_map_info(map_info: MapInfo) -> None:
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
     )
     opt_result = optimize_graph(graph=graph, oconfig=optimization_config)
-    json_str = make_processed_map_json(
+    # json_str = make_processed_map_json(
+    #     graph=graph, opt_result=opt_result.map_opt, calculate_intersections=True
+    # )
+    proto_str = make_processed_map_protobuf(
         graph=graph, opt_result=opt_result.map_opt, calculate_intersections=True
     )
-    cms.upload(map_info, json_str)
+    # cms.upload(map_info, json_str)
+    cms.upload(map_info, proto_str)
 
 
 if __name__ == "__main__":
