@@ -103,7 +103,7 @@ class CacheManagerSingleton:
 
     UNPROCESSED_MAPS_PARENT: str = "unprocessed_maps"
     GENERATED_MAPS_PARENTS: str = "generated"
-    PROCESSED_UPLOAD_TO: str = "TestProcessed"
+    PROCESSED_UPLOAD_TO: str = "protobuf"
     SWEEP_PROCESSED_UPLOAD_TO: str = "SweepProcessed"
     GROUND_TRUTH_PARENT: str = "ground_truth"
     SWEEP_RESULTS_PARENT: str = "sweep_results"
@@ -209,9 +209,9 @@ class CacheManagerSingleton:
             thread_obj.join()
 
     def upload(
-        self, map_info: MapInfo, json_string: str, verbose: bool = False
+        self, map_info: MapInfo, proto_bytes: bytes, verbose: bool = False
     ) -> None:
-        """Uploads the map json string into the Firebase __bucket under the path
+        """Uploads the map proto bytes into the Firebase __bucket under the path
         <GraphManager._processed_upload_to>/<processed_map_filename> and updates the appropriate database reference.
 
         Notes:
@@ -221,12 +221,12 @@ class CacheManagerSingleton:
 
         Args:
             map_info (MapInfo): Contains the map name and map json path
-            json_string (str): Json string of the map to upload
+            proto_bytes (bytes): Protobuf bytes of the map to upload
             verbose: TODO
         """
         with self.__synch_mutex:
             processed_map_filename = (
-                os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.json"
+                os.path.basename(map_info.map_json_blob_name)[:-5] + "_processed.proto"
             )
             processed_map_full_path = (
                 f"{self.PROCESSED_UPLOAD_TO}/{processed_map_filename}"
@@ -240,7 +240,7 @@ class CacheManagerSingleton:
             processed_map_blob = self.__bucket.blob(processed_map_full_path)
             token = uuid.uuid4()
             processed_map_blob.metadata = {"firebaseStorageDownloadTokens": token}
-            processed_map_blob.upload_from_string(json_string)
+            processed_map_blob.upload_from_string(proto_bytes)
 
             ref = db.reference("maps")
             if map_info.uid is not None:
@@ -256,7 +256,7 @@ class CacheManagerSingleton:
             CacheManagerSingleton.cache_map(
                 CacheManagerSingleton.PROCESSED_UPLOAD_TO,
                 map_info,
-                json_string,
+                proto_bytes,
                 verbose=verbose,
             )
 
@@ -281,7 +281,7 @@ class CacheManagerSingleton:
             map_name = map_seed.map_name
         combined_map.map_name = f"{map_name}_combined"
         combined_map.map_json_blob_name = f"fixedtesting/{map_name}_combined"
-        CacheManagerSingleton.cache_map(
+        CacheManagerSingleton.cache_json_map(
             CacheManagerSingleton.UNPROCESSED_MAPS_PARENT,
             combined_map,
             json.dumps(combined_map.map_dct, indent=2),
@@ -544,7 +544,7 @@ class CacheManagerSingleton:
         return matches
 
     @staticmethod
-    def cache_map(
+    def cache_json_map(
         parent_folder: str,
         map_info: MapInfo,
         json_string: str,
@@ -645,6 +645,121 @@ class CacheManagerSingleton:
                     )
                 )
             return False
+
+    @staticmethod
+    def cache_map(
+        parent_folder: str,
+        map_info: MapInfo,
+        proto_bytes: bytes,
+        file_suffix: Union[str, None] = None,
+        verbose: bool = False,
+    ) -> bool:
+        """Saves a map to a json file in cache directory.
+
+        Catches any exceptions raised when saving the file (exceptions are raised for invalid arguments) and displays an
+        appropriate diagnostic message if one is caught. All the arguments are checked to ensure that they are, in
+        fact strings; if any are not, then a diagnostic message is printed and False is returned.
+
+        Arguments:
+            parent_folder (str): Specifies the subdirectory of the cache directory that the map is cached in
+            map_info (MapInfo): Contains the map name and map json path in the map_name and map_json_blob_name
+             fields respectively. If the last 5 characters of this string do not form the substring ".json",
+             then ".json" will be appended automatically.
+            proto_bytes (bytes): The protobuf bytes that defines the map (this is what is written as the contents of the
+             cached map file).
+            file_suffix (str): String to append to the file name given by map_info.map_json_blob_name.
+            verbose: TODO
+
+        Returns:
+            True if map was successfully cached, and False otherwise
+
+        Raises:
+            ValueError: Raised if there is any argument (except file_suffix) that is of an incorrect type
+            NotADirectoryError: Raised if _resolve_cache_dir method returns false.
+        """
+        if not isinstance(map_info, MapInfo):
+            raise ValueError(
+                "Cannot cache map because '{}' argument is not a {} instance".format(
+                    nameof(map_info), nameof(MapInfo)
+                )
+            )
+        for arg in [
+            parent_folder,
+            map_info.map_name,
+            map_info.map_json_blob_name,
+        ]:
+            if not isinstance(arg, str):
+                raise ValueError(
+                    "Cannot cache map because '{}' argument is not a string".format(
+                        nameof(arg)
+                    )
+                )
+        if not isinstance(proto_bytes, bytes):
+            raise ValueError(
+                "Cannot cache map because '{}' argument is not in bytes".format(
+                    nameof(proto_bytes)
+                )
+            )
+        if not CacheManagerSingleton._resolve_cache_dir():
+            raise NotADirectoryError(
+                "Cannot cache map because cache folder existence could not be resolved at path {}".format(
+                    CacheManagerSingleton.CACHE_PATH
+                )
+            )
+
+        file_suffix_str = file_suffix if isinstance(file_suffix, str) else ""
+        map_proto_to_use = str(map_info.map_json_blob_name)
+        if len(map_proto_to_use) < 6:
+            map_proto_to_use += file_suffix_str + ".proto"
+        else:
+            if map_proto_to_use[-5:] != ".proto":
+                map_proto_to_use += file_suffix_str + ".proto"
+            else:
+                map_proto_to_use = map_proto_to_use[:-5] + file_suffix_str + ".proto"
+
+        cached_file_path = os.path.join(
+            CacheManagerSingleton.CACHE_PATH, parent_folder, map_proto_to_use
+        )
+        try:
+            cache_to = os.path.join(parent_folder, map_proto_to_use)
+            cache_to_split = cache_to.split(os.path.sep)
+            cache_to_split_idx = 0
+            while cache_to_split_idx < len(cache_to_split) - 1:
+                dir_to_check = os.path.join(
+                    CacheManagerSingleton.CACHE_PATH,
+                    os.path.sep.join(cache_to_split[: cache_to_split_idx + 1]),
+                )
+                if not os.path.exists(dir_to_check):
+                    os.mkdir(dir_to_check)
+                cache_to_split_idx += 1
+
+            with open(cached_file_path, "w") as map_json_file:
+                map_json_file.write(proto_bytes)
+                map_json_file.close()
+
+            CacheManagerSingleton._append_to_cache_directory(
+                os.path.basename(map_proto_to_use), map_info.map_name
+            )
+
+            if verbose:
+                print("Successfully cached {}".format(cached_file_path))
+            return True
+        except Exception as ex:
+            if verbose:
+                print(
+                    "Could not cache map {} due to error: {}".format(
+                        map_proto_to_use, ex
+                    )
+                )
+            return False
+
+    @staticmethod
+    def export_all_ground_truth_data():
+        for dataset_name, dataset in GT_TAG_DATASETS.items():
+            CacheManagerSingleton.cache_ground_truth_data(
+                gt_data=GTDataSet.gt_data_set_from_dict_of_arrays(dataset),
+                dataset_name=dataset_name,
+            )
 
     @staticmethod
     def export_all_ground_truth_data():
@@ -1056,7 +1171,7 @@ class CacheManagerSingleton:
             json_data = json_blob.download_as_bytes()
             json_dct = json.loads(json_data)
             map_info.map_dct = json_dct
-            CacheManagerSingleton.cache_map(
+            CacheManagerSingleton.cache_json_map(
                 self.UNPROCESSED_MAPS_PARENT, map_info, json.dumps(json_dct, indent=2)
             )
             return map_info

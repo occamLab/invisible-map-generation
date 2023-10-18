@@ -646,13 +646,13 @@ def make_processed_map_protobuf(
         neighbors_list, intersections = graph_util_get_neighbors.get_neighbors(
             odom_locations[:, :7]
         )
-        for index, neighbors in enumerate(neighbors_list):
+        for index, neighbors_list in enumerate(neighbors_list):
             neighbor_proto = NeighborsList()
-            for neighbor in neighbors:
-                neighbor_proto.neighbors = neighbor
+            for neighbor_instance in neighbors_list:
+                neighbor_proto.neighbor.append(neighbor_instance)
             odom_vertex_list[index].neighbors.append(neighbor_proto)
-        for intersection in intersections:
-            odom_vertex_list.append(PGOdomV(**intersection))
+        # for intersection in intersections:
+        #     odom_vertex_list.append(PGOdomV(**intersection))
     else:
         for index in range(0, len(odom_vertex_list)):
             odom_vertex_list[index].neighbors.extend([])
@@ -685,7 +685,6 @@ def make_processed_map_protobuf(
     )
 
     # Serialize the Protobuf message to bytes
-    print(processed_data_set)
     return processed_data_set.SerializeToString()
 
 

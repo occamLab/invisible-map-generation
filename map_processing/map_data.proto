@@ -14,7 +14,7 @@ message PGRot {
 }
 
 message NeighborsList{
-  repeated int32 neighbors = 1;
+  repeated int32 neighbor = 1;
 }
 
 message PGTagV {
@@ -38,7 +38,7 @@ message PGOdomV {
   optional float cloudChi2 = 5;
   optional int32 vizTags = 6;
   optional int32 vizCloud = 7;
-  repeated NeighborsList all_neighbors = 8;
+  repeated NeighborsList neighbors = 8;
 }
 
 message PGWaypointV {

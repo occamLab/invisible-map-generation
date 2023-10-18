@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\x0emap_data.proto\"*\n\x07PGTrans\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01z\x18\x03 \x01(\x02\"3\n\x05PGRot\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01z\x18\x03 \x01(\x02\x12\t\n\x01w\x18\x04 \x01(\x02\"\"\n\rNeighborsList\x12\x11\n\tneighbors\x18\x01 \x03(\x05\"M\n\x06PGTagV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\n\n\x02id\x18\x03 \x01(\x05\"\x83\x01\n\x08PGCloudV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\x15\n\x08\x63loud_id\x18\x03 \x01(\tH\x00\x88\x01\x01\x12\x11\n\x04name\x18\x04 \x01(\tH\x01\x88\x01\x01\x42\x0b\n\t_cloud_idB\x07\n\x05_name\"\x87\x02\n\x07PGOdomV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\x0e\n\x06poseId\x18\x03 \x01(\x05\x12\x14\n\x07\x61\x64jChi2\x18\x04 \x01(\x02H\x00\x88\x01\x01\x12\x16\n\tcloudChi2\x18\x05 \x01(\x02H\x01\x88\x01\x01\x12\x14\n\x07vizTags\x18\x06 \x01(\x05H\x02\x88\x01\x01\x12\x15\n\x08vizCloud\x18\x07 \x01(\x05H\x03\x88\x01\x01\x12%\n\rall_neighbors\x18\x08 \x03(\x0b\x32\x0e.NeighborsListB\n\n\x08_adjChi2B\x0c\n\n_cloudChi2B\n\n\x08_vizTagsB\x0b\n\t_vizCloud\"R\n\x0bPGWaypointV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\n\n\x02id\x18\x03 \x01(\t\"\x99\x01\n\x06PGData\x12\x1d\n\x0ctag_vertices\x18\x01 \x03(\x0b\x32\x07.PGTagV\x12!\n\x0e\x63loud_vertices\x18\x02 \x03(\x0b\x32\t.PGCloudV\x12#\n\x11odometry_vertices\x18\x03 \x03(\x0b\x32\x08.PGOdomV\x12(\n\x12waypoints_vertices\x18\x04 \x03(\x0b\x32\x0c.PGWaypointVb\x06proto3'
+  serialized_pb=b'\n\x0emap_data.proto\"*\n\x07PGTrans\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01z\x18\x03 \x01(\x02\"3\n\x05PGRot\x12\t\n\x01x\x18\x01 \x01(\x02\x12\t\n\x01y\x18\x02 \x01(\x02\x12\t\n\x01z\x18\x03 \x01(\x02\x12\t\n\x01w\x18\x04 \x01(\x02\"!\n\rNeighborsList\x12\x10\n\x08neighbor\x18\x01 \x03(\x05\"M\n\x06PGTagV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\n\n\x02id\x18\x03 \x01(\x05\"\x83\x01\n\x08PGCloudV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\x15\n\x08\x63loud_id\x18\x03 \x01(\tH\x00\x88\x01\x01\x12\x11\n\x04name\x18\x04 \x01(\tH\x01\x88\x01\x01\x42\x0b\n\t_cloud_idB\x07\n\x05_name\"\x83\x02\n\x07PGOdomV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\x0e\n\x06poseId\x18\x03 \x01(\x05\x12\x14\n\x07\x61\x64jChi2\x18\x04 \x01(\x02H\x00\x88\x01\x01\x12\x16\n\tcloudChi2\x18\x05 \x01(\x02H\x01\x88\x01\x01\x12\x14\n\x07vizTags\x18\x06 \x01(\x05H\x02\x88\x01\x01\x12\x15\n\x08vizCloud\x18\x07 \x01(\x05H\x03\x88\x01\x01\x12!\n\tneighbors\x18\x08 \x03(\x0b\x32\x0e.NeighborsListB\n\n\x08_adjChi2B\x0c\n\n_cloudChi2B\n\n\x08_vizTagsB\x0b\n\t_vizCloud\"R\n\x0bPGWaypointV\x12\x1d\n\x0btranslation\x18\x01 \x01(\x0b\x32\x08.PGTrans\x12\x18\n\x08rotation\x18\x02 \x01(\x0b\x32\x06.PGRot\x12\n\n\x02id\x18\x03 \x01(\t\"\x99\x01\n\x06PGData\x12\x1d\n\x0ctag_vertices\x18\x01 \x03(\x0b\x32\x07.PGTagV\x12!\n\x0e\x63loud_vertices\x18\x02 \x03(\x0b\x32\t.PGCloudV\x12#\n\x11odometry_vertices\x18\x03 \x03(\x0b\x32\x08.PGOdomV\x12(\n\x12waypoints_vertices\x18\x04 \x03(\x0b\x32\x0c.PGWaypointVb\x06proto3'
 )
 
 
@@ -133,7 +133,7 @@ _NEIGHBORSLIST = _descriptor.Descriptor(
   create_key=_descriptor._internal_create_key,
   fields=[
     _descriptor.FieldDescriptor(
-      name='neighbors', full_name='NeighborsList.neighbors', index=0,
+      name='neighbor', full_name='NeighborsList.neighbor', index=0,
       number=1, type=5, cpp_type=1, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -152,7 +152,7 @@ _NEIGHBORSLIST = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=115,
-  serialized_end=149,
+  serialized_end=148,
 )
 
 
@@ -197,8 +197,8 @@ _PGTAGV = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=151,
-  serialized_end=228,
+  serialized_start=150,
+  serialized_end=227,
 )
 
 
@@ -260,8 +260,8 @@ _PGCLOUDV = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=231,
-  serialized_end=362,
+  serialized_start=230,
+  serialized_end=361,
 )
 
 
@@ -323,7 +323,7 @@ _PGODOMV = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='all_neighbors', full_name='PGOdomV.all_neighbors', index=7,
+      name='neighbors', full_name='PGOdomV.neighbors', index=7,
       number=8, type=11, cpp_type=10, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
@@ -361,8 +361,8 @@ _PGODOMV = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=365,
-  serialized_end=628,
+  serialized_start=364,
+  serialized_end=623,
 )
 
 
@@ -407,8 +407,8 @@ _PGWAYPOINTV = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=630,
-  serialized_end=712,
+  serialized_start=625,
+  serialized_end=707,
 )
 
 
@@ -460,8 +460,8 @@ _PGDATA = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=715,
-  serialized_end=868,
+  serialized_start=710,
+  serialized_end=863,
 )
 
 _PGTAGV.fields_by_name['translation'].message_type = _PGTRANS
@@ -476,7 +476,7 @@ _PGCLOUDV.oneofs_by_name['_name'].fields.append(
 _PGCLOUDV.fields_by_name['name'].containing_oneof = _PGCLOUDV.oneofs_by_name['_name']
 _PGODOMV.fields_by_name['translation'].message_type = _PGTRANS
 _PGODOMV.fields_by_name['rotation'].message_type = _PGROT
-_PGODOMV.fields_by_name['all_neighbors'].message_type = _NEIGHBORSLIST
+_PGODOMV.fields_by_name['neighbors'].message_type = _NEIGHBORSLIST
 _PGODOMV.oneofs_by_name['_adjChi2'].fields.append(
   _PGODOMV.fields_by_name['adjChi2'])
 _PGODOMV.fields_by_name['adjChi2'].containing_oneof = _PGODOMV.oneofs_by_name['_adjChi2']
