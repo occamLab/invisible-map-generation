@@ -69,13 +69,9 @@ def for_each_map_info(map_info: MapInfo) -> None:
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
     )
     opt_result = optimize_graph(graph=graph, oconfig=optimization_config)
-    # json_str = make_processed_map_json(
-    #     graph=graph, opt_result=opt_result.map_opt, calculate_intersections=True
-    # )
     proto_str = make_processed_map_protobuf(
         graph=graph, opt_result=opt_result.map_opt, calculate_intersections=True
     )
-    # cms.upload(map_info, json_str)
     cms.upload(map_info, proto_str)
 
 
