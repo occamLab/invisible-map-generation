@@ -44,7 +44,7 @@ def on_event(event):
     )
 
 
-def for_each_map_info(map_info: MapInfo) -> None:
+def for_each_map_info(map_info: MapInfo, multi_session: bool = False) -> None:
     """
     Full workflow of invisible map optimization. This function is called on every event where a new
     map is uploaded. The workflow is as follows:
@@ -60,11 +60,17 @@ def for_each_map_info(map_info: MapInfo) -> None:
         f"{map_info.map_json_blob_name[:-5]}"
         + f'_{datetime.now().strftime("%Y%m%d%H%M%S")}.json'
     )
-    combined_map = cms.combine_shared_maps(map_seed=map_info)
-    combined_map.map_dct = tag_filter.throw_out_bad_tags(
-        combined_map.map_dct, combined_map.map_name, verbose=False
+    if multi_session:
+        combined_map = cms.combine_shared_maps(map_seed=map_info)
+        combined_map.map_dct = tag_filter.throw_out_bad_tags(
+            combined_map.map_dct, combined_map.map_name, verbose=False
+        )
+        unoptimized_graph = combined_map.map_dct
+    map_info.map_dct = tag_filter.throw_out_bad_tags(
+        map_info.map_dct, map_info.map_name, verbose=False
     )
-    graph = Graph.as_graph(combined_map.map_dct, prescaling_opt=PrescalingOptEnum.ONES)
+    unoptimized_graph = map_info.map_dct
+    graph = Graph.as_graph(unoptimized_graph, prescaling_opt=PrescalingOptEnum.ONES)
     optimization_config = OConfig(
         is_sba=False, weights=WEIGHTS_DICT[WeightSpecifier.BEST_SWEEP]
     )

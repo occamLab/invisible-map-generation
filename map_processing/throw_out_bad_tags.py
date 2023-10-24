@@ -14,6 +14,7 @@ repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pa
 sys.path.append(repository_root)
 
 import json
+import itertools
 import numpy as np
 import argparse
 from firebase_admin import db, storage
@@ -147,6 +148,55 @@ def throw_out_bad_tags(
     Returns:
         The filtered version of the data.
     """
+
+    if unprocessed_map_data["pose_data"]:
+        geospatial_data = list(
+            map(
+                lambda x: x[0]["geoSpatial"]["location"],
+                unprocessed_map_data["pose_data"],
+            )
+        )
+        geospatial_data = [
+            (coord["longitude"], coord["latitude"]) for coord in geospatial_data
+        ]
+
+        max_lat_distance = 0
+        max_long_distance = 0
+        max_lat_coords = ()
+        max_long_coords = ()
+
+        # Find the two sets of coordinates with the longest distance
+        for pair in itertools.combinations(geospatial_data, 2):
+            lat1, long1 = pair[0]
+            lat2, long2 = pair[1]
+            lat_distance = abs(lat2 - lat1)
+            long_distance = abs(long2 - long1)
+
+            if lat_distance > max_lat_distance:
+                max_lat_distance = lat_distance
+                max_lat_coords = (pair[0], pair[1])
+
+            if long_distance > max_long_distance:
+                max_long_distance = long_distance
+                max_long_coords = (pair[0], pair[1])
+
+        # Calculate the average latitude and longitude values for max_lat_coords
+        center_lat_lat = sum(lat for lat, _ in max_lat_coords) / len(max_lat_coords)
+        center_long_lat = sum(long for _, long in max_lat_coords) / len(max_lat_coords)
+
+        # Calculate the average latitude and longitude values for max_long_coords
+        center_lat_long = sum(lat for lat, _ in max_long_coords) / len(max_long_coords)
+        center_long_long = sum(long for _, long in max_long_coords) / len(
+            max_long_coords
+        )
+
+        center_lat = (center_lat_lat + center_lat_long) / 2
+        center_long = (center_long_lat + center_long_long) / 2
+
+        unprocessed_map_data["geohash"] = {
+            "latitude": center_lat,
+            "longitude": center_long,
+        }
 
     throw_ids = []
     if unprocessed_map_data["cloud_data"]:

@@ -1085,7 +1085,6 @@ class CacheManagerSingleton:
         for cloud_data in map_seed.map_dct["cloud_data"]:
             for instance in cloud_data:
                 seed_anchors.add(instance["cloudIdentifier"])
-
         for address in map_info:
             # if maps_added == MAP_LIMIT:
             #     break
