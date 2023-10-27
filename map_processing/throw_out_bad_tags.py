@@ -13,17 +13,13 @@ import matplotlib.pyplot as plt
 repository_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir)
 sys.path.append(repository_root)
 
-import json
 import itertools
 import numpy as np
 import argparse
 from firebase_admin import db, storage
+import pygeohash as pgh
 
 import benchmarking.benchmarking_utils as B
-
-# import map_processing
-# from map_processing import benchmarking_utils as B
-
 
 def make_parser():
     """
@@ -152,7 +148,7 @@ def throw_out_bad_tags(
     if unprocessed_map_data["pose_data"]:
         geospatial_data = list(
             map(
-                lambda x: x[0]["geoSpatial"]["location"],
+                lambda x: x["geoSpatial"]["location"],
                 unprocessed_map_data["pose_data"],
             )
         )
@@ -193,10 +189,9 @@ def throw_out_bad_tags(
         center_lat = (center_lat_lat + center_lat_long) / 2
         center_long = (center_long_lat + center_long_long) / 2
 
-        unprocessed_map_data["geohash"] = {
-            "latitude": center_lat,
-            "longitude": center_long,
-        }
+        unprocessed_map_data["lat"] = center_lat
+        unprocessed_map_data["long"] = center_long
+        unprocessed_map_data["geohash"] = pgh.encode(center_lat, center_long)
 
     throw_ids = []
     if unprocessed_map_data["cloud_data"]:

@@ -52,4 +52,7 @@ message PGData {
   repeated PGCloudV cloud_vertices = 2;
   repeated PGOdomV odometry_vertices = 3;
   repeated PGWaypointV waypoints_vertices = 4;
+  float lat = 5;
+  float long = 6;
+  string geohash = 7;
 }

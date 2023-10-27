@@ -114,6 +114,9 @@ class Graph:
         self.maximization_results = OptimizeResult
         self.unoptimized_graph: Union[SparseOptimizer, None] = None
         self.optimized_graph: Union[SparseOptimizer, None] = None
+        self.geohash: str
+        self.lat: float
+        self.long: float
 
     def graph_is_valid(self) -> Optional[ValueError]:
         """
@@ -1419,6 +1422,10 @@ class Graph:
         resulting_graph = Graph(
             edges, is_sba=use_sba, use_huber=False, huber_delta=None
         )
+        resulting_graph.geohash = data_set.geohash
+        resulting_graph.lat = data_set.lat
+        resulting_graph.long = data_set.long
+        
         resulting_graph.cloud_anchor_names = data_set.cloud_anchor_names
         resulting_graph.cloud_id_by_vertex_id = (
             cloud_anchor_id_by_cloud_anchor_vertex_id

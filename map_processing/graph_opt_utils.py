@@ -576,6 +576,9 @@ def make_processed_map_protobuf(
     visible_tags_count = opt_result.visibleTagsCount
     visible_cloud_count = opt_result.visibleCloudCount
     waypoint_locations = (opt_result.waypoints_metadata, opt_result.waypoints_arr)
+    lat_map = graph.lat
+    long_map = graph.long
+    geohash_map = graph.geohash
 
     if (visible_tags_count is None) ^ (adj_chi2_arr is None):
         raise ValueError(
@@ -682,8 +685,10 @@ def make_processed_map_protobuf(
         cloud_vertices=cloud_vertex_list,
         odometry_vertices=odom_vertex_list,
         waypoints_vertices=waypoint_vertex_list,
+        lat=lat_map,
+        long=long_map,
+        geohash=geohash_map,
     )
-
     # Serialize the Protobuf message to bytes
     return processed_data_set.SerializeToString()
 

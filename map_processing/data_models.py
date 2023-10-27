@@ -1000,6 +1000,9 @@ class UGDataSet(BaseModel):
     generated_from: Optional[GenerateParams] = None
     cloud_data: List[List[UGCloudAnchorDatum]] = []
     map_num: int = 0
+    lat: float = 0.0
+    long: float = 0.0
+    geohash: str
 
     # TODO: Add documentation for the following properties
 
@@ -1242,7 +1245,7 @@ class UGDataSet(BaseModel):
                 ]
             )
         )
-    
+
     @property
     def cloud_anchor_names(self) -> np.ndarray:
         return {item[0].cloudIdentifier: item[0].name for item in self.cloud_data}
