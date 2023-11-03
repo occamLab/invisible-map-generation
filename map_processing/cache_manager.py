@@ -14,8 +14,9 @@ from collections import defaultdict
 
 import firebase_admin
 import numpy as np
-from firebase_admin import db, storage
+from firebase_admin import db, storage, firestore
 from varname import nameof
+from google.cloud.firestore import GeoPoint
 
 from map_processing import GT_TAG_DATASETS, GROUND_TRUTH_MAPPING_STARTING_PT
 from map_processing.data_models import (
@@ -248,6 +249,11 @@ class CacheManagerSingleton:
             ref.child(map_info.map_name).child("map_file").set(processed_map_full_path)
             ref.child("latestProcessedMap").set(processed_map_full_path)
 
+            collection = CacheManagerSingleton.firestore_collection(map_info)
+            collection["map_protobuf_path"] = processed_map_full_path
+            collection["name"] = map_info.map_name
+            self.__firestore.collection("maps").document(map_info.uid).set(collection)
+
             if verbose:
                 print(
                     f"Successfully uploaded database reference maps/{map_info.map_name}/"
@@ -287,6 +293,91 @@ class CacheManagerSingleton:
             json.dumps(combined_map.map_dct, indent=2),
         )
         return combined_map
+
+    def get_map_from_unprocessed_map_event(
+        self,
+        event: firebase_admin.db.Event,
+        map_info_callback: Union[Callable[[MapInfo], None], None] = None,
+        ignore_dict: bool = False,
+        override_all: bool = False,
+    ) -> None:
+        """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
+
+        Arguments:
+            event: A firebase event corresponding a single unprocessed map (event.data is a string)
+                or to a dictionary of unprocessed maps (event.data is a dictionary).
+            map_info_callback: For every MapInfo object created, invoke this callback and pass the
+                MapInfo object as the argument.
+            ignore_dict: If true, no action is taken if `event.data` is a dictionary.
+            override_all: If true, reprocess every map in firebase.
+        """
+        firebase_reference = db.reference("unprocessed_maps")
+        if isinstance(event.data, str):
+            # A single new map just got added
+            map_info = self._firebase_get_and_cache_unprocessed_map(
+                event.path.lstrip("/"), event.data
+            )
+            if (
+                "map_file" in firebase_reference.child(map_info.map_name).get()
+                and not override_all
+            ):
+                return
+            if map_info_callback is not None and map_info is not None:
+                map_info_callback(map_info)
+        elif isinstance(event.data, dict):
+            if ignore_dict:
+                return
+            # This will be a dictionary of all the data that is there initially
+            for map_name, map_json in event.data.items():
+                if isinstance(map_json, str):
+                    map_info = self._firebase_get_and_cache_unprocessed_map(
+                        map_name, map_json
+                    )
+                    if (
+                        firebase_reference.child(map_info.map_name).get() is not None
+                        and "map_file"
+                        in firebase_reference.child(map_info.map_name).get()
+                        and not override_all
+                    ):
+                        continue
+                    if map_info_callback is not None:
+                        map_info_callback(map_info)
+                elif isinstance(map_json, dict):
+                    for nested_name, nested_json in map_json.items():
+                        map_info = self._firebase_get_and_cache_unprocessed_map(
+                            nested_name, nested_json, uid=map_name
+                        )
+                        if map_info is None:
+                            continue
+                        if (
+                            firebase_reference.child(map_name)
+                            .child(map_info.map_name)
+                            .get()
+                            is not None
+                            and "map_file"
+                            in firebase_reference.child(map_name)
+                            .child(map_info.map_name)
+                            .get()
+                            and not override_all
+                        ):
+                            continue
+                        if map_info_callback is not None:
+                            map_info_callback(map_info)
+
+    @staticmethod
+    def firestore_collection(
+        map_info: MapInfo,
+    ) -> Dict:
+        """
+        Organize information from a map to upload as a collection to Firestore
+        """
+        collection = {
+            "center_geohash": map_info.map_dct["geohash"],
+            "geo_coord": GeoPoint(map_info.map_dct["lat"], map_info.map_dct["long"]),
+            "map_protobuf_path": "",
+            "name": "",
+        }
+        return collection
 
     @staticmethod
     def combine_maps(
@@ -377,76 +468,6 @@ class CacheManagerSingleton:
             map_bounds=map_bounds,
         )
         return complete_map
-
-    def get_map_from_unprocessed_map_event(
-        self,
-        event: firebase_admin.db.Event,
-        map_info_callback: Union[Callable[[MapInfo], None], None] = None,
-        ignore_dict: bool = False,
-        override_all: bool = False,
-    ) -> None:
-        """Acquires MapInfo objects from firebase events corresponding to unprocessed maps.
-
-        Arguments:
-            event: A firebase event corresponding a single unprocessed map (event.data is a string)
-                or to a dictionary of unprocessed maps (event.data is a dictionary).
-            map_info_callback: For every MapInfo object created, invoke this callback and pass the
-                MapInfo object as the argument.
-            ignore_dict: If true, no action is taken if `event.data` is a dictionary.
-            override_all: If true, reprocess every map in firebase.
-        """
-        firebase_reference = db.reference("unprocessed_maps")
-        if isinstance(event.data, str):
-            # A single new map just got added
-            map_info = self._firebase_get_and_cache_unprocessed_map(
-                event.path.lstrip("/"), event.data
-            )
-            if (
-                "map_file" in firebase_reference.child(map_info.map_name).get()
-                and not override_all
-            ):
-                return
-            if map_info_callback is not None and map_info is not None:
-                map_info_callback(map_info)
-        elif isinstance(event.data, dict):
-            if ignore_dict:
-                return
-            # This will be a dictionary of all the data that is there initially
-            for map_name, map_json in event.data.items():
-                if isinstance(map_json, str):
-                    map_info = self._firebase_get_and_cache_unprocessed_map(
-                        map_name, map_json
-                    )
-                    if (
-                        firebase_reference.child(map_info.map_name).get() is not None
-                        and "map_file"
-                        in firebase_reference.child(map_info.map_name).get()
-                        and not override_all
-                    ):
-                        continue
-                    if map_info_callback is not None:
-                        map_info_callback(map_info)
-                elif isinstance(map_json, dict):
-                    for nested_name, nested_json in map_json.items():
-                        map_info = self._firebase_get_and_cache_unprocessed_map(
-                            nested_name, nested_json, uid=map_name
-                        )
-                        if map_info is None:
-                            continue
-                        if (
-                            firebase_reference.child(map_name)
-                            .child(map_info.map_name)
-                            .get()
-                            is not None
-                            and "map_file"
-                            in firebase_reference.child(map_name)
-                            .child(map_info.map_name)
-                            .get()
-                            and not override_all
-                        ):
-                            continue
-                        if map_info_callback is not None:
-                            map_info_callback(map_info)
 
     @staticmethod
     def map_info_from_path(map_json_path: str) -> Union[MapInfo, None]:
@@ -1028,6 +1049,7 @@ class CacheManagerSingleton:
             )
             self.__bucket = storage.bucket(app=self.__app)
             self.__db_ref = db.reference(f"/{self.UNPROCESSED_MAPS_PARENT}")
+            self.__firestore = firestore.client()
             self.__were_credentials_set = True
 
     def download_maps_for_device(self, device_id_name: str):
